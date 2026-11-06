@@ -366,6 +366,8 @@ public sealed class BreakButton : Button
     private readonly BreakGlyph cup = new() { Mono = false };
     private readonly Border tile = new() { Width = StatusFace.TileSize, Height = StatusFace.TileSize, CornerRadius = new CornerRadius(StatusFace.TileRadius), Background = Brushes.Transparent };
     private bool hover, focus;
+    // Styles written for Button (pillBare, zone) must reach this subclass too.
+    protected override Type StyleKeyOverride => typeof(Button);
     private readonly CupGlyph? dots;
     /// <summary>The dot-matrix cup when the break sits in the pill's display (null for the round key).</summary>
     public CupGlyph? Cup => dots;

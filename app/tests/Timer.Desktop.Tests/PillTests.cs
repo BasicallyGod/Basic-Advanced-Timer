@@ -59,49 +59,25 @@ public sealed class PillTests
             Assert.Equal("Not recording", Tip(lights)); Assert.StartsWith("Start ", Tip(circle)); Assert.Equal("Start break", Tip(mug));
             model.ToggleAccount("Account one"); Dispatcher.UIThread.RunJobs();
             Assert.Equal("Recording", Tip(lights)); Assert.StartsWith("Pause", Tip(circle));
-            Assert.Contains(pill.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "AO"); // The circle carries the running account's initials.
+            Assert.Equal("ACCOUNT ONE", Find<SegmentName>(pill, "PillAccountName").Text); Assert.True(Find<Button>(pill, "PillPause").GetVisualDescendants().OfType<TransportGlyph>().Single().Paused); // The display names the running account and shows the pause bars.
             model.ToggleBreak(); Dispatcher.UIThread.RunJobs();
-            Assert.Equal("On break", Tip(lights)); Assert.StartsWith("End break", Tip(mug)); Assert.True(pill.GetVisualDescendants().OfType<BreakGlyph>().Single().Steaming);
+            Assert.Equal("On break", Tip(lights)); Assert.StartsWith("End break", Tip(mug)); Assert.True(pill.GetVisualDescendants().OfType<CupGlyph>().Single().Steaming);
         }
         finally { pill.Close(); }
     }
 
     [AvaloniaFact]
-    public void HoveringThePrimaryControlDeepensItsTintInsteadOfGrowingItSoNothingIsClipped()
+    public void EveryPressableZoneOfTheDisplayWashesTheSameWay()
     {
         var model = Model(); var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs();
         try
         {
-            var button = Find<Button>(pill, "PillPause"); var tile = Find<Border>(pill, "PillPrimaryTile");
-            Assert.Equal(22, tile.CornerRadius.TopLeft); // A round key.
-            Dispatcher.UIThread.RunJobs(); using var frame = pill.CaptureRenderedFrame();
-            var rest = ((Avalonia.Media.ISolidColorBrush)tile.Background!).Color; Assert.Equal(255, rest.A); // A raised key: a solid face,
-            Assert.True(tile.BoxShadow.Count > 0); // standing off the well.
-            var over = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), pill)!.Value;
-            pill.MouseMoveUntil(over, () => ((Avalonia.Media.ISolidColorBrush)tile.Background!).Color != rest);
-            Assert.NotEqual(rest, ((Avalonia.Media.ISolidColorBrush)tile.Background!).Color); // A step lighter under the pointer.
-            Assert.Equal(StatusFace.WellTileWidth, tile.Bounds.Width, 0.5); // And no change of size.
-            pill.MouseMove(new Point(2, 2)); Assert.Equal(rest, ((Avalonia.Media.ISolidColorBrush)tile.Background!).Color);
-        }
-        finally { pill.Close(); }
-    }
-
-    [AvaloniaFact]
-    public void KeyboardFocusRingsThePrimaryControlTheBreakAndTheAccountsButtonButAMouseClickDoesNot()
-    {
-        var model = Model(); var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs(); using var frame = pill.CaptureRenderedFrame();
-        try
-        {
-            foreach (var (button, tileName) in new[] { (Find<Button>(pill, "PillPause"), "PillPrimaryTile"), (Find<Button>(pill, "PillBreak"), (string?)null), (pill.AccountsButton, (string?)null) })
-            {
-                var tile = tileName is not null ? Find<Border>(pill, tileName) : button.GetVisualDescendants().OfType<Border>().First(b => b.Name != "PillSurface" && b.Child is not null && b.Width is >= 40 and <= 50);
-                var resting = tile.BoxShadow; // A key stands off its well with a shadow of its own; the ring replaces it.
-                button.RaiseEvent(new GotFocusEventArgs { RoutedEvent = InputElement.GotFocusEvent, NavigationMethod = NavigationMethod.Pointer });
-                Assert.Equal(resting, tile.BoxShadow); // Focus left by a click is not shown.
-                button.RaiseEvent(new GotFocusEventArgs { RoutedEvent = InputElement.GotFocusEvent, NavigationMethod = NavigationMethod.Tab });
-                Assert.NotEqual(resting, tile.BoxShadow); // Tab shows the ring.
-                button.RaiseEvent(new RoutedEventArgs(InputElement.LostFocusEvent)); Assert.Equal(resting, tile.BoxShadow);
-            }
+            var zones = new[] { Find<Button>(pill, "PillDashboard"), Find<Button>(pill, "PillAlertsButton"), Find<Button>(pill, "PillPause"), pill.AccountsButton, Find<Button>(pill, "PillBreak") };
+            Assert.All(zones, z => Assert.Contains("zone", z.Classes)); // One style gives the hover and pressed wash to all five.
+            Assert.True(pill.TryFindResource("ZoneHover", pill.ActualThemeVariant, out _)); Assert.True(pill.TryFindResource("ZonePressed", pill.ActualThemeVariant, out _));
+            var display = Find<Border>(pill, "PillDisplay"); // And every divider in it is the same dotted column.
+            var dividers = display.GetVisualDescendants().OfType<DottedDivider>().ToList(); Assert.Equal(3, dividers.Count);
+            Assert.All(dividers, d => { Assert.Equal(DottedDivider.ColumnWidth, d.Bounds.Width, 0.5); Assert.Equal(DottedDivider.ColumnHeight, d.Bounds.Height, 0.5); });
         }
         finally { pill.Close(); }
     }
@@ -221,59 +197,57 @@ public sealed class PillTests
     }
 
     [AvaloniaFact]
-    public void ThePrimaryControlAndTheAccountsButtonShareOneWellWithTheBreakApartAtTheEnd()
+    public void ThePlayZoneTheNameAndTheCupRunOnAlongTheDisplayInThatOrder()
     {
         var model = Model(); var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs(); using var frame = pill.CaptureRenderedFrame();
         try
         {
             double X(Control c) => c.TranslatePoint(default, pill)!.Value.X;
             var primary = Find<Button>(pill, "PillPause"); var brk = Find<Button>(pill, "PillBreak"); var clock = Find<Button>(pill, "PillDashboard");
-            Assert.True(X(clock) < X(primary)); Assert.True(X(primary) < X(pill.AccountsButton)); Assert.True(X(pill.AccountsButton) < X(brk)); // Time, primary control, accounts, then the break at the end.
-            var surface = Find<Border>(pill, "PillSurface");
-            // The two share one well: the tiles 46 and 48 wide inside it, 4 from its edge and 2 apart, as high as the break's tile with the well's padding.
-            var well = Find<Border>(pill, "PillWell");
-            Assert.Equal(StatusFace.TileSize + 2 * StatusFace.WellPadding, well.Bounds.Height, 0.5);
-            Assert.Equal(StatusFace.WellRadius, well.CornerRadius.TopLeft); Assert.True(well.BoxShadow.Count > 0); // Sunk: the well turns its shadow inward.
-            Border TileIn(Control c, double width) => c.GetVisualDescendants().OfType<Border>().First(x => x.Width == width);
-            var primaryTile = Find<Border>(pill, "PillPrimaryTile"); var accountsTile = TileIn(pill.AccountsButton, StatusFace.SelectorWidth); var breakTile = TileIn(brk, StatusFace.TileSize);
-            foreach (var t in new[] { primaryTile, accountsTile })
-            {
-                Assert.Equal(StatusFace.TileSize, t.Bounds.Height); Assert.Equal(StatusFace.TileRadius, t.CornerRadius.TopLeft);
-                Assert.Equal(StatusFace.WellPadding, t.TranslatePoint(default, well)!.Value.Y, 0.5);
-            }
-            Assert.Equal(StatusFace.WellPadding, primaryTile.TranslatePoint(default, well)!.Value.X, 0.5);
-            Assert.Equal(StatusFace.WellPadding + StatusFace.WellTileWidth + StatusFace.WellGap, accountsTile.TranslatePoint(default, well)!.Value.X, 0.5);
-            // The break is its own 44 pixel tile, centred on the card's height.
-            Assert.Equal(StatusFace.TileSize, breakTile.Bounds.Width); Assert.Equal(StatusFace.TileRadius, breakTile.CornerRadius.TopLeft);
-            var top = breakTile.TranslatePoint(default, surface)!.Value.Y; var bottom = surface.Bounds.Height - (top + breakTile.Bounds.Height);
-            Assert.True(Math.Abs(bottom - top) <= 1, $"top {top} bottom {bottom}");
+            Assert.True(X(clock) < X(primary)); Assert.True(X(primary) < X(pill.AccountsButton)); Assert.True(X(pill.AccountsButton) < X(brk));
+            Assert.Equal(StatusFace.TransportZone, primary.Bounds.Width, 0.5); Assert.Equal(StatusFace.BreakZone, brk.Bounds.Width, 0.5);
+            Assert.Equal(PillWindow.PillHeight, Find<Border>(pill, "PillSurface").Bounds.Height, 0.5);
         }
         finally { pill.Close(); }
     }
 
     [AvaloniaFact]
-    public void TheBreakIsASoftOrangeTileThatTurnsSolidWithALitCupOnABreak()
+    public void TheCupFillsOnABreakAndTheTransportShowsPauseWhileRecording()
     {
-        foreach (var theme in new[] { "Light", "Dark" })
+        using var motion = new EnabledMotionScope();
+        var model = Model(); var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs(); using var frame = pill.CaptureRenderedFrame();
+        try
         {
-            var model = Model(); model.SetTheme(theme); var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs(); using var frame = pill.CaptureRenderedFrame();
-            try
-            {
-                var button = Find<Button>(pill, "PillBreak");
-                var tile = button.GetVisualDescendants().OfType<Border>().Single(b => b.Width == StatusFace.TileSize); var cup = button.GetVisualDescendants().OfType<BreakGlyph>().Single();
-                var orange = Avalonia.Media.Color.Parse(model.CurrentTheme.Colour("Break"));
-                Assert.Equal(StatusFace.TileRadius, tile.CornerRadius.TopLeft); // A rounded square, like the primary control and the accounts icon.
-                var rest = ((Avalonia.Media.ISolidColorBrush)tile.Background!).Color; Assert.Equal(255, rest.A); // A raised key with a solid face,
-                Assert.Null(cup.Fixed); Assert.True(tile.BoxShadow.Count > 0); // the cup in the theme's orange.
-                model.ToggleBreak(); Dispatcher.UIThread.RunJobs();
-                // While a break is on the key is on: sunk into a well (the mock's "sunk and coloured"), with the cup still in the break colour and no solid orange fill.
-                var on = ((Avalonia.Media.ISolidColorBrush)tile.Background!).Color; Assert.NotEqual(orange, on); Assert.NotEqual(rest, on);
-                Assert.True(tile.TryFindResource("Well", tile.ActualThemeVariant, out var well)); Assert.Equal(((Avalonia.Media.ISolidColorBrush)well!).Color, on);
-                Assert.Null(cup.Fixed); Assert.True(tile.BoxShadow.Count > 0);
-                Assert.True(ThemeColours.Contrast($"#{orange.R:X2}{orange.G:X2}{orange.B:X2}", $"#{on.R:X2}{on.G:X2}{on.B:X2}") >= 2.5, theme); // The amber cup reads on the well.
-            }
-            finally { pill.Close(); model.SetTheme("System"); }
+            var cup = pill.GetVisualDescendants().OfType<CupGlyph>().Single(); var transport = pill.GetVisualDescendants().OfType<TransportGlyph>().Single();
+            Assert.False(cup.On); Assert.Equal(0, cup.FilledRows); Assert.False(transport.Paused);
+            model.ToggleAccount("Account one"); Dispatcher.UIThread.RunJobs(); Assert.True(transport.Paused);
+            transport.Step(TransportGlyph.WipeMilliseconds + 1); Assert.Equal(1, transport.Level(0, 1)); Assert.Equal(0, transport.Level(0, 0)); // Bars at columns 1, 2, 4 and 5.
+            model.ToggleBreak(); Dispatcher.UIThread.RunJobs(); Assert.True(cup.On); cup.Step(CupGlyph.RowMilliseconds * 4 + 1);
+            Assert.Equal(4, cup.FilledRows); Assert.True(cup.Steaming); Assert.Equal(1, cup.Level(6, 3));
+            model.ToggleBreak(); Dispatcher.UIThread.RunJobs(); cup.Step(CupGlyph.RowMilliseconds * 4 + 1); Assert.Equal(0, cup.FilledRows);
         }
+        finally { pill.Close(); }
+    }
+
+    [Theory]
+    [InlineData("Northwind Traders", "NORTHWIND TRADERS")]
+    [InlineData("Café Résumé", "CAFE RESUME")]
+    [InlineData("Straße", "STRASSE")]
+    [InlineData("日本語", null)]
+    [InlineData("A", null)]
+    public void NamesAreCleanedForTheSegmentsOrGiveWayToAnAccountNumber(string name, string? expected)
+    {
+        Assert.Equal(expected, SegmentName.Normalise(name)); Assert.Equal(expected ?? "ACCT 03", SegmentName.ForAccount(name, 2));
+    }
+
+    [AvaloniaFact]
+    public void ALongNameScrollsOnePassAndComesBackAndAShortOneNever()
+    {
+        using var motion = new EnabledMotionScope();
+        var run = new SegmentName { Text = "ABCDEFGHIJ" }; run.Scroll();
+        Assert.True(run.Scrolling); run.Step(SegmentName.StepMilliseconds * 4 + 1); Assert.Equal(4, run.Offset);
+        run.Step(SegmentName.StepMilliseconds * 3); Assert.False(run.Scrolling); Assert.Equal(0, run.Offset);
+        var shortRun = new SegmentName { Text = "ABC" }; shortRun.Scroll(); Assert.False(shortRun.Scrolling);
     }
 
     [AvaloniaFact]

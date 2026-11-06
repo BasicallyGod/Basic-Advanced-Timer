@@ -22,21 +22,15 @@ public sealed class Round14Tests
     private static T Find<T>(Visual root, string name) where T : Control => root.GetVisualDescendants().OfType<T>().First(c => c.Name == name);
 
     [AvaloniaFact]
-    public void TheAccountsBoxShowsTheStateDotAndItsChevronPointsDownAndUp()
+    public void TheAccountsZoneHoldsTheNameAndOpensAndClosesTheList()
     {
         var model = Model(); var pill = new PillWindow(model); pill.Show(); Settle(pill);
         try
         {
-            var box = Find<Border>(pill, "PillAccountSelector");
-            // Two marks and no letters: the state's dot beside a chevron, side by side and centred in the box.
-            Assert.Empty(box.GetVisualDescendants().OfType<TextBlock>());
-            var dot = box.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Ellipse>().Single(); var chevron = box.GetVisualDescendants().OfType<Chevron>().Single();
-            var dotBox = dot.TranslatePoint(default, box)!.Value; var chevronBox = chevron.TranslatePoint(default, box)!.Value;
-            Assert.True(dotBox.X < chevronBox.X); Assert.Equal(dotBox.Y + dot.Bounds.Height / 2, chevronBox.Y + chevron.Bounds.Height / 2, 1);
-            Assert.Equal(box.Bounds.Width / 2, (dotBox.X + chevronBox.X + chevron.Bounds.Width) / 2, 1.5);
+            var name = Find<SegmentName>(pill, "PillAccountName"); Assert.Equal(SegmentName.Cells, 6);
+            Assert.Empty(pill.AccountsButton.GetVisualDescendants().OfType<Chevron>()); // No chevron: pressing the name is enough.
             Assert.False(pill.PanelOpen); pill.AccountsButton.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Assert.True(pill.PanelOpen);
-            Assert.True(chevron.Expanded); // Down turns to up while the list is open.
-            pill.CloseFlyouts(); Settle(pill); Assert.False(chevron.Expanded);
+            pill.CloseFlyouts(); Settle(pill); Assert.False(pill.PanelOpen);
         }
         finally { pill.Close(); }
     }
@@ -44,7 +38,7 @@ public sealed class Round14Tests
     [AvaloniaFact]
     public void ThePillKeepsItsPartsInside()
     {
-        Assert.Equal(406, PillWindow.PillWidth); // The display, the well and the break, 12 apart, between the two insets.
+        Assert.Equal(StatusFace.DisplayWidth + 12, PillWindow.PillWidth, 1.0); // The display and a 6 pixel bezel each side.
         var model = Model();
         var pill = new PillWindow(model); pill.Show(); Settle(pill);
         try

@@ -54,11 +54,11 @@ public sealed class Round31Tests
         var model = Demo("Light"); var pill = new PillWindow(model); pill.Show(); Settle(pill);
         try
         {
-            var surface = Find<Border>(pill, "PillSurface"); var display = Find<Border>(pill, "PillDisplay"); var well = Find<Border>(pill, "PillWell");
+            var surface = Find<Border>(pill, "PillSurface"); var display = Find<Border>(pill, "PillDisplay"); 
             Assert.Equal(StatusFace.DisplayHeight, display.Bounds.Height, 0.5); Assert.Equal(52, display.Bounds.Height, 0.5); Assert.Equal(14, display.CornerRadius.TopLeft);
             Assert.Equal(StatusFace.DisplayWidth, display.Bounds.Width, 1.0);
             Assert.Equal(PillWindow.InsetLeft, X(display, surface), 3.0); // The display starts at the card's left inset.
-            Assert.Equal(12, X(well, surface) - (X(display, surface) + display.Bounds.Width), 1.5); // 12 between the display and the well, and the well and the break (G3).
+            Assert.Equal(PillWindow.InsetRight, surface.Bounds.Width - (X(display, surface) + display.Bounds.Width), 3.0); // The same bezel at the far end.
             var width = display.Bounds.Width; var clockWidth = pill.GetVisualDescendants().OfType<SegmentClock>().Single().Bounds.Width; var countWidth = Find<SegmentRun>(pill, "PillAlertCount").Bounds.Width;
             model.ToggleAccount("Account one"); model.ToggleBreak(); model.Notes.AddNote("Send the budget", null, DemoNow.Date.AddHours(8)); Settle(pill);
             Assert.Equal(width, display.Bounds.Width, 0.5); Assert.Equal(clockWidth, pill.GetVisualDescendants().OfType<SegmentClock>().Single().Bounds.Width, 0.5); Assert.Equal(countWidth, Find<SegmentRun>(pill, "PillAlertCount").Bounds.Width, 0.5);

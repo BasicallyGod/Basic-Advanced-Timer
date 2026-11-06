@@ -59,15 +59,15 @@ public sealed class DisplayOptionsTests
             var surface = Find<Border>(pill, "PillSurface");
             Assert.Equal(PillWindow.PillWidth, surface.Width);
             model.SetCompactPill(true); Settle(pill);
-            Assert.Equal(PillWindow.CompactWidth, surface.Width); Assert.Equal(230, PillWindow.CompactWidth);
+            Assert.Equal(PillWindow.CompactWidth, surface.Width); Assert.Equal(StatusFace.ShortDisplayWidth + 12, PillWindow.CompactWidth, 1.0);
             Assert.Equal((PillWindow.CompactWidth + 2 * Ui.ShadowMargin) * pill.Scale, pill.WindowWidthNow, 0.5);
-            Assert.False(Find<Border>(pill, "PillWell").IsVisible); Assert.False(Find<Button>(pill, "PillBreak").IsVisible);
+            Assert.False(Find<Button>(pill, "PillPause").IsVisible); Assert.False(Find<Button>(pill, "PillBreak").IsVisible);
             var display = Find<Border>(pill, "PillDisplay"); Assert.True(display.IsVisible);
             var edge = surface.Bounds.Width - (display.TranslatePoint(default, surface)!.Value.X + display.Bounds.Width);
             Assert.Equal(PillWindow.InsetLeft, edge, 3.0); // The display sits in the card with the same room each side.
             Assert.True(pill.AlertsButton.IsVisible); // The count still opens what is waiting.
             model.SetCompactPill(false); Settle(pill);
-            Assert.Equal(PillWindow.PillWidth, surface.Width); Assert.True(Find<Border>(pill, "PillWell").IsVisible);
+            Assert.Equal(PillWindow.PillWidth, surface.Width); Assert.True(Find<Button>(pill, "PillPause").IsVisible);
         }
         finally { pill.Close(); }
     }
