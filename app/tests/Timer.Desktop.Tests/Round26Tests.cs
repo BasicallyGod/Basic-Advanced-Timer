@@ -90,7 +90,7 @@ public sealed class Round26Tests
     }
 
     [AvaloniaFact]
-    public void ABlocksNoteStopsShortOfItsNoteMarkAndTheSidebarSaysNothingUnderTheNameWhileTracking()
+    public void ABlocksNoteStopsShortOfItsNoteMarkAndTheSidebarSaysItsStateOnlyInTheTooltipWhileTracking()
     {
         var model = Model(); model.Engine.AddSession("Account one", T(12, 0), T(14, 0)); var noted = model.Engine.Sessions[^1]; model.EditEntry(noted, noted.Account, noted.From, noted.To, "Kick-off prep and agenda for the week");
         var window = new DashboardWindow(model); window.Show(); Settle(window);
@@ -102,7 +102,7 @@ public sealed class Round26Tests
             Assert.True(note.Margin.Right >= 20); // The words are cut before the mark, not run under it.
             Assert.True(note.TranslatePoint(new Point(note.Bounds.Width, 0), block)!.Value.X <= mark.TranslatePoint(default, block)!.Value.X + .5);
             model.ToggleAccount("Account two"); Settle(window);
-            Assert.False(Find<TextBlock>(window, "SidebarWhoStatus").IsVisible);
+            Assert.Equal("Account two · Recording", ToolTip.GetTip(Find<Border>(window, "SidebarWhoName"))?.ToString());
         }
         finally { window.Close(); }
     }

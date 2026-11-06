@@ -72,9 +72,6 @@ public sealed class StatusFace : StackPanel
     }
     /// <summary>Whether this is the dashboard's sidebar face: the lights and the clock centred, then one tracking card (play or pause, the account and how long it has run, the break).</summary>
     public bool Sidebar { get; }
-    private readonly TextBlock whoName = new() { FontSize = 13.5, FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
-    private readonly TextBlock whoStatus = new() { FontSize = 11.5, Classes = { "muted" }, TextTrimming = TextTrimming.CharacterEllipsis };
-    private readonly Ellipse whoDot = new() { Width = 9, Height = 9, VerticalAlignment = VerticalAlignment.Center };
     /// <summary>The pill's account box (only a dot and a chevron: the name is its tooltip and the list) and the day clock's box are these widths, so the pill keeps one size whatever the time.</summary>
     public const double SelectorWidth = 50;
     /// <summary>The display window is as tall as the well beside it, with its digits 28 tall and the count's 15; the count's column is 24 wide.</summary>
@@ -82,6 +79,8 @@ public sealed class StatusFace : StackPanel
     /// <summary>The window's width, which is one size whatever the time or the count: padding, the LED, a divider, the clock, a divider and the count's column.</summary>
     public static double LeftWidth => 2 * DisplayPadding + 6 + 2 * (2 * DividerGap + DottedDivider.ColumnWidth) + SegmentClock.Width + CountColumn;
     /// <summary>The pill's window continues past the count: a divider, then the play and pause zone, the account's name and the break.</summary>
+    /// <summary>The sidebar's display has a second row for the play dots, the name and the cup, under a dotted rule.</summary>
+    public const double SecondRowHeight = 48;
     public const double TransportZone = 36, NameZone = 90, BreakZone = 36;
     public static double DisplayWidth => LeftWidth - DisplayPadding + (2 * DividerGap + DottedDivider.ColumnWidth) + TransportZone + NameZone + BreakZone + 6;
     /// <summary>The window of the sidebar and the compact pill, which stop at the count.</summary>
@@ -111,7 +110,7 @@ public sealed class StatusFace : StackPanel
     public TransportGlyph? Transport { get; private set; }
     public SegmentName? NameRun { get; private set; }
     public CupGlyph? Cup { get; private set; }
-    private DottedDivider? transportDivider;
+    private DottedDivider? transportDivider; private Border? nameHost, trackBox;
     private bool wasTracking; private string? scrolledFor;
     public Button AccountsButton { get; }
     public BreakButton Break { get; }
@@ -124,13 +123,13 @@ public sealed class StatusFace : StackPanel
     {
         this.model = model; this.clockTip = clockTip; Sidebar = sidebar;
         segmentClock = new SegmentClock(); clock = segmentClock;
-        Spacing = 0; HorizontalAlignment = HorizontalAlignment.Center; if (sidebar) { Spacing = 6; HorizontalAlignment = HorizontalAlignment.Stretch; } else { Orientation = Orientation.Horizontal; VerticalAlignment = VerticalAlignment.Center; }
+        Spacing = 0; HorizontalAlignment = HorizontalAlignment.Center; if (sidebar) { Spacing = 8; HorizontalAlignment = HorizontalAlignment.Stretch; } else { Orientation = Orientation.Horizontal; VerticalAlignment = VerticalAlignment.Center; }
         // The state LED is a capsule set into the display, like a segment: an empty groove when idle, inlaid in the state's colour when not.
         stateLight = new Border { Name = prefix + "StateLight", Width = 6, Height = 14, CornerRadius = new CornerRadius(3.5), VerticalAlignment = VerticalAlignment.Center };
         // The clock opens the dashboard (and collapses it again), as it always has; it is one width whatever the time.
         ClockButton = Ui.Button("", clockClick, prefix + "Dashboard");
         ClockButton.Classes.Add("pillBare"); ClockButton.Content = (Control)clock; ClockButton.HorizontalAlignment = HorizontalAlignment.Center; ClockButton.VerticalAlignment = VerticalAlignment.Center;
-        ClockButton.Classes.Add("zone"); ClockButton.Padding = new Thickness(4, 6); ClockButton.Margin = new Thickness(-4, -6);
+        ClockButton.Classes.Add("zone"); ClockButton.Padding = new Thickness(3, 6); ClockButton.Margin = new Thickness(-3, -6);
         ToolTip.SetTip(ClockButton, clockTip); Avalonia.Automation.AutomationProperties.SetName(ClockButton, clockTip);
         // The alert count: a small bell over two segment digits, in the colour of the most urgent thing waiting. Pressing it opens what is waiting (on the pill).
         alertCountRun.Name = prefix + "AlertCount";
@@ -158,7 +157,7 @@ public sealed class StatusFace : StackPanel
         Circle.PointerEntered += (_, _) => { hoverCircle = true; Refresh(); };
         Circle.PointerExited += (_, _) => { hoverCircle = false; Refresh(); };
         SoftTint.WatchKeyboardFocus(Circle, f => { circleFocus = f; Refresh(); });
-        Break = new BreakButton(model, breakName, inDisplay: !sidebar);
+        Break = new BreakButton(model, breakName, inDisplay: true);
         // The accounts button is the same on the pill and the rail: it opens the account list beside the window, and closes it again.
         AccountsButton = Ui.Button("", accountsClick, prefix + "Accounts");
         AccountsButton.Classes.Add("pillBare");
@@ -174,63 +173,37 @@ public sealed class StatusFace : StackPanel
         SetAccountsOpen(false);
         // The primary control and the Accounts button share one well.
         well.Name = prefix + "Well";
-        if (!sidebar)
-        {
-            // Along the pill the display simply carries on past the count: a divider, the play or pause symbol, the account's name and the cup, each a zone that washes
-            // under the pointer exactly as the clock and the count do.
-            Transport = new TransportGlyph { Colour = ThemeColourOr("Live", "#34D399") };
-            Circle.Content = Transport; Circle.Classes.Add("zone"); Circle.Margin = default; Circle.Padding = new Thickness(0); Circle.Width = TransportZone; Circle.Height = 40; Circle.VerticalAlignment = VerticalAlignment.Center;
-            NameRun = new SegmentName { Name = prefix + "AccountName", HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-            AccountsButton.Content = NameRun; AccountsButton.Classes.Add("zone"); AccountsButton.Margin = default; AccountsButton.Padding = new Thickness(0); AccountsButton.Width = NameZone; AccountsButton.Height = 40; AccountsButton.VerticalAlignment = VerticalAlignment.Center;
-            AccountsButton.PointerEntered += (_, _) => NameRun.Scroll();
-            Break.VerticalAlignment = VerticalAlignment.Center;
-            transportDivider = Divider(); Cup = Break.Cup;
-        }
-        else
-        {
-            // One tracking card: pause or play at its left end, the break at its right, and between them the account's colour and name with how long it has run.
-            well.Width = double.NaN; well.Height = double.NaN; well.Margin = new Thickness(0, 6, 0, 4); well.Padding = new Thickness(6); well.HorizontalAlignment = HorizontalAlignment.Stretch;
-            // The words are left aligned in the room between the two tiles, so the dot stays at one left edge whatever the name's length (centred, it moved with every
-            // name, which read as a bounce when the account changed). The name is in a grid so a long one is cut with an ellipsis instead of widening the card.
-            var who = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(8, 0, 0, 0) };
-            var nameLine = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 7 };
-            whoName.HorizontalAlignment = HorizontalAlignment.Left; Grid.SetColumn(whoName, 1); nameLine.Children.Add(whoDot); nameLine.Children.Add(whoName);
-            // The status sits under the name, not the dot.
-            whoStatus.HorizontalAlignment = HorizontalAlignment.Left; whoStatus.TextAlignment = TextAlignment.Left; whoStatus.Margin = new Thickness(16, 0, 0, 0); whoStatus.TextTrimming = TextTrimming.CharacterEllipsis;
-            who.Children.Add(nameLine); who.Children.Add(whoStatus); whoName.Name = prefix + "WhoName"; whoStatus.Name = prefix + "WhoStatus";
-            // The well holds the play key and the account's name; the break is its own round key outside it, as on the pill (the mock draws the dashboard the same way).
-            var card = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 4 };
-            Grid.SetColumn(who, 1);
-            card.Children.Add(Circle); card.Children.Add(who);
-            well.Child = card; well.CornerRadius = new CornerRadius(WellRadius); well.Padding = new Thickness(WellPadding, WellPadding, 8, WellPadding);
-            Break.VerticalAlignment = VerticalAlignment.Center;
-        }
+        // The display's right-hand controls are the same parts on the pill and the sidebar: the play or pause symbol, the account's name and the cup, each a zone that washes
+        // under the pointer exactly as the clock and the count do. On the pill they continue the one display; on the sidebar they are a second display of the same width.
+        Transport = new TransportGlyph { Colour = ThemeColourOr("Live", "#34D399") };
+        Circle.Content = Transport; Circle.Classes.Add("zone"); Circle.Margin = default; Circle.Padding = new Thickness(0); Circle.Width = TransportZone; Circle.Height = 40; Circle.VerticalAlignment = VerticalAlignment.Center;
+        NameRun = new SegmentName { Name = prefix + "AccountName", HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        Break.VerticalAlignment = VerticalAlignment.Center; Cup = Break.Cup;
+        transportDivider = Divider();
         Children.Add(displayBox);
         if (!sidebar)
         {
+            AccountsButton.Content = NameRun; AccountsButton.Classes.Add("zone"); AccountsButton.Margin = default; AccountsButton.Padding = new Thickness(0); AccountsButton.Width = NameZone; AccountsButton.Height = 40; AccountsButton.VerticalAlignment = VerticalAlignment.Center;
+            AccountsButton.PointerEntered += (_, _) => NameRun.Scroll();
             displayBox.Padding = new Thickness(DisplayPadding, 0, 6, 0);
-            inside.Children.Add(transportDivider!); inside.Children.Add(Circle); inside.Children.Add(AccountsButton); inside.Children.Add(Break);
+            inside.Children.Add(transportDivider); inside.Children.Add(Circle); inside.Children.Add(AccountsButton); inside.Children.Add(Break);
         }
-        if (sidebar)
+        else
         {
-            var track = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 5, Margin = well.Margin } /* the break key clear of the well */; well.Margin = default;
-            Grid.SetColumn(Break, 1); track.Children.Add(well); track.Children.Add(Break); Children.Add(track);
+            // The display folds in two: the clock row above, and under a dotted rule play and pause, the account's name (a label: the account list is already below it) and
+            // the cup. Every zone keeps its wash clear of the dividers and of the window's edge.
+            nameHost = new Border { Name = prefix + "WhoName", Width = NameZone, Height = 40, Child = NameRun, Background = Brushes.Transparent, VerticalAlignment = VerticalAlignment.Center };
+            var strip = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center, Children = { Circle, Divider(), nameHost, Divider(), Break } };
+            trackBox = new Border { Name = prefix + "Track", Height = SecondRowHeight, Width = ShortDisplayWidth, Child = strip, HorizontalAlignment = HorizontalAlignment.Center };
+            var rule = new DottedDivider(false, ShortDisplayWidth - 2 * 16) { VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Center };
+            var rows = new Grid { RowDefinitions = new RowDefinitions(DisplayHeight + "," + SecondRowHeight) };
+            displayBox.Child = null; inside.Margin = new Thickness(DisplayPadding, 0); displayBox.Padding = default; displayBox.Height = DisplayHeight + SecondRowHeight;
+            Grid.SetRow(trackBox, 1); Grid.SetRow(rule, 1); rule.Margin = new Thickness(0, -1, 0, 0);
+            rows.Children.Add(inside); rows.Children.Add(trackBox); rows.Children.Add(rule);
+            displayBox.Child = rows;
         }
         ActualThemeVariantChanged += (_, _) => Refresh();
         Refresh();
-    }
-
-    // The sidebar's tracking card: the account being tracked (or the one a press would start) by its colour and name, and what it is doing.
-    private void RefreshWho(bool onBreak, TimerAccount? selected, string? who, Color stateColour)
-    {
-        var account = model.Accounts.FirstOrDefault(a => a.Name == who);
-        var name = onBreak ? "Break" : who is null ? "Choose an account" : account?.Display ?? who;
-        whoName.Text = name;
-        whoDot.Fill = onBreak ? new SolidColorBrush(ThemeColourOr("Break", "#F5A524")) : account is null ? new SolidColorBrush(ThemeColourOr("Idle", "#8A8F98")) : Brush.Parse(Ui.Visible(account.Colour));
-        whoStatus.Text = onBreak ? "On break" + (model.ResumeAccount is { } back ? " · back to " + (model.Accounts.FirstOrDefault(a => a.Name == back)?.Display ?? back) : "")
-            : model.IsTracking ? "" : who is null ? "Pick one below" : "Ready to track";
-        // While tracking, the play or pause tile and the state light already say so, so the line is left out and the name stands alone, centred in the card.
-        whoStatus.IsVisible = whoStatus.Text.Length > 0;
     }
 
     /// <summary>Marks the accounts button as pressed while the list is open, and words its tooltip for what pressing it will do.</summary>
@@ -327,7 +300,6 @@ public sealed class StatusFace : StackPanel
         if (selectorWords != display) { selectorWords = display; SetAccountsOpen(accountsOpen, wash: false); }
         selectorDot.Fill = new SolidColorBrush(stateColour); // The dot is the state.
         // The pill's tile carries the initials while an account runs, and gives way to the symbol at rest, under the pointer, or with no account to name.
-        if (Sidebar) RefreshWho(onBreak, selected, who, stateColour);
         var showGlyph = Sidebar || hoverCircle || (!model.IsTracking && !onBreak) || initials.Text.Length == 0;
         initials.IsVisible = !showGlyph; glyphBox.IsVisible = showGlyph;
         glyph.Playing = model.IsTracking && !onBreak; glyph.InvalidateVisual();
@@ -338,7 +310,7 @@ public sealed class StatusFace : StackPanel
         Avalonia.Automation.AutomationProperties.SetName(ClockButton, clockTip + ". Working time " + model.ClockText);
         Break.Refresh();
         PaintAccountsTile();
-        if (!Sidebar) RefreshTransport(onBreak, who, shown);
+        RefreshTransport(onBreak, who, shown);
     }
 
     // The display's right-hand end: the symbol for what pressing the first zone does, the account's name and (in the cup) the break.
@@ -353,6 +325,16 @@ public sealed class StatusFace : StackPanel
         // A long name runs along once when recording starts (and again whenever the pointer is over it).
         if (recording && !wasTracking || (recording && scrolledFor != shown)) NameRun.Scroll();
         wasTracking = recording; scrolledFor = recording ? shown : null;
+        if (nameHost is not null)
+        {
+            // The words the old card showed under the name now live in its tooltip and accessible name.
+            var account = model.Accounts.FirstOrDefault(a => a.Name == shown);
+            var who2 = shown is null ? "Choose an account" : account?.Display ?? shown;
+            var status = onBreak ? "On break" + (model.ResumeAccount is { } back ? " · back to " + (model.Accounts.FirstOrDefault(a => a.Name == back)?.Display ?? back) : "")
+                : model.IsTracking ? "Recording" : shown is null ? "Pick one below" : "Ready to track";
+            var words = who2 + " · " + status;
+            ToolTip.SetTip(nameHost, words); Avalonia.Automation.AutomationProperties.SetName(nameHost, words);
+        }
     }
 }
 

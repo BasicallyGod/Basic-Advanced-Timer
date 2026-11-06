@@ -78,14 +78,15 @@ public sealed class SidebarTests
     }
 
     [AvaloniaFact]
-    public void TheTrackingCardNamesTheAccountAndItsStateAndTheClockIsOneCentredLine()
+    public void TheTrackingDisplayNamesTheAccountAndItsStateAndTheClockIsOneCentredLine()
     {
         var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            Assert.Equal("Account one", Find<TextBlock>(window, "SidebarWhoName").Text); Assert.Equal("Ready to track", Find<TextBlock>(window, "SidebarWhoStatus").Text);
-            model.ToggleAccount("Account two"); Settle(window); Assert.Equal("Account two", Find<TextBlock>(window, "SidebarWhoName").Text); Assert.False(Find<TextBlock>(window, "SidebarWhoStatus").IsVisible); // Tracking says itself, on the tile and the light.
-            model.ToggleBreak(); Settle(window); Assert.Equal("Break", Find<TextBlock>(window, "SidebarWhoName").Text); Assert.StartsWith("On break", Find<TextBlock>(window, "SidebarWhoStatus").Text);
+            string Tip() => ToolTip.GetTip(Find<Border>(window, "SidebarWhoName"))!.ToString()!;
+            Assert.Equal("ACCOUNT ONE", Find<SegmentName>(window, "SidebarAccountName").Text); Assert.Equal("Account one · Ready to track", Tip());
+            model.ToggleAccount("Account two"); Settle(window); Assert.Equal("ACCOUNT TWO", Find<SegmentName>(window, "SidebarAccountName").Text); Assert.Equal("Account two · Recording", Tip()); // The words the card used to carry are the tooltip now.
+            model.ToggleBreak(); Settle(window); Assert.StartsWith("Account two · On break", Tip());
             // The clock is seven-segment digits (hours and minutes, then the seconds the same height) inside the display, and the display is centred in the column.
             var display = Find<Border>(window, "SidebarDisplay"); var sidebar = Find<Border>(window, "Sidebar");
             var clock = display.GetVisualDescendants().OfType<SegmentClock>().Single(); var parts = clock.GetVisualDescendants().OfType<SegmentRun>().ToList(); Assert.Equal(2, parts.Count);

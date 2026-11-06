@@ -105,7 +105,7 @@ public sealed class Round31Tests
         try
         {
             var sidebar = Find<Border>(window, "Sidebar"); var display = Find<Border>(window, "SidebarDisplay");
-            Assert.Equal(52, display.Bounds.Height, 0.5); Assert.True(display.Bounds.Width <= sidebar.Bounds.Width - 24, "the display fits the column with room at each side");
+            Assert.Equal(StatusFace.DisplayHeight + StatusFace.SecondRowHeight, display.Bounds.Height, 0.5); // The clock row and the row of play, name and cup. Assert.True(display.Bounds.Width <= sidebar.Bounds.Width - 24, "the display fits the column with room at each side");
             Assert.NotNull(Find<Border>(window, "SidebarStateLight")); Assert.Equal(2, Find<SegmentRun>(window, "SidebarAlertCount").Text.Length);
             var width = display.Bounds.Width; model.ToggleAccount("Account one"); Settle(window); Assert.Equal(width, display.Bounds.Width, 0.5);
         }

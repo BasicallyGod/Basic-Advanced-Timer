@@ -12,9 +12,15 @@ namespace Timer.Desktop;
 /// </summary>
 public sealed class DottedDivider : Control
 {
-    /// <summary>Every divider in every display is this: a column of dots 2 wide and 28 tall, 4 apart.</summary>
+    /// <summary>Every divider in every display is this: a line of dots 2 wide, 4 apart, 28 long when it stands upright.</summary>
     public const double ColumnWidth = 2, ColumnHeight = 28, Pitch = 4, DotSize = 1.6;
-    public DottedDivider() { Width = ColumnWidth; Height = ColumnHeight; IsHitTestVisible = false; }
+    private readonly bool vertical;
+    /// <summary>An upright divider, or (with a length) the flat rule between the two rows of the sidebar's display.</summary>
+    public DottedDivider(bool vertical = true, double length = ColumnHeight)
+    {
+        this.vertical = vertical; IsHitTestVisible = false;
+        if (vertical) { Width = ColumnWidth; Height = length; } else { Width = length; Height = ColumnWidth; }
+    }
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
@@ -24,7 +30,9 @@ public sealed class DottedDivider : Control
     {
         var ink = Ui.ThemeColour(this, "Ink", Colors.Gray);
         var brush = new SolidColorBrush(SoftTint.WithAlpha(ink, .26));
-        for (var y = Pitch / 2; y < ColumnHeight; y += Pitch) context.DrawEllipse(brush, null, new Point(ColumnWidth / 2, y), DotSize / 2, DotSize / 2);
+        var length = vertical ? Height : Width;
+        for (var d = Pitch / 2; d < length; d += Pitch)
+            context.DrawEllipse(brush, null, vertical ? new Point(ColumnWidth / 2, d) : new Point(d, ColumnWidth / 2), DotSize / 2, DotSize / 2);
     }
 }
 
