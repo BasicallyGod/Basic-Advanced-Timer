@@ -71,10 +71,9 @@ public sealed partial class SelectedBlockCard
         dayButton.Width = double.NaN; dayButton.Height = 38; dayButton.Padding = new Thickness(12, 0); dayButton.Content = Ui.Horizontal(new IconGlyph(IconKind.Today), f.DayWords);
         var dayHost = new Grid { Children = { dayButton, popup } };
 
-        var row1 = Ui.Grid("*,Auto"); row1.ColumnSpacing = 10; Field(row1, 0, "Name", f.Name); Field(row1, 1, "Day", dayHost);
-        var accountRow = new StackPanel { Spacing = 5 }; accountRow.Children.Add(Label("Account")); accountRow.Children.Add(f.Account);
+        var row1 = Ui.Grid("2*,Auto,*"); row1.ColumnSpacing = 10; Field(row1, 0, "Name", f.Name); Field(row1, 1, "Day", dayHost); Field(row1, 2, "Account", f.Account);
         var row2 = Ui.Grid("100,100,*"); row2.ColumnSpacing = 10; Field(row2, 0, "Start", f.Start); Field(row2, 1, "End", f.End); Field(row2, 2, "Repeat", f.Repeat);
-        body.Children.Add(row1); body.Children.Add(accountRow); body.Children.Add(row2);
+        body.Children.Add(row1); body.Children.Add(row2);
         if (series)
         {
             f.ScopeHost = new Border { Name = "DetailsScope" }; var scope = new StackPanel { Spacing = 5 }; scope.Children.Add(Label("Changes apply to")); scope.Children.Add(f.ScopeHost); body.Children.Add(scope);

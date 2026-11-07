@@ -60,8 +60,7 @@ public sealed partial class SelectedBlockCard
         var reminderHost = new Grid { Children = { reminderButton, popup } };
 
         var wordsStack = new StackPanel { Spacing = 5 }; wordsStack.Children.Add(Label("Note")); wordsStack.Children.Add(f.Words); body.Children.Add(wordsStack);
-        var accountRow = new StackPanel { Spacing = 5 }; accountRow.Children.Add(Label("Account")); accountRow.Children.Add(f.Account); body.Children.Add(accountRow);
-        var row = Ui.Grid("*"); Field(row, 0, "Reminder", reminderHost);
+        var row = Ui.Grid("1.1*,1.2*"); row.ColumnSpacing = 12; Field(row, 0, "Account", f.Account); Field(row, 1, "Reminder", reminderHost);
         body.Children.Add(row);
         Committing(f.Words, () => ApplyNote(f));
         f.Account.SelectionChanged += (_, _) => ApplyNote(f);

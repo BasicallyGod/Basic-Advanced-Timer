@@ -17,6 +17,8 @@ public enum ChoiceLook
     Segments,
     /// <summary>Small chips of one or two letters in a row, for the days of the week.</summary>
     Days,
+    /// <summary>A drop-down list with the option's colour dot, for a long list that a row of chips would crowd: the accounts in a form. It keeps the same members as the other looks.</summary>
+    Dropdown,
 }
 
 /// <summary>
@@ -72,7 +74,8 @@ public sealed class ChoiceStrip : Border
 
     private void Rebuild()
     {
-        buttons.Clear();
+        buttons.Clear(); combo = null;
+        if (Look == ChoiceLook.Dropdown) { Child = BuildDropdown(); return; }
         if (Look == ChoiceLook.Segments) { Child = BuildSegments(); return; }
         var panel = new WrapPanel { Orientation = Orientation.Horizontal, ItemSpacing = Look == ChoiceLook.Days ? 6 : 7, LineSpacing = 7 };
         var folded = Look == ChoiceLook.Chips && items.Count > FoldAfter && !expanded;
@@ -82,6 +85,22 @@ public sealed class ChoiceStrip : Border
         if (folded) panel.Children.Add(MoreChip("+" + (items.Count - shown.Count) + " more", () => { expanded = true; Rebuild(); }));
         else if (Look == ChoiceLook.Chips && expanded && items.Count > FoldAfter) panel.Children.Add(MoreChip("Show fewer", () => { expanded = false; Rebuild(); }));
         Child = panel; Refresh();
+    }
+    private ComboBox? combo;
+    private bool syncingCombo;
+    private Control BuildDropdown()
+    {
+        var box = new ComboBox { Name = (string.IsNullOrEmpty(Name) ? "Choice" : Name) + "_Combo", ItemsSource = items, HorizontalAlignment = HorizontalAlignment.Stretch, Height = 38,
+            ItemTemplate = new Avalonia.Controls.Templates.FuncDataTemplate<string>((text, _) =>
+            {
+                var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
+                if (text is not null && DotFor?.Invoke(text) is { } hex) row.Children.Add(new Avalonia.Controls.Shapes.Ellipse { Width = 10, Height = 10, Fill = Brush.Parse(hex), VerticalAlignment = VerticalAlignment.Center });
+                row.Children.Add(new TextBlock { Text = ShortLabel?.Invoke(text ?? "") ?? text, VerticalAlignment = VerticalAlignment.Center }); return row;
+            }) };
+        AutomationProperties.SetName(box, string.IsNullOrEmpty(Name) ? "Choice" : Name);
+        combo = box; syncingCombo = true; box.SelectedItem = selected is null ? null : items.FirstOrDefault(i => i.Equals(selected, StringComparison.OrdinalIgnoreCase)); syncingCombo = false;
+        box.SelectionChanged += (_, _) => { if (!syncingCombo && box.SelectedItem is string chosen) SelectedItem = chosen; };
+        return box;
     }
     private Control BuildSegments()
     {
@@ -136,6 +155,7 @@ public sealed class ChoiceStrip : Border
     /// <summary>Brings every option up to date with the choice: the lamp lights on the chosen chip, the thumb sits under the chosen segment.</summary>
     private void Refresh()
     {
+        if (combo is not null) { syncingCombo = true; combo.SelectedItem = selected is null ? null : items.FirstOrDefault(i => i.Equals(selected, StringComparison.OrdinalIgnoreCase)); syncingCombo = false; return; }
         for (var i = 0; i < buttons.Count; i++)
         {
             var on = items.Count > i && selected is not null && buttons[i].Tag is string tag ? tag.Equals(selected, StringComparison.OrdinalIgnoreCase) : (Look == ChoiceLook.Segments && i < items.Count && selected is not null && items[i].Equals(selected, StringComparison.OrdinalIgnoreCase));

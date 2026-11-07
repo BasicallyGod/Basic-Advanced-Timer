@@ -124,7 +124,7 @@ public sealed partial class SelectedBlockCard : Border
     /// <summary>The account choice: a chip for each account, led by its colour, with the chosen one lit.</summary>
     private ChoiceStrip AccountStrip(string name, IReadOnlyList<string> names) => new()
     {
-        Name = name, Look = ChoiceLook.Chips, ItemsSource = names,
+        Name = name, Look = ChoiceLook.Dropdown, ItemsSource = names,
         DotFor = shown => shown == NoAccount || BreakAccount.Is(BreakAccount.Stored(shown)) ? null : model.ReviewAccounts.FirstOrDefault(a => a.Name.Equals(shown, StringComparison.OrdinalIgnoreCase)) is { } found ? Ui.Visible(found.Colour) : null,
     };
     private Control Swatch(string account, double size = 14)
@@ -178,7 +178,7 @@ public sealed partial class SelectedBlockCard : Border
         var day = block.Start.Date;
         var body = new StackPanel { Spacing = 12 };
         stackHost = new Border { Name = "StackHost", IsVisible = false }; body.Children.Add(stackHost);
-        var fields = Ui.Grid("*,*,*"); fields.ColumnSpacing = 10;
+        var fields = Ui.Grid("1.7*,*,*,*"); fields.ColumnSpacing = 10;
         // Account: one of the accounts, shown with its colour. A merged block's account and times are read-only.
         var names = model.ReviewAccounts.Select(a => a.Name).Append(block.Account).Distinct(StringComparer.OrdinalIgnoreCase).Select(BreakAccount.Display).ToList();
         if (!names.Contains(BreakAccount.Display(BreakAccount.Name))) names.Add(BreakAccount.Display(BreakAccount.Name));
@@ -195,8 +195,7 @@ public sealed partial class SelectedBlockCard : Border
         // Two small keys beside the labels set the start to the end of the block before, or the end to the start of the block after, for anyone who types times.
         Control? fitStart = group ? null : FitKey("FitToPrevious", IconKind.Previous, "Start where the block before ends", () => { if (current is { Row: not null } now) model.FitToPrevious(now.Row); });
         Control? fitEnd = group ? null : FitKey("FitToNext", IconKind.Next, "End where the block after starts", () => { if (current is { Row: not null } now) model.FitToNext(now.Row); });
-        var accountRow = new StackPanel { Spacing = 5 }; accountRow.Children.Add(Label("Account")); accountRow.Children.Add(account); body.Children.Add(accountRow);
-        Field(fields, 0, "Start", start, fitStart); Field(fields, 1, "End", end, fitEnd); Field(fields, 2, "Length", length);
+        Field(fields, 0, "Account", account); Field(fields, 1, "Start", start, fitStart); Field(fields, 2, "End", end, fitEnd); Field(fields, 3, "Length", length);
         body.Children.Add(fields);
         if (!group)
         {
