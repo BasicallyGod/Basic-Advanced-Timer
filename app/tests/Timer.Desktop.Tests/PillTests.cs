@@ -55,13 +55,13 @@ public sealed class PillTests
         var model = Model(); var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs();
         try
         {
-            var lights = Find<Border>(pill, "PillStateLight"); var circle = Find<Button>(pill, "PillPause"); var mug = Find<Button>(pill, "PillBreak");
-            Assert.Equal("Not recording", Tip(lights)); Assert.StartsWith("Start ", Tip(circle)); Assert.Equal("Start break", Tip(mug));
+            var lights = Find<Border>(pill, "PillStateLight"); var circle = Find<Button>(pill, "PillPause"); var breakKey = Find<Button>(pill, "PillBreak");
+            Assert.Equal("Not recording", Tip(lights)); Assert.StartsWith("Start ", Tip(circle)); Assert.Equal("Start break", Tip(breakKey));
             model.ToggleAccount("Account one"); Dispatcher.UIThread.RunJobs();
             Assert.Equal("Recording", Tip(lights)); Assert.StartsWith("Pause", Tip(circle));
             Assert.Equal("ACCOUNT ONE", Find<SegmentName>(pill, "PillAccountName").Text); Assert.True(Find<Button>(pill, "PillPause").GetVisualDescendants().OfType<TransportGlyph>().Single().Paused); // The display names the running account and shows the pause bars.
             model.ToggleBreak(); Dispatcher.UIThread.RunJobs();
-            Assert.Equal("On break", Tip(lights)); Assert.StartsWith("End break", Tip(mug)); Assert.True(pill.GetVisualDescendants().OfType<CupGlyph>().Single().Steaming);
+            Assert.Equal("On break", Tip(lights)); Assert.StartsWith("End break", Tip(breakKey)); Assert.True(pill.GetVisualDescendants().OfType<BreakBadgeGlyph>().Single().Highlighted);
         }
         finally { pill.Close(); }
     }
@@ -75,16 +75,15 @@ public sealed class PillTests
             var zones = new[] { Find<Button>(pill, "PillDashboard"), Find<Button>(pill, "PillAlertsButton"), Find<Button>(pill, "PillPause"), pill.AccountsButton, Find<Button>(pill, "PillBreak") };
             Assert.All(zones, z => Assert.Contains("zone", z.Classes)); // One style gives the hover and pressed wash to all five.
             Assert.True(pill.TryFindResource("ZoneHover", pill.ActualThemeVariant, out _)); Assert.True(pill.TryFindResource("ZonePressed", pill.ActualThemeVariant, out _));
-            // There are no dividers: the display runs LED, clock, count, name, then the play tag and the mug, and the mug is as far from the right edge as the LED is from the left.
+            // The display runs LED, clock, count and name, then the stacked badges.
             var display = Find<Border>(pill, "PillDisplay");
             double X(Control c) => c.TranslatePoint(new Point(0, 0), display)!.Value.X;
-            var cupG = zones[4].GetVisualDescendants().OfType<CupGlyph>().Single(); var tagG = zones[2].GetVisualDescendants().OfType<TransportGlyph>().Single();
+            var badge = zones[4].GetVisualDescendants().OfType<BreakBadgeGlyph>().Single();
+            var tag = zones[2].GetVisualDescendants().OfType<TransportGlyph>().Single();
             var led = Find<Border>(pill, "PillStateLight"); var clockZone = zones[0]; var count = zones[1]; var name = pill.AccountsButton; var play = zones[2]; var brk = zones[4];
-            Assert.True(X(led) < X(clockZone) && X(clockZone) < X(count) && X(count) < X(name) && X(name) < X(play) && X(play) < X(brk));
-            Assert.Equal(X(led), display.Bounds.Width - (X(cupG) + cupG.Bounds.Width), 1.5);
-            Assert.Equal(20, tagG.Bounds.Height, 0.5); Assert.Equal(SegmentName.CellHeight, tagG.Bounds.Height, 0.5); // The tag is as tall as the name.
-            var tileMiddle = cupG.TranslatePoint(new Point(0, cupG.Bounds.Height / 2), display)!.Value.Y; var tagMiddle = tagG.TranslatePoint(new Point(0, 10), display)!.Value.Y;
-            Assert.Equal(tagMiddle, tileMiddle, 0.5); // The mug's tile is level with the tag; only the steam rises above it.
+            Assert.True(X(led) < X(clockZone) && X(clockZone) < X(count) && X(count) < X(name) && X(name) < X(play));
+            Assert.Equal(X(play), X(brk), 0.5);
+            Assert.Equal(tag.Bounds.Size, badge.Bounds.Size);
         }
         finally { pill.Close(); }
     }
@@ -204,34 +203,52 @@ public sealed class PillTests
     }
 
     [AvaloniaFact]
-    public void TheNameThenThePlayZoneAndTheCupRunOnAlongTheDisplayInThatOrder()
+    public void ThePillAndSidebarStackTheirControlsAfterTheName()
     {
-        var model = Model(); var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs(); using var frame = pill.CaptureRenderedFrame();
+        var model = Model();
+        var pill = new PillWindow(model);
+        var dashboard = new DashboardWindow(model);
+        pill.Show();
+        dashboard.Show();
+        Dispatcher.UIThread.RunJobs();
+        using var pillFrame = pill.CaptureRenderedFrame();
+        using var dashboardFrame = dashboard.CaptureRenderedFrame();
         try
         {
-            double X(Control c) => c.TranslatePoint(default, pill)!.Value.X;
-            var primary = Find<Button>(pill, "PillPause"); var brk = Find<Button>(pill, "PillBreak"); var clock = Find<Button>(pill, "PillDashboard");
-            Assert.True(X(clock) < X(pill.AccountsButton)); Assert.True(X(pill.AccountsButton) < X(primary)); Assert.True(X(primary) < X(brk)); // The name, then the play tag and the mug.
-            Assert.Equal(StatusFace.TransportZone, primary.Bounds.Width, 0.5); Assert.Equal(StatusFace.BreakZone, brk.Bounds.Width, 0.5);
+            void Check(Window window, string prefix, string breakName, int cells)
+            {
+                var display = Find<Border>(window, prefix + "Display");
+                var name = Find<SegmentName>(window, prefix + "AccountName");
+                var play = Find<Button>(window, prefix + "Pause");
+                var brk = Find<Button>(window, breakName);
+                Point At(Control c) => c.TranslatePoint(default, display)!.Value;
+                Assert.Equal(cells, name.VisibleCells);
+                Assert.True(At(name).X + name.Bounds.Width <= At(play).X);
+                Assert.Equal(At(play).X, At(brk).X, 0.5);
+                Assert.True(At(play).Y + play.Bounds.Height <= At(brk).Y);
+                Assert.InRange(At(brk).Y + brk.Bounds.Height, 0, display.Bounds.Height + 0.5);
+            }
+            Check(pill, "Pill", "PillBreak", 6);
+            Check(dashboard, "Sidebar", "DashboardBreak", 10);
             Assert.Equal(PillWindow.PillHeight, Find<Border>(pill, "PillSurface").Bounds.Height, 0.5);
         }
-        finally { pill.Close(); }
+        finally { pill.Close(); dashboard.Close(); }
     }
 
     [AvaloniaFact]
-    public void TheCupFillsOnABreakAndTheTransportShowsPauseWhileRecording()
+    public void TheBreakBadgeLightsOnABreakAndTheTransportShowsPauseWhileRecording()
     {
         using var motion = new EnabledMotionScope();
         var model = Model(); var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs(); using var frame = pill.CaptureRenderedFrame();
         try
         {
-            var cup = pill.GetVisualDescendants().OfType<CupGlyph>().Single(); var transport = pill.GetVisualDescendants().OfType<TransportGlyph>().Single();
-            Assert.False(cup.On); Assert.Equal(0, cup.Lit); Assert.False(transport.Paused);
+            var badge = pill.GetVisualDescendants().OfType<BreakBadgeGlyph>().Single(); var transport = pill.GetVisualDescendants().OfType<TransportGlyph>().Single();
+            Assert.False(badge.Highlighted); Assert.Equal(0, badge.Lit); Assert.False(transport.Paused);
             model.ToggleAccount("Account one"); Dispatcher.UIThread.RunJobs(); Assert.True(transport.Paused);
             transport.Step(TransportGlyph.WipeMilliseconds + 1); Assert.Equal(1, transport.Progress); // The triangle has faded into the bars.
-            model.ToggleBreak(); Dispatcher.UIThread.RunJobs(); Assert.True(cup.On); cup.Step(CupGlyph.FadeMilliseconds + 1);
-            Assert.Equal(1, cup.Lit); Assert.True(cup.Steaming); // The mug is lit.
-            model.ToggleBreak(); Dispatcher.UIThread.RunJobs(); cup.Step(CupGlyph.FadeMilliseconds + 1); Assert.Equal(0, cup.Lit);
+            model.ToggleBreak(); Dispatcher.UIThread.RunJobs(); Assert.True(badge.Highlighted); badge.Step(BreakBadgeGlyph.FadeMilliseconds + 1);
+            Assert.Equal(1, badge.Lit);
+            model.ToggleBreak(); Dispatcher.UIThread.RunJobs(); badge.Step(BreakBadgeGlyph.FadeMilliseconds + 1); Assert.Equal(0, badge.Lit);
         }
         finally { pill.Close(); }
     }
@@ -262,22 +279,19 @@ public sealed class PillTests
     }
 
     [AvaloniaFact]
-    public void TheMugsSteamIsDrawnEvenWhenNoBreakIsOn()
+    public void TheWiderNameRunScrollsOnlyWhenItsOwnCellsFill()
     {
         using var motion = new EnabledMotionScope();
-        var cup = new CupGlyph(); cup.Show(false, false, true);
-        Assert.False(cup.On); Assert.False(cup.Steaming);
-        Assert.All(Enumerable.Range(0, CupGlyph.Wisps), i => Assert.True(cup.WispBrightness(i) > 0)); // Three wisps, faint and still above the mug.
-        cup.Show(true, true, true); Assert.Equal(1, cup.Lit);
-        // Lit and steaming, the wisps take turns: one is brightest and they are not all the same.
-        Assert.True(Enumerable.Range(0, CupGlyph.Wisps).Select(cup.WispBrightness).Distinct().Count() > 1);
-        var first = Enumerable.Range(0, CupGlyph.Wisps).Select(i => cup.WispBrightness(i)).ToList(); cup.Step(CupGlyph.TurnMilliseconds);
-        var next = Enumerable.Range(0, CupGlyph.Wisps).Select(i => cup.WispBrightness(i)).ToList();
-        Assert.Equal(first.IndexOf(first.Max()) + 1, next.IndexOf(next.Max()) == 0 ? 3 : next.IndexOf(next.Max())); // The turn moves on to the next wisp.
+        var run = new SegmentName(10) { Text = "ABCDEFGHIJ" };
+        Assert.False(run.Scrolling);
+        run.Text = "ABCDEFGHIJKL";
+        Assert.True(run.Scrolling);
+        run.Step(SegmentName.StepMilliseconds * (SegmentName.RestSteps + 2));
+        Assert.Equal(2, run.Offset);
     }
 
     [AvaloniaFact]
-    public void ThePillHasNoBreakItemOnItsMenuBecauseTheMugIsTheBreakButton()
+    public void TheFullPillHasNoBreakItemOnItsMenuBecauseItHasABreakButton()
     {
         var model = Model(); var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs();
         try
