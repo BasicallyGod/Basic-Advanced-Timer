@@ -125,7 +125,7 @@ public abstract class VfdGlyph : SteppedControl
 public sealed class TransportGlyph : VfdGlyph
 {
     public const double WipeMilliseconds = 180;
-    private static readonly StreamGeometry Tag = Poly(true, (2.6, 8.2), (17, 8.2), (25.4, 14), (17, 19.8), (2.6, 19.8));
+    private static readonly StreamGeometry BadgeOutline = Poly(true, (2.6, 8.2), (17, 8.2), (25.4, 14), (17, 19.8), (2.6, 19.8));
     private static readonly StreamGeometry Triangle = Fill((7.2, 10.8), (13.2, 14), (7.2, 17.2));
     private static readonly StreamGeometry Bars = Build(c => { foreach (var x in new[] { 6.1, 10.5 }) { c.BeginFigure(new Point(x, 11), true); c.LineTo(new Point(x + 2.4, 11)); c.LineTo(new Point(x + 2.4, 17)); c.LineTo(new Point(x, 17)); c.EndFigure(true); } });
     private bool pause; private double progress;
@@ -147,12 +147,12 @@ public sealed class TransportGlyph : VfdGlyph
     {
         using (context.PushTransform(About(Size / 2, Size / 2, .85)))
         {
-            Bloom(context, Tag, 2.3, 1); Bloom(context, Triangle, 0, 1 - progress, true); Bloom(context, Bars, 0, progress, true);
+            Bloom(context, BadgeOutline, 2.3, 1); Bloom(context, Triangle, 0, 1 - progress, true); Bloom(context, Bars, 0, progress, true);
         }
         using (Meshed(context))
         using (context.PushTransform(About(Size / 2, Size / 2, .85)))
         {
-            Ink(context, Tag, 2.3, 1); Ink(context, Triangle, 0, 1 - progress, true); Ink(context, Bars, 0, progress, true);
+            Ink(context, BadgeOutline, 2.3, 1); Ink(context, Triangle, 0, 1 - progress, true); Ink(context, Bars, 0, progress, true);
         }
     }
 }
