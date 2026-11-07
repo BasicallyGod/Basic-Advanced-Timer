@@ -38,16 +38,16 @@ public sealed class SettingsRedesignTests
     }
 
     [AvaloniaFact]
-    public void ThePillsStyleAndClockDigitsArePicturesThatChangeTheModelAndShowWhichIsChosen()
+    public void ThePillStylePicturesChangeTheModelAndShowWhichIsChosen()
     {
         var (window, view, model) = Open();
         try
         {
             view.ShowSection("pill"); Dispatcher.UIThread.RunJobs();
-            Assert.Contains("selected", Find<Button>(view, "StyleFull").Classes); Assert.Contains("selected", Find<Button>(view, "DigitsSegments").Classes);
+            Assert.Contains("selected", Find<Button>(view, "StyleFull").Classes);
+            Assert.DoesNotContain(view.GetVisualDescendants().OfType<Button>(), b => b.Name is "DigitsPlain" or "DigitsSegments");
             Press(view, "StyleCompact"); Assert.True(model.CompactPill); Assert.Contains("selected", Find<Button>(view, "StyleCompact").Classes); Assert.DoesNotContain("selected", Find<Button>(view, "StyleFull").Classes);
-            Press(view, "DigitsPlain"); Assert.True(model.PlainClock); Assert.Contains("selected", Find<Button>(view, "DigitsPlain").Classes);
-            Press(view, "StyleFull"); Press(view, "DigitsSegments"); Assert.False(model.CompactPill); Assert.False(model.PlainClock);
+            Press(view, "StyleFull"); Assert.False(model.CompactPill);
             // Tooltips-style switches stay plain ticks: nothing about them is drawn.
             Assert.NotNull(Find<CheckBox>(view, "PillOnTop")); Assert.NotNull(Find<CheckBox>(view, "DashboardOnTop"));
         }

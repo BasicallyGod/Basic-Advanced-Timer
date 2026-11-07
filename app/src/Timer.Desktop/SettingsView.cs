@@ -131,7 +131,7 @@ public sealed class SettingsView : Grid
             var shown = auto ? 95 : model.PillScalePercent!.Value;
             percent.Text = auto ? "Fits the screen" : $"{shown} per cent";
             // The picture is the pill at that size, kept inside the well.
-            stage.Child = SettingsPictures.Pill(true, model.PlainClock, null, Math.Clamp(1.2 * shown / 100.0, 0.7, 1.6));
+            stage.Child = SettingsPictures.Pill(true, null, Math.Clamp(1.2 * shown / 100.0, 0.7, 1.6));
         }
         slider.PropertyChanged += (_, e) => { if (e.Property == Avalonia.Controls.Primitives.RangeBase.ValueProperty && slider.IsEnabled) { var chosen = (int)Math.Round(slider.Value / 10) * 10; if (chosen != model.PillScalePercent) model.SetPillScale(chosen); } };
         automatic.Click += (_, _) => { model.SetPillScale(automatic.IsChecked == true ? null : (int)Math.Round(slider.Value / 10) * 10); SyncSize(); };
@@ -141,16 +141,10 @@ public sealed class SettingsView : Grid
         var sizeStack = new StackPanel(); sizeStack.Children.Add(stage); sizeStack.Children.Add(sizeRow);
         stack.Children.Add(Section("Size", sizeStack));
 
-        // Style and clock digits sit side by side: each is two pictures of the real pill.
         var style = Choices(
-            Choice("StyleFull", "Full", "Clock, keys and alert count", SettingsPictures.Pill(true, false, null, 1), () => !model.CompactPill, () => model.SetCompactPill(false)),
-            Choice("StyleCompact", "Compact", "Only the clock. The keys move to its right-click menu", SettingsPictures.Pill(false, false, null, 1), () => model.CompactPill, () => model.SetCompactPill(true)));
-        var digits = Choices(
-            Choice("DigitsSegments", "Segments", "Like a digital watch", SettingsPictures.Clock(false, 1), () => !model.PlainClock, () => model.SetPlainClock(false)),
-            Choice("DigitsPlain", "Plain", "Plain numerals, which some people find easier to read", SettingsPictures.Clock(true, 1), () => model.PlainClock, () => model.SetPlainClock(true)));
-        var both = Ui.Grid("*,*"); both.ColumnSpacing = 26;
-        Ui.Put(both, Section("Style", style)); Ui.Put(both, Section("Clock digits", digits), 1);
-        stack.Children.Add(both);
+            Choice("StyleFull", "Full", "Clock, keys and alert count", SettingsPictures.Pill(true, null, 1), () => !model.CompactPill, () => model.SetCompactPill(false)),
+            Choice("StyleCompact", "Compact", "Only the clock. The keys move to its right-click menu", SettingsPictures.Pill(false, null, 1), () => model.CompactPill, () => model.SetCompactPill(true)));
+        stack.Children.Add(Section("Style", style));
 
         // The windows: nothing here changes how anything looks, so these are plain ticks.
         var rows = new List<Control>

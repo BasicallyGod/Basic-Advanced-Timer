@@ -21,7 +21,7 @@ public sealed class SegmentShapes
     /// <summary>The seven segments, in the order a, b, c, d, e, f, g.</summary>
     public IReadOnlyList<Geometry> Segments { get; }
     /// <summary>The two dots of a colon, centred in <see cref="ColonWidth"/>.</summary>
-    public IReadOnlyList<Rect> ColonDots { get; }
+    public IReadOnlyList<Geometry> ColonDots { get; }
     private static readonly Dictionary<double, SegmentShapes> Cache = new();
     public static SegmentShapes For(double height) { lock (Cache) { if (!Cache.TryGetValue(height, out var shapes)) Cache[height] = shapes = new SegmentShapes(height); return shapes; } }
 
@@ -50,7 +50,11 @@ public sealed class SegmentShapes
         list.Add(Horizontal(height / 2));                             // g
         Segments = list;
         var dot = Thickness * 0.9; var cx = ColonWidth / 2;
-        ColonDots = new[] { new Rect(cx - dot / 2, height * 0.3 - dot / 2, dot, dot), new Rect(cx - dot / 2, height * 0.7 - dot / 2, dot, dot) };
+        ColonDots = new Geometry[]
+        {
+            new RectangleGeometry(new Rect(cx - dot / 2, height * 0.3 - dot / 2, dot, dot)),
+            new RectangleGeometry(new Rect(cx - dot / 2, height * 0.7 - dot / 2, dot, dot))
+        };
     }
     private static Geometry Poly(params (double X, double Y)[] points)
     {
@@ -73,15 +77,8 @@ public sealed class SegmentRun : Control
     public static readonly StyledProperty<double> DigitHeightProperty = AvaloniaProperty.Register<SegmentRun, double>(nameof(DigitHeight), 28);
     public static readonly StyledProperty<string> LitKeyProperty = AvaloniaProperty.Register<SegmentRun, string>(nameof(LitKey), "Ink");
     public static readonly StyledProperty<Color?> ColourProperty = AvaloniaProperty.Register<SegmentRun, Color?>(nameof(Colour));
-    public static readonly StyledProperty<bool> PlainProperty = AvaloniaProperty.Register<SegmentRun, bool>(nameof(Plain));
-    public static readonly StyledProperty<double> PlainScaleProperty = AvaloniaProperty.Register<SegmentRun, double>(nameof(PlainScale), 1);
-    static SegmentRun() { AffectsMeasure<SegmentRun>(TextProperty, DigitHeightProperty); AffectsRender<SegmentRun>(TextProperty, DigitHeightProperty, LitKeyProperty, ColourProperty, PlainProperty, PlainScaleProperty); }
-    /// <summary>Draws the run as plain numerals (Chakra Petch) instead of segments, in the same cells, so nothing round it moves. An accessibility choice.</summary>
-    public bool Plain { get => GetValue(PlainProperty); set => SetValue(PlainProperty, value); }
-    /// <summary>How large plain numerals are against the biggest that fit the run's height and cells (the seconds are drawn smaller and quiet).</summary>
-    public double PlainScale { get => GetValue(PlainScaleProperty); set => SetValue(PlainScaleProperty, value); }
-    public SegmentRun() { IsHitTestVisible = false; OpacityMask = Honeycomb.Brush; ActualThemeVariantChanged += (_, _) => InvalidateVisual(); }
-    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change) { base.OnPropertyChanged(change); if (change.Property == PlainProperty) OpacityMask = Plain ? null : Honeycomb.Brush; }
+    static SegmentRun() { AffectsMeasure<SegmentRun>(TextProperty, DigitHeightProperty); AffectsRender<SegmentRun>(TextProperty, DigitHeightProperty, LitKeyProperty, ColourProperty); }
+    public SegmentRun() { IsHitTestVisible = false; ActualThemeVariantChanged += (_, _) => InvalidateVisual(); }
     public string Text { get => GetValue(TextProperty); set => SetValue(TextProperty, value); }
     public double DigitHeight { get => GetValue(DigitHeightProperty); set => SetValue(DigitHeightProperty, value); }
     /// <summary>The theme colour the lit segments are drawn in, unless <see cref="Colour"/> is set.</summary>
@@ -107,63 +104,57 @@ public sealed class SegmentRun : Control
         FrameMonitor.Bump("draw SegmentRun");
         var shapes = SegmentShapes.For(DigitHeight);
         var dark = ActualThemeVariant == ThemeVariant.Dark;
-        Color colour;
-        if (Colour is { } own) colour = own;
-        else colour = this.TryFindResource(LitKey, ActualThemeVariant, out var found) && found is ISolidColorBrush solid ? solid.Color : Colors.Gray;
-        if (Plain) { RenderPlain(context, shapes, colour); return; }
-        var lit = new SolidColorBrush(colour); var ghost = new SolidColorBrush(Color.FromArgb((byte)(dark ? 31 : 26), colour.R, colour.G, colour.B));
-        // On a dark card the lit segments carry a faint halo of their own colour, as a lit display does.
-        var halo = dark ? new Pen(new SolidColorBrush(Color.FromArgb(70, colour.R, colour.G, colour.B)), 1.3, lineJoin: PenLineJoin.Round) : null;
-        var x = 0.0; var previousDigit = false;
-        foreach (var c in Text)
-        {
-            if (c == ':')
-            {
-                x += ColonPad;
-                foreach (var dot in shapes.ColonDots) context.DrawRectangle(lit, null, new Rect(x + dot.X, dot.Y, dot.Width, dot.Height));
-                x += shapes.ColonWidth + ColonPad; previousDigit = false; continue;
-            }
-            if (previousDigit) x += DigitGap;
-            using (context.PushTransform(Matrix.CreateTranslation(x, 0)))
-                for (var s = 0; s < 7; s++)
-                {
-                    var on = SegmentShapes.IsLit(c, s);
-                    context.DrawGeometry(on ? lit : ghost, on ? halo : null, shapes.Segments[s]);
-                }
-            x += shapes.Width; previousDigit = true;
-        }
+        var colour = Colour ?? Ui.ThemeColour(this, LitKey, Colors.Gray);
+        var lit = new SolidColorBrush(colour);
+        var ghost = new SolidColorBrush(Color.FromArgb((byte)(dark ? 31 : 26), colour.R, colour.G, colour.B));
+
+        // Like the badges, the halo sits behind the masked phosphor and never lights the ghost segments.
+        var bloom = new PhosphorBloom(colour, 0, dark ? .78 : .28);
+        DrawRun(context, shapes, lit, ghost, bloom);
+        using (Honeycomb.Meshed(context, new Rect(Bounds.Size)))
+            DrawRun(context, shapes, lit, ghost, null);
     }
 
-    // ---- plain numerals: the same cells as the segments, so the clock is exactly as wide, and nothing beside it moves
-    private static readonly Typeface PlainFace = new(new FontFamily($"avares://{typeof(SegmentRun).Assembly.GetName().Name}/Assets/Fonts#Chakra Petch"), FontStyle.Normal, FontWeight.SemiBold);
-    private static double advanceRatio, inkTop, inkBottom;
-    private static FormattedText Text0(string text, double size, Color colour) => new(text, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, PlainFace, size, new SolidColorBrush(colour));
-    /// <summary>Measures the face once at a large size: the widest digit's advance and where a digit's ink starts and ends, as fractions of the font size.</summary>
-    private static void MeasurePlainFace()
+    private void DrawRun(DrawingContext context, SegmentShapes shapes, IBrush lit, IBrush ghost, PhosphorBloom? bloom)
     {
-        if (advanceRatio > 0) return;
-        var widest = 0.0;
-        foreach (var d in "0123456789") widest = Math.Max(widest, Text0(d.ToString(), 100, Colors.Black).Width / 100);
-        var bounds = Text0("0", 100, Colors.Black).BuildGeometry(default)?.Bounds ?? new Rect(0, 15, 60, 70);
-        inkTop = bounds.Top / 100; inkBottom = bounds.Bottom / 100; advanceRatio = Math.Max(widest, .3);
-    }
-    private void RenderPlain(DrawingContext context, SegmentShapes shapes, Color colour)
-    {
-        MeasurePlainFace();
-        // As large as the cell and the run's height allow, then scaled for the seconds. The digits are drawn one to a cell, so the widths never depend on the face.
-        var size = Math.Min(DigitHeight * .96, shapes.Width * .98 / advanceRatio) * PlainScale;
-        var y = DigitHeight / 2 - size * (inkTop + inkBottom) / 2;
-        var x = 0.0; var previousDigit = false;
+        var x = 0.0;
+        var previousDigit = false;
         foreach (var c in Text)
         {
             if (c == ':')
             {
-                var cell = shapes.ColonWidth + 2 * ColonPad; var colon = Text0(":", size, colour);
-                context.DrawText(colon, new Point(x + (cell - colon.Width) / 2, y)); x += cell; previousDigit = false; continue;
+                using (context.PushTransform(Matrix.CreateTranslation(x + ColonPad, 0)))
+                {
+                    foreach (var dot in shapes.ColonDots)
+                    {
+                        if (bloom is { } glow) glow.Draw(context, dot);
+                        else context.DrawGeometry(lit, null, dot);
+                    }
+                }
+                x += shapes.ColonWidth + 2 * ColonPad;
+                previousDigit = false;
+                continue;
             }
+
             if (previousDigit) x += DigitGap;
-            if (c != ' ') { var glyph = Text0(c.ToString(), size, colour); context.DrawText(glyph, new Point(x + (shapes.Width - glyph.Width) / 2, y)); }
-            x += shapes.Width; previousDigit = true;
+            if (bloom is null || c != ' ')
+            {
+                using (context.PushTransform(Matrix.CreateTranslation(x, 0)))
+                {
+                    for (var s = 0; s < shapes.Segments.Count; s++)
+                    {
+                        var on = SegmentShapes.IsLit(c, s);
+                        var segment = shapes.Segments[s];
+                        if (bloom is { } glow)
+                        {
+                            if (on) glow.Draw(context, segment);
+                        }
+                        else context.DrawGeometry(on ? lit : ghost, null, segment);
+                    }
+                }
+            }
+            x += shapes.Width;
+            previousDigit = true;
         }
     }
 }
@@ -172,7 +163,7 @@ public sealed class SegmentRun : Control
 /// The day clock as a seven-segment display: hours and minutes in the text colour and the seconds, the same height, in the quiet one, with the colon kept before them.
 /// It is one width whatever the time. Set from one hours:minutes:seconds string.
 /// </summary>
-public sealed class SegmentClock : StackPanel, IClockText
+public sealed class SegmentClock : StackPanel
 {
     /// <summary>The height of every digit on the pill and on the dashboard's sidebar.</summary>
     public const double DigitHeight = 28;
@@ -182,10 +173,8 @@ public sealed class SegmentClock : StackPanel, IClockText
     public SegmentClock()
     {
         Orientation = Orientation.Horizontal; VerticalAlignment = VerticalAlignment.Center; Spacing = SegmentRun.DigitGap;
-        Children.Add(main); Children.Add(seconds); seconds.PlainScale = .66; Text = "00:00:00";
+        Children.Add(main); Children.Add(seconds); Text = "00:00:00";
     }
-    /// <summary>Draws the clock as plain numerals instead of segments (the accessibility choice); the width does not change.</summary>
-    public bool Plain { get => main.Plain; set { main.Plain = value; seconds.Plain = value; } }
     public string Text
     {
         get => main.Text + seconds.Text;

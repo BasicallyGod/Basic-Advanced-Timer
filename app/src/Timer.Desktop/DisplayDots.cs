@@ -70,10 +70,27 @@ public abstract class SteppedControl : Control
     }
 }
 
-/// <summary>
-/// The play, pause and break symbols as a vacuum-fluorescent display draws them: solid phosphor strokes seen through the display's honeycomb (<see cref="Honeycomb"/>), with a
-/// soft bloom. Both badge outlines use the same stroke.
-/// </summary>
+/// <summary>Two faint strokes behind the lit phosphor, drawn outside the mesh.</summary>
+internal readonly struct PhosphorBloom
+{
+    private readonly Pen outer, inner;
+
+    public PhosphorBloom(Color colour, double width, double strength)
+    {
+        outer = Halo(3.6, .14);
+        inner = Halo(1.6, .26);
+        Pen Halo(double extra, double alpha) => new(new SolidColorBrush(SoftTint.WithAlpha(colour, alpha * strength)),
+            width + extra, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
+    }
+
+    public void Draw(DrawingContext context, Geometry shape, bool filled = false)
+    {
+        context.DrawGeometry(filled ? outer.Brush : null, outer, shape);
+        context.DrawGeometry(filled ? inner.Brush : null, inner, shape);
+    }
+}
+
+/// <summary>Play, pause and break badges drawn through the display's shared honeycomb and bloom.</summary>
 public abstract class VfdGlyph : SteppedControl
 {
     public const double BadgeWidth = 30, BadgeHeight = 14, StrokeWidth = 1.4;
@@ -106,10 +123,45 @@ public abstract class VfdGlyph : SteppedControl
     /// <summary>The bloom: the same shape again, wider and faint, under the strokes and outside the mask, so it fills the gaps of the mesh with a soft light.</summary>
     protected void Bloom(DrawingContext context, Geometry geometry, double width, double alpha, bool filled = false)
     {
-        if (alpha < .4 || Glow <= 0) return;
-        foreach (var (extra, strength) in new[] { (3.6, .14), (1.6, .26) })
-            context.DrawGeometry(filled ? new SolidColorBrush(SoftTint.WithAlpha(Colour, strength * Glow * alpha)) : null,
-                new Pen(new SolidColorBrush(SoftTint.WithAlpha(Colour, strength * Glow * alpha)), width + extra, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), geometry);
+        if (alpha < .4) return;
+        new PhosphorBloom(Colour, width, Glow * alpha).Draw(context, geometry, filled);
+    }
+}
+
+/// <summary>The display bell, with coloured bloom only when alerts are waiting.</summary>
+internal sealed class AlertBellGlyph : Control
+{
+    private Color colour;
+    private bool lit;
+    public AlertBellGlyph()
+    {
+        Width = Height = 9;
+        IsHitTestVisible = false;
+        ActualThemeVariantChanged += (_, _) => InvalidateVisual();
+    }
+
+    public void Show(Color tint, bool waiting)
+    {
+        if (colour == tint && lit == waiting) return;
+        colour = tint;
+        lit = waiting;
+        InvalidateVisual();
+    }
+
+    public override void Render(DrawingContext context)
+    {
+        var scale = Matrix.CreateScale(.5, .5);
+        if (lit)
+        {
+            var bloom = new PhosphorBloom(colour, IconGlyph.StrokeWidth, SoftTint.IsDark(this) ? 1 : .45);
+            using (context.PushTransform(scale))
+                bloom.Draw(context, IconGlyph.BellOutline);
+        }
+        var brush = new SolidColorBrush(lit ? colour : SoftTint.WithAlpha(colour, .55));
+        var pen = new Pen(brush, IconGlyph.StrokeWidth, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
+        using (Honeycomb.Meshed(context, new Rect(Bounds.Size)))
+        using (context.PushTransform(scale))
+            context.DrawGeometry(null, pen, IconGlyph.BellOutline);
     }
 }
 

@@ -5,11 +5,12 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Timer.Core;
+using Timer.Storage;
 using Xunit;
 
 namespace Timer.Desktop.Tests;
 
-// The plain clock digits, the compact pill, the alerts card that opens from the sidebar's count (in place of the bell) and the all-red alerts.
+// The segmented display, the compact pill and the alerts that open from the sidebar's count.
 public sealed class DisplayOptionsTests
 {
     private static readonly DateTime DemoNow = new(2026, 10, 14, 14, 15, 7);
@@ -25,27 +26,28 @@ public sealed class DisplayOptionsTests
     }
 
     [Fact]
-    public void PlainDigitsAndTheCompactPillAreSavedAsAppearanceLinesAndComeBackOff()
+    public void TheCompactPillCanBeTurnedOnAndOff()
     {
-        var model = Demo(); Assert.False(model.PlainClock); Assert.False(model.CompactPill);
-        model.SetPlainClock(true); model.SetCompactPill(true); Assert.True(model.PlainClock); Assert.True(model.CompactPill);
-        model.SetPlainClock(false); model.SetCompactPill(false); Assert.False(model.PlainClock); Assert.False(model.CompactPill);
+        var model = Demo();
+        Assert.False(model.CompactPill);
+        model.SetCompactPill(true); Assert.True(model.CompactPill);
+        model.SetCompactPill(false); Assert.False(model.CompactPill);
     }
 
     [AvaloniaFact]
-    public void PlainDigitsKeepTheDisplayExactlyAsWideAndDrawTheClockAndTheCount()
+    public void AStoredPlainDigitsPreferenceStillOpensTheSegmentedDisplay()
     {
-        var model = Demo(); var pill = new PillWindow(model); pill.Show(); Settle(pill);
+        var extras = SettingsExtras.Empty with { AppearanceLines = new List<string> { "clockdigits=plain" } };
+        var model = new TimerModel(new TrackingEngine(clock: () => DemoNow),
+            new StoreSettings(new() { new("Account one") }, false, "Dark", DayOfWeek.Monday, SetupDone: true, Extras: extras));
+        var pill = new PillWindow(model); pill.Show(); Settle(pill);
         try
         {
             var display = Find<Border>(pill, "PillDisplay"); var width = display.Bounds.Width; var clock = pill.GetVisualDescendants().OfType<SegmentClock>().Single(); var clockWidth = clock.Bounds.Width;
-            var count = Find<SegmentRun>(pill, "PillAlertCount");
-            Assert.False(count.Plain);
-            model.SetPlainClock(true); Settle(pill);
-            Assert.True(clock.Plain); Assert.True(count.Plain);
-            Assert.Equal(width, display.Bounds.Width, 0.5); Assert.Equal(clockWidth, clock.Bounds.Width, 0.5);
+            Assert.Equal(2, clock.GetVisualDescendants().OfType<SegmentRun>().Count());
+            Assert.Equal("  ", Find<SegmentRun>(pill, "PillAlertCount").Text);
             model.ToggleAccount("Account one"); Settle(pill); Assert.Equal(width, display.Bounds.Width, 0.5); // Ticking on changes nothing about the width.
-            model.SetPlainClock(false); Settle(pill); Assert.False(clock.Plain);
+            Assert.Equal(clockWidth, clock.Bounds.Width, 0.5);
         }
         finally { pill.Close(); }
     }

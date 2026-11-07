@@ -9,9 +9,6 @@ using Timer.Core;
 
 namespace Timer.Desktop;
 
-/// <summary>A clock that can be set from one hours:minutes:seconds string, whichever way it is drawn.</summary>
-public interface IClockText { string Text { get; set; } }
-
 /// <summary>Small helpers shared by the pill's controls, which draw soft tints of their colours and a ring for keyboard focus.</summary>
 public static class SoftTint
 {
@@ -40,11 +37,10 @@ public static class SoftTint
 public sealed class StatusFace : StackPanel
 {
     private readonly TimerModel model;
-    private readonly IClockText clock;
-    private readonly SegmentClock segmentClock;
+    private readonly SegmentClock clock = new();
     private readonly Border stateLight;
     private readonly SegmentRun alertCountRun = new() { DigitHeight = CountDigitHeight, Text = "  " };
-    private readonly IconGlyph bell = new(IconKind.Bell);
+    private readonly AlertBellGlyph bell = new();
     private readonly Border displayBox;
     private int shownCount = -1;
     /// <summary>How many alerts are waiting (none while Pill alerts is off), as of the last refresh.</summary>
@@ -133,19 +129,20 @@ public sealed class StatusFace : StackPanel
     public StatusFace(TimerModel model, string prefix, string breakName, string clockTip, Action clockClick, Action circleClick, Action accountsClick, bool sidebar = false, Action? alertsClick = null)
     {
         this.model = model; this.clockTip = clockTip; Sidebar = sidebar;
-        segmentClock = new SegmentClock(); clock = segmentClock;
         Spacing = 0; HorizontalAlignment = HorizontalAlignment.Center; if (sidebar) { Spacing = 8; HorizontalAlignment = HorizontalAlignment.Stretch; } else { Orientation = Orientation.Horizontal; VerticalAlignment = VerticalAlignment.Center; }
         // The state LED is a capsule set into the display, like a segment: an empty groove when idle, inlaid in the state's colour when not.
         stateLight = new Border { Name = prefix + "StateLight", Width = 6, Height = 14, CornerRadius = new CornerRadius(3.5), OpacityMask = Honeycomb.Brush };
         // The clock opens the dashboard (and collapses it again), as it always has; it is one width whatever the time.
         ClockButton = Ui.Button("", clockClick, prefix + "Dashboard");
-        ClockButton.Classes.Add("pillBare"); ClockButton.Content = (Control)clock; ClockButton.HorizontalAlignment = HorizontalAlignment.Center; ClockButton.VerticalAlignment = VerticalAlignment.Center;
+        ClockButton.Classes.Add("pillBare"); ClockButton.Content = clock; ClockButton.HorizontalAlignment = HorizontalAlignment.Center; ClockButton.VerticalAlignment = VerticalAlignment.Center;
         ClockButton.Classes.Add("zone"); ClockButton.Padding = new Thickness(3, 6); ClockButton.Margin = new Thickness(-3, -6);
         ToolTip.SetTip(ClockButton, clockTip); Avalonia.Automation.AutomationProperties.SetName(ClockButton, clockTip);
         // The alert count: a small bell over two segment digits, in the colour of the most urgent thing waiting. Pressing it opens what is waiting (on the pill).
         alertCountRun.Name = prefix + "AlertCount";
         var countStack = new StackPanel { Spacing = 3, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Width = CountColumn, Name = prefix + "AlertCountStack" };
-        countStack.Children.Add(new Viewbox { Width = 9, Height = 9, HorizontalAlignment = HorizontalAlignment.Center, Child = bell, OpacityMask = Honeycomb.Brush }); countStack.Children.Add(new Border { Child = alertCountRun, HorizontalAlignment = HorizontalAlignment.Center });
+        bell.HorizontalAlignment = HorizontalAlignment.Center;
+        countStack.Children.Add(bell);
+        countStack.Children.Add(new Border { Child = alertCountRun, HorizontalAlignment = HorizontalAlignment.Center });
         Control countHost;
         if (alertsClick is not null)
         {
@@ -308,12 +305,12 @@ public sealed class StatusFace : StackPanel
         var lit = waiting ? ThemeColourOr(alerts[0].LightToken, "#3558C8") : ThemeColourOr("Muted", "#8A8F98");
         var count = Math.Min(alerts.Count, 99);
         alertCountRun.Text = waiting ? (count < 10 ? " " + count : count.ToString()) : "  ";
-        alertCountRun.Colour = lit; bell.TintKey = waiting ? alerts[0].LightToken : "Muted"; bell.Opacity = waiting ? 1 : .55;
+        alertCountRun.Colour = lit;
+        bell.Show(lit, waiting);
         var reminderWords = !waiting ? "No reminders waiting" : alerts.All(a => a.Kind == AlertKind.Reminder) ? "A reminder is due" : $"{alerts.Count} waiting, most urgent first";
         if (shownCount >= 0 && count > shownCount && !Motion.Reduced) FlashCount(); shownCount = count; AlertCount = alerts.Count;
         var countTarget = (Control?)AlertsButton ?? (Control)alertCountRun;
         ToolTip.SetTip(countTarget, reminderWords); Avalonia.Automation.AutomationProperties.SetName(countTarget, waiting ? (alerts.Count == 1 ? reminderWords : $"{alerts.Count} waiting") : "Nothing waiting");
-        segmentClock.Plain = model.PlainClock; alertCountRun.Plain = model.PlainClock;
         clock.Text = model.ClockText;
 
         var selected = model.Accounts.FirstOrDefault(a => a.Name == model.SelectedAccount);

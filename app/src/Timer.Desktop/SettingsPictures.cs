@@ -7,8 +7,8 @@ using Avalonia.Media;
 namespace Timer.Desktop;
 
 /// <summary>
-/// The small drawings on the settings page. A picture is used only where a choice changes how something looks: the pill (full or compact, with its clock in segments or
-/// plain numerals, with or without an alert count and card) and a card with and without a shadow. Each is a pictogram drawn from plain shapes at its own size, as the theme
+/// The small drawings on the settings page. A picture is used where a choice changes how something looks: the pill (full or compact, with or without an alert count
+/// and card) and a card with and without a shadow. Each is a pictogram drawn from plain shapes at its own size, as the theme
 /// pictures are, and not the real pill scaled down: scaling the real controls (with their inset shadows) left stray marks in the corners of the frames.
 /// </summary>
 internal static class SettingsPictures
@@ -40,21 +40,20 @@ internal static class SettingsPictures
         for (var i = 0; i < 2; i++) { var dot = new Ellipse { Width = s, Height = s }; Fill(dot, "Ink"); stack.Children.Add(dot); }
         return stack;
     }
-    /// <summary>The clock for a picture: four digits and a colon, as segments or as plain numerals.</summary>
-    private static Control ClockFace(bool plain, double k)
+    /// <summary>The clock for a picture: four segmented digits and a colon.</summary>
+    private static Control ClockFace(double k)
     {
-        if (plain) { var text = Ui.Text("04:45", 11 * k, "clock"); text.FontWeight = FontWeight.SemiBold; text.VerticalAlignment = VerticalAlignment.Center; text.HorizontalAlignment = HorizontalAlignment.Center; return text; }
         var h = 11 * k; var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = h * 0.14, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
         row.Children.Add(Digit(0, h)); row.Children.Add(Digit(4, h)); row.Children.Add(Colon(h)); row.Children.Add(Digit(4, h)); row.Children.Add(Digit(5, h));
         return row;
     }
 
     /// <summary>The pill's recessed display: the state light, the clock and, when asked for, the red count.</summary>
-    private static Border Display(bool plain, bool count, double k)
+    private static Border Display(bool count, double k)
     {
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), VerticalAlignment = VerticalAlignment.Center };
         var led = new Border { Width = 3 * k, Height = 7 * k, CornerRadius = new CornerRadius(1.5 * k), VerticalAlignment = VerticalAlignment.Center }; Fill(led, "DisplayGroove");
-        var clock = ClockFace(plain, k); Grid.SetColumn(clock, 1);
+        var clock = ClockFace(k); Grid.SetColumn(clock, 1);
         var red = new Border { Width = 9 * k, Height = 9 * k, VerticalAlignment = VerticalAlignment.Center };
         if (count) { var t = Ui.Text("03", 7 * k, "overtime"); t.HorizontalAlignment = HorizontalAlignment.Center; t.VerticalAlignment = VerticalAlignment.Center; red.Child = t; }
         Grid.SetColumn(red, 2);
@@ -81,27 +80,21 @@ internal static class SettingsPictures
 
     /// <summary>The pill as a pictogram. <paramref name="keys"/> adds the play key and the break key (the full pill); without them it is the compact pill. <paramref name="scale"/> is the size
     /// of the whole drawing, 1 being about 135 pixels wide for the full pill.</summary>
-    public static Control Pill(bool keys, bool plain, int? alerts, double scale)
+    public static Control Pill(bool keys, int? alerts, double scale)
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5 * scale, VerticalAlignment = VerticalAlignment.Center };
-        row.Children.Add(Display(plain, alerts is not null, scale));
+        row.Children.Add(Display(alerts is not null, scale));
         if (keys) { row.Children.Add(Key(true, scale)); row.Children.Add(Key(false, scale)); }
         var card = new Border { Height = 28 * scale, CornerRadius = new CornerRadius(9 * scale), Padding = new Thickness(5 * scale, 0), Child = row, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         Fill(card, "PillBody"); Edge(card, "Line");
         return card;
     }
 
-    /// <summary>Only the clock display, for the choice between segments and plain numerals.</summary>
-    public static Control Clock(bool plain, double scale)
-    {
-        var display = Display(plain, false, scale * 1.3); display.HorizontalAlignment = HorizontalAlignment.Center; display.VerticalAlignment = VerticalAlignment.Center; return display;
-    }
-
     /// <summary>The pill with the card a new alert opens under it (Peek), with only the count (Light only) or with nothing (Off).</summary>
     public static Control Alerts(string mode, double scale)
     {
         var stack = new StackPanel { Spacing = 5 * scale, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        stack.Children.Add(Pill(false, false, mode == "off" ? null : 3, scale));
+        stack.Children.Add(Pill(false, mode == "off" ? null : 3, scale));
         if (mode == "peek")
         {
             var dot = new Ellipse { Width = 6 * scale, Height = 6 * scale, VerticalAlignment = VerticalAlignment.Center }; Fill(dot, "Overtime");
