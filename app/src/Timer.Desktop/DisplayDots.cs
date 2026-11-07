@@ -126,16 +126,17 @@ public sealed class TransportGlyph : DotMatrix
 }
 
 /// <summary>
-/// The break mug, nine dots across and nine down: two wisps of steam, a blank row, then the mug with its handle. Its outline fills from the bottom up (70 ms a row) when a
+/// The break mug, nine dots across and nine down: three wisps of steam, a blank row, then the mug with its handle. Its outline fills from the bottom up (70 ms a row) when a
 /// break starts and empties from the top down when it ends. The steam is always drawn, dim and still at rest and bright and tilting together (left, upright, right,
 /// upright, 330 ms a frame) while a break is on or the pointer is over the mug.
 /// </summary>
 public sealed class CupGlyph : DotMatrix
 {
-    public const int Size = 9, BodyTop = 3, BodyRows = 6;
-    // The body: a rim, the walls, a handle on the right and the base.
-    private static readonly string[] Cup = { "000000000", "000000000", "000000000", "111111000", "100001110", "100001001", "100001110", "100001000", "011110000" };
-    private static readonly string[][] Steam = { new[] { "010010000", "001001000" }, new[] { "001001000", "001001000" }, new[] { "000100100", "001001000" }, new[] { "001001000", "001001000" } };
+    public const int Size = 9, BodyTop = 4, BodyRows = 5;
+    // The mug as the mock draws it: a rim of seven dots, a wall down the left, a handle of three at the right and a base of five; three wisps of steam above it.
+    private static readonly string[] Cup = { "000000000", "000000000", "000000000", "000000000", "111111100", "100000111", "100000101", "100000110", "011111000" };
+    // Three wisps at columns 1, 3 and 5, the middle one tallest; they lean together left, upright, right, upright.
+    private static readonly string[][] Steam = { new[] { "001000000", "101010000", "010101000" }, new[] { "000100000", "010101000", "010101000" }, new[] { "000010000", "001010100", "010101000" }, new[] { "000100000", "010101000", "010101000" } };
     public const double RowMilliseconds = 70, SteamMilliseconds = 330;
     public CupGlyph() : base(Size, Size) { }
     private bool on, steaming; private double fill; private double steamClock;
@@ -171,7 +172,7 @@ public sealed class CupGlyph : DotMatrix
             var lit = Math.Clamp(fill - rowsFromBottom, 0, 1);
             return .5 + .5 * lit;
         }
-        if (row > 1) return 0;
+        if (row > 2) return 0;
         // The steam is always there: dim and still at rest, bright and moving while it steams.
         return Steam[SteamFrame][row][col] == '1' ? (Animated ? .9 : on ? .9 : .5) : 0;
     }

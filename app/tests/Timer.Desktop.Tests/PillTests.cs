@@ -260,9 +260,9 @@ public sealed class PillTests
         using var motion = new EnabledMotionScope();
         var cup = new CupGlyph(); cup.Show(false, false, true);
         Assert.False(cup.On); Assert.False(cup.Steaming);
-        Assert.True(cup.Level(0, 2) > 0 && cup.Level(1, 2) > 0); // Dim and still above the mug,
-        Assert.True(cup.Level(3, 0) > 0); // as its outline is.
-        cup.Show(true, true, true); Assert.True(cup.Level(1, 2) > .8); // Bright while a break is on.
+        Assert.True(cup.Level(0, 3) > 0 && cup.Level(1, 1) > 0 && cup.Level(1, 5) > 0); // Three wisps, dim and still above the mug,
+        Assert.True(cup.Level(4, 0) > 0 && cup.Level(5, 8) > 0); // as its rim and handle are.
+        cup.Show(true, true, true); Assert.True(cup.Level(2, 3) > .8); // Bright while a break is on.
     }
 
     [AvaloniaFact]
