@@ -76,8 +76,8 @@ public sealed class PillTests
             Assert.All(zones, z => Assert.Contains("zone", z.Classes)); // One style gives the hover and pressed wash to all five.
             Assert.True(pill.TryFindResource("ZoneHover", pill.ActualThemeVariant, out _)); Assert.True(pill.TryFindResource("ZonePressed", pill.ActualThemeVariant, out _));
             var display = Find<Border>(pill, "PillDisplay"); // And every divider in it is the same dotted column.
-            var dividers = display.GetVisualDescendants().OfType<DottedDivider>().ToList(); Assert.Equal(3, dividers.Count);
-            Assert.All(dividers, d => { Assert.Equal(DottedDivider.ColumnWidth, d.Bounds.Width, 0.5); Assert.Equal(DottedDivider.ColumnHeight, d.Bounds.Height, 0.5); });
+            var dividers = display.GetVisualDescendants().OfType<EtchedDivider>().ToList(); Assert.Equal(3, dividers.Count);
+            Assert.All(dividers, d => { Assert.Equal(EtchedDivider.ColumnWidth, d.Bounds.Width, 0.5); Assert.Equal(EtchedDivider.ColumnHeight, d.Bounds.Height, 0.5); });
         }
         finally { pill.Close(); }
     }
@@ -222,9 +222,9 @@ public sealed class PillTests
             Assert.False(cup.On); Assert.Equal(0, cup.FilledRows); Assert.False(transport.Paused);
             model.ToggleAccount("Account one"); Dispatcher.UIThread.RunJobs(); Assert.True(transport.Paused);
             transport.Step(TransportGlyph.WipeMilliseconds + 1); Assert.Equal(1, transport.Level(0, 1)); Assert.Equal(0, transport.Level(0, 0)); // Bars at columns 1, 2, 4 and 5.
-            model.ToggleBreak(); Dispatcher.UIThread.RunJobs(); Assert.True(cup.On); cup.Step(CupGlyph.RowMilliseconds * 4 + 1);
-            Assert.Equal(4, cup.FilledRows); Assert.True(cup.Steaming); Assert.Equal(1, cup.Level(6, 3));
-            model.ToggleBreak(); Dispatcher.UIThread.RunJobs(); cup.Step(CupGlyph.RowMilliseconds * 4 + 1); Assert.Equal(0, cup.FilledRows);
+            model.ToggleBreak(); Dispatcher.UIThread.RunJobs(); Assert.True(cup.On); cup.Step(CupGlyph.RowMilliseconds * CupGlyph.BodyRows + 1);
+            Assert.Equal(CupGlyph.BodyRows, cup.FilledRows); Assert.True(cup.Steaming); Assert.Equal(1, cup.Level(8, 2)); // The base of the mug is lit.
+            model.ToggleBreak(); Dispatcher.UIThread.RunJobs(); cup.Step(CupGlyph.RowMilliseconds * CupGlyph.BodyRows + 1); Assert.Equal(0, cup.FilledRows);
         }
         finally { pill.Close(); }
     }
@@ -241,30 +241,28 @@ public sealed class PillTests
     }
 
     [AvaloniaFact]
-    public void ALongNameScrollsOnePassAndComesBackAndAShortOneNever()
+    public void ALongNameAlwaysRunsAlongAndRestsAtEachEndAndAShortOneNever()
     {
         using var motion = new EnabledMotionScope();
-        var run = new SegmentName { Text = "ABCDEFGHIJ" }; run.Scroll();
-        Assert.True(run.Scrolling); run.Step(SegmentName.StepMilliseconds * 4 + 1); Assert.Equal(4, run.Offset);
-        run.Step(SegmentName.StepMilliseconds * 3); Assert.False(run.Scrolling); Assert.Equal(0, run.Offset);
-        var shortRun = new SegmentName { Text = "ABC" }; shortRun.Scroll(); Assert.False(shortRun.Scrolling);
+        var run = new SegmentName { Text = "ABCDEFGHIJ" };
+        Assert.True(run.Scrolling); // No pointer or recording needed: a name that doesn't fit is always on the move.
+        run.Step(SegmentName.StepMilliseconds * SegmentName.RestSteps + 1); Assert.Equal(0, run.Offset); // It rests at the start first,
+        run.Step(SegmentName.StepMilliseconds * 4); Assert.Equal(4, run.Offset); // runs along to the last characters,
+        run.Step(SegmentName.StepMilliseconds * SegmentName.RestSteps); Assert.Equal(4, run.Offset); // rests there,
+        run.Step(SegmentName.StepMilliseconds); Assert.Equal(0, run.Offset); Assert.True(run.Scrolling); // and goes round again.
+        var shortRun = new SegmentName { Text = "ABC" }; Assert.False(shortRun.Scrolling);
+        Motion.Override = true; try { Assert.False(run.Scrolling); } finally { Motion.Override = false; } // Less motion asked for: it stands still on its first characters.
     }
 
     [AvaloniaFact]
-    public void TheSidebarsBreakIsThePillsCupAtTheEndOfTheTrackingDisplayBesideThePlayDots()
+    public void TheMugsSteamIsDrawnEvenWhenNoBreakIsOn()
     {
-        var model = Model(); var window = new DashboardWindow(model); window.Show(); Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
-        try
-        {
-            double Y(Control c) => c.TranslatePoint(default, window)!.Value.Y;
-            var brk = Find<Button>(window, "DashboardBreak");
-            Assert.Equal(Y(Find<Button>(window, "SidebarPause")), Y(brk), 1.0); // Level with the play tile, at the card's far end.
-            Assert.NotNull(Find<Border>(window, "SidebarTrack")); // The card is a second display, as wide as the clock's.
-            Assert.True(Y(brk) < Y(Find<Button>(window, "QuitTimer"))); // And not at the foot with Quit timer.
-            Assert.False(brk.GetVisualDescendants().OfType<CupGlyph>().Single().On);
-            model.ToggleBreak(); Dispatcher.UIThread.RunJobs(); Assert.True(brk.GetVisualDescendants().OfType<CupGlyph>().Single().On);
-        }
-        finally { window.Close(); }
+        using var motion = new EnabledMotionScope();
+        var cup = new CupGlyph(); cup.Show(false, false, true);
+        Assert.False(cup.On); Assert.False(cup.Steaming);
+        Assert.True(cup.Level(0, 2) > 0 && cup.Level(1, 2) > 0); // Dim and still above the mug,
+        Assert.True(cup.Level(3, 0) > 0); // as its outline is.
+        cup.Show(true, true, true); Assert.True(cup.Level(1, 2) > .8); // Bright while a break is on.
     }
 
     [AvaloniaFact]

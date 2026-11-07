@@ -93,7 +93,15 @@ public sealed class PillAlertsCard : Border
         var head = Ui.Grid("*,Auto"); head.Margin = new Thickness(6, 0, 0, 4); head.Height = 26;
         var title = Bold(items.Count == 0 ? "Nothing waiting" : $"{items.Count} waiting", "Ink", 12.5); title.Name = "AlertTitle"; title.VerticalAlignment = VerticalAlignment.Center; Ui.Put(head, title);
         var cross = Ui.IconButton(IconKind.Close, "Fold", "AlertFold", fold); cross.Width = 24; cross.Height = 24; Ui.Put(head, cross, 1);
-        var rows = new StackPanel { Spacing = 2, Name = "AlertRows" };
+        if (items.Count == 0)
+        {
+            // Nothing waiting: one short line, the words, Open Notes and the cross, with no empty list or foot under it.
+            head.ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"); head.Margin = new Thickness(6, 0, 0, 0);
+            Grid.SetColumn(cross, 2); var notes = Link("Open Notes", "AlertOpenDashboard", OpenNotes, null, "Ink"); notes.VerticalAlignment = VerticalAlignment.Center; notes.Margin = new Thickness(0, 0, 6, 0); Ui.Put(head, notes, 1);
+            var only = new Grid(); only.Children.Add(head); only.Children.Add(rescheduling); Child = only; return;
+        }
+        // No gap between rows: the padding of each row carries the space, so every point of the list belongs to some row and presses never land in a dead strip.
+        var rows = new StackPanel { Spacing = 0, Name = "AlertRows" };
         for (var i = 0; i < items.Count; i++) rows.Children.Add(i == Index ? OpenRowFor(items[i]) : ClosedRow(i));
         // The list has no scroll bar (the wheel still moves it when there are more alerts than room); what comes later is on the Notes page, which Open Notes shows.
         var scroll = new ScrollViewer { Name = "AlertListScroll", Content = rows, VerticalScrollBarVisibility = ScrollBarVisibility.Hidden, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
@@ -133,7 +141,7 @@ public sealed class PillAlertsCard : Border
         }
         column.Children.Add(meta);
         var actions = Actions(item); actions.Margin = new Thickness(18, 0, 0, 0); column.Children.Add(actions);
-        var card = new Border { Child = column, CornerRadius = new CornerRadius(12), Padding = new Thickness(10, 10, 10, 12), Name = "AlertOpenRow" };
+        var card = new Border { Child = column, CornerRadius = new CornerRadius(12), Padding = new Thickness(10, 10, 10, 12), Margin = new Thickness(0, 2), Name = "AlertOpenRow" };
         card.Bind(Border.BackgroundProperty, card.GetResourceObservable("Well")); card.Bind(Border.BoxShadowProperty, card.GetResourceObservable("ShadowSunk"));
         return card;
     }
@@ -204,7 +212,7 @@ public sealed class PillAlertsCard : Border
             side.Children.Add(hover);
         }
         Ui.Put(grid, side, 2);
-        var card = new Border { Child = grid, CornerRadius = new CornerRadius(10), Padding = new Thickness(8, 5), Name = "AlertListRow_" + index, Background = Brushes.Transparent };
+        var card = new Border { Child = grid, CornerRadius = new CornerRadius(10), Padding = new Thickness(8, 6), Margin = new Thickness(0), Name = "AlertListRow_" + index, Background = Brushes.Transparent };
         void Over(bool on)
         {
             if (on) card.Bind(Border.BackgroundProperty, card.GetResourceObservable("Hover")); else { card.ClearValue(Border.BackgroundProperty); card.Background = Brushes.Transparent; }
@@ -212,7 +220,7 @@ public sealed class PillAlertsCard : Border
             if (hover is not null) { hover.Opacity = on ? 1 : 0; hover.IsHitTestVisible = on; late.Opacity = on ? 0 : 1; }
         }
         // The whole row is the target, not only the words: a press anywhere on it that no button took opens the alert.
-        card.Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand); card.PointerPressed += (_, e) => { if (!e.Handled && e.GetCurrentPoint(card).Properties.IsLeftButtonPressed) { e.Handled = true; OpenRow(index); } };
+        card.Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand); card.PointerPressed += (_, e) => { if (!e.Handled && e.GetCurrentPoint(card).Properties.IsLeftButtonPressed) { e.Handled = true; Avalonia.Threading.Dispatcher.UIThread.Post(() => OpenRow(index), Avalonia.Threading.DispatcherPriority.Input); } };
         card.PointerEntered += (_, _) => Over(true); card.PointerExited += (_, _) => Over(false);
         card.GotFocus += (_, _) => Over(true); card.LostFocus += (_, _) => Over(card.IsPointerOver);
         return card;
