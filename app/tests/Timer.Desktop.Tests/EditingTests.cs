@@ -480,7 +480,7 @@ Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame(
             // The break is at the right end of the tracking card, level with the play tile.
             var breakButton = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardBreak"); var play = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "SidebarPause");
             Assert.InRange(Math.Abs(breakButton.TranslatePoint(new Point(0, breakButton.Bounds.Height / 2), dashboard)!.Value.Y - play.TranslatePoint(new Point(0, play.Bounds.Height / 2), dashboard)!.Value.Y), 0, 1);
-            Assert.True(breakButton.TranslatePoint(default, dashboard)!.Value.X > play.TranslatePoint(default, dashboard)!.Value.X + play.Bounds.Width);
+            Assert.True(breakButton.TranslatePoint(default, dashboard)!.Value.X >= play.TranslatePoint(default, dashboard)!.Value.X + play.Bounds.Width - 0.5); // The play tag and the mug sit side by side, after the name.
             // The window can be picked up by the sidebar and the header row, but not by a button or the timeline.
             var tab = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "TimelineTab");
             var tabAt = tab.TranslatePoint(new Point(tab.Bounds.Width / 2, tab.Bounds.Height / 2), dashboard)!.Value;

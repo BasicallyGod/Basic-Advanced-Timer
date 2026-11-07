@@ -75,16 +75,20 @@ public sealed class StatusFace : StackPanel
     /// <summary>The pill's account box (only a dot and a chevron: the name is its tooltip and the list) and the day clock's box are these widths, so the pill keeps one size whatever the time.</summary>
     public const double SelectorWidth = 50;
     /// <summary>The display window is as tall as the well beside it, with its digits 28 tall and the count's 15; the count's column is 24 wide.</summary>
-    public const double DisplayHeight = 52, CountDigitHeight = 15, CountColumn = 24, DisplayPadding = 10, DividerGap = 9;
-    /// <summary>The window's width, which is one size whatever the time or the count: padding, the LED, a divider, the clock, a divider and the count's column.</summary>
-    public static double LeftWidth => 2 * DisplayPadding + 6 + 2 * (2 * DividerGap + EtchedDivider.ColumnWidth) + SegmentClock.Width + CountColumn;
-    /// <summary>The pill's window continues past the count: a divider, then the play and pause zone, the account's name and the break.</summary>
-    /// <summary>The sidebar's display has a second row for the play dots, the name and the cup, under a dotted rule.</summary>
+    public const double DisplayHeight = 52, CountDigitHeight = 15, CountColumn = 24, DisplayPadding = 10;
+    /// <summary>There are no dividers: the parts of the display are set apart by these gaps (the LED to the clock, the clock to the count, the count to the name, the name to the play tag).</summary>
+    public const double LedGap = 12, ClockCountGap = 14, CountNameGap = 12, NameTagGap = 8;
+    /// <summary>The window of the sidebar and the compact pill, which stop at the count: padding, the LED, the clock and the count's column.</summary>
+    public static double LeftWidth => DisplayPadding + 6 + LedGap + SegmentClock.Width + ClockCountGap + CountColumn + DisplayPadding;
+    /// <summary>The sidebar's display has a second row for the account's name, the play tag and the mug.</summary>
     public const double SecondRowHeight = 48;
-    public const double TransportZone = 34, NameZone = 88, BreakZone = 38;
-    public static double DisplayWidth => LeftWidth - DisplayPadding + (2 * DividerGap + EtchedDivider.ColumnWidth) + TransportZone + NameZone + BreakZone + 6;
-    /// <summary>The window of the sidebar and the compact pill, which stop at the count.</summary>
+    /// <summary>The zones of the pill's right-hand end. The name's zone is 4 wider than its six cells; the tag and the mug are each a little wider than they are, so the washes do not touch.</summary>
+    public const double TransportZone = 36, NameZone = 88, BreakZone = 38, RightPadding = 6;
+    /// <summary>The pill's window: LED, clock, count, then the name, the play tag and the break. The mug's right edge is as far from the window's edge as the LED's left edge is.</summary>
+    public static double DisplayWidth => LeftWidth - DisplayPadding + CountNameGap + NameZone + NameTagGap + TransportZone + BreakZone + RightPadding;
     public static double ShortDisplayWidth => LeftWidth;
+    /// <summary>The sidebar's display is a fixed width whatever the pill does.</summary>
+    public const double SidebarDisplayWidth = 212;
     private readonly Ellipse selectorDot = new() { Width = 10, Height = 10, VerticalAlignment = VerticalAlignment.Center };
     private readonly Chevron selectorChevron = new() { VerticalAlignment = VerticalAlignment.Center };
     private Border selectorTile = null!;
@@ -101,7 +105,7 @@ public sealed class StatusFace : StackPanel
     /// <summary>The alert count's two digits.</summary>
     public SegmentRun AlertCountDigits => alertCountRun;
     /// <summary>Hides the play key, account box and break so the pill is only its display (the compact pill). Not for the sidebar.</summary>
-    public void SetCompact(bool compact) { if (Sidebar) return; displayBox.Padding = new Thickness(DisplayPadding, 0, compact ? DisplayPadding : 6, 0); transportDivider!.IsVisible = !compact; Circle.IsVisible = !compact; AccountsButton.IsVisible = !compact; Break.IsVisible = !compact; }
+    public void SetCompact(bool compact) { if (Sidebar) return; displayBox.Padding = new Thickness(DisplayPadding, 0, compact ? DisplayPadding : 6, 0); nameSpacer!.IsVisible = !compact; tagSpacer!.IsVisible = !compact; Circle.IsVisible = !compact; AccountsButton.IsVisible = !compact; Break.IsVisible = !compact; }
     public Button ClockButton { get; }
     /// <summary>The lights as a button that opens the pill's alerts; null on the sidebar.</summary>
     public Button? AlertsButton { get; }
@@ -110,7 +114,7 @@ public sealed class StatusFace : StackPanel
     public TransportGlyph? Transport { get; private set; }
     public SegmentName? NameRun { get; private set; }
     public CupGlyph? Cup { get; private set; }
-    private EtchedDivider? transportDivider; private Border? nameHost, trackBox;
+    private Border? nameHost, trackBox, nameSpacer, tagSpacer; private readonly Border ledGlow = new() { Width = 6, Height = 14, CornerRadius = new CornerRadius(3.5), IsHitTestVisible = false };
     public Button AccountsButton { get; }
     public BreakButton Break { get; }
     private bool accountsOpen, hoverAccounts; private double accountsAmount;
@@ -124,7 +128,7 @@ public sealed class StatusFace : StackPanel
         segmentClock = new SegmentClock(); clock = segmentClock;
         Spacing = 0; HorizontalAlignment = HorizontalAlignment.Center; if (sidebar) { Spacing = 8; HorizontalAlignment = HorizontalAlignment.Stretch; } else { Orientation = Orientation.Horizontal; VerticalAlignment = VerticalAlignment.Center; }
         // The state LED is a capsule set into the display, like a segment: an empty groove when idle, inlaid in the state's colour when not.
-        stateLight = new Border { Name = prefix + "StateLight", Width = 6, Height = 14, CornerRadius = new CornerRadius(3.5), VerticalAlignment = VerticalAlignment.Center };
+        stateLight = new Border { Name = prefix + "StateLight", Width = 6, Height = 14, CornerRadius = new CornerRadius(3.5), OpacityMask = Honeycomb.Brush };
         // The clock opens the dashboard (and collapses it again), as it always has; it is one width whatever the time.
         ClockButton = Ui.Button("", clockClick, prefix + "Dashboard");
         ClockButton.Classes.Add("pillBare"); ClockButton.Content = (Control)clock; ClockButton.HorizontalAlignment = HorizontalAlignment.Center; ClockButton.VerticalAlignment = VerticalAlignment.Center;
@@ -133,7 +137,7 @@ public sealed class StatusFace : StackPanel
         // The alert count: a small bell over two segment digits, in the colour of the most urgent thing waiting. Pressing it opens what is waiting (on the pill).
         alertCountRun.Name = prefix + "AlertCount";
         var countStack = new StackPanel { Spacing = 3, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Width = CountColumn, Name = prefix + "AlertCountStack" };
-        countStack.Children.Add(new Viewbox { Width = 9, Height = 9, HorizontalAlignment = HorizontalAlignment.Center, Child = bell }); countStack.Children.Add(new Border { Child = alertCountRun, HorizontalAlignment = HorizontalAlignment.Center });
+        countStack.Children.Add(new Viewbox { Width = 9, Height = 9, HorizontalAlignment = HorizontalAlignment.Center, Child = bell, OpacityMask = Honeycomb.Brush }); countStack.Children.Add(new Border { Child = alertCountRun, HorizontalAlignment = HorizontalAlignment.Center });
         Control countHost;
         if (alertsClick is not null)
         {
@@ -141,9 +145,12 @@ public sealed class StatusFace : StackPanel
             AlertsButton.Content = countStack; AlertsButton.VerticalAlignment = VerticalAlignment.Center; AlertsButton.HorizontalContentAlignment = HorizontalAlignment.Center; countHost = AlertsButton;
         }
         else countHost = countStack;
-        EtchedDivider Divider() => new() { Margin = new Thickness(DividerGap, 0), VerticalAlignment = VerticalAlignment.Center };
+        Border Spacer(double width) => new() { Width = width, IsHitTestVisible = false };
+        // The LED sits in a small host with its bloom behind it, so the bloom is drawn outside the honeycomb the LED itself is seen through.
+        var ledHost = new Grid { Width = 6, Height = 14, VerticalAlignment = VerticalAlignment.Center, Children = { ledGlow, stateLight } };
         var inside = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center, Spacing = 0 };
-        inside.Children.Add(stateLight); inside.Children.Add(Divider()); inside.Children.Add(ClockButton); inside.Children.Add(Divider()); inside.Children.Add(countHost);
+        nameSpacer = Spacer(CountNameGap); tagSpacer = Spacer(NameTagGap);
+        inside.Children.Add(ledHost); inside.Children.Add(Spacer(LedGap)); inside.Children.Add(ClockButton); inside.Children.Add(Spacer(ClockCountGap)); inside.Children.Add(countHost);
         displayBox = new Border { Name = prefix + "Display", Height = DisplayHeight, CornerRadius = new CornerRadius(14), Padding = new Thickness(DisplayPadding, 0), Child = inside, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         displayBox.Bind(Border.BackgroundProperty, displayBox.GetResourceObservable("DisplayWell"));
         // The primary control carries the running account's initials, and pauses or resumes. The initials give way to the symbol under the pointer.
@@ -178,26 +185,29 @@ public sealed class StatusFace : StackPanel
         Circle.Content = Transport; Circle.Classes.Add("zone"); Circle.Margin = default; Circle.Padding = new Thickness(0); Circle.Width = TransportZone; Circle.Height = 40; Circle.VerticalAlignment = VerticalAlignment.Center;
         NameRun = new SegmentName { Name = prefix + "AccountName", HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         Break.VerticalAlignment = VerticalAlignment.Center; Cup = Break.Cup;
-        transportDivider = Divider();
         Children.Add(displayBox);
         if (!sidebar)
         {
             AccountsButton.Content = NameRun; AccountsButton.Classes.Add("zone"); AccountsButton.Margin = default; AccountsButton.Padding = new Thickness(0); AccountsButton.Width = NameZone; AccountsButton.Height = 40; AccountsButton.VerticalAlignment = VerticalAlignment.Center;
             displayBox.Padding = new Thickness(DisplayPadding, 0, 6, 0);
-            inside.Children.Add(transportDivider); inside.Children.Add(Circle); inside.Children.Add(AccountsButton); inside.Children.Add(Break);
+            inside.Children.Add(nameSpacer); inside.Children.Add(AccountsButton); inside.Children.Add(tagSpacer); inside.Children.Add(Circle); inside.Children.Add(Break);
         }
         else
         {
-            // The display folds in two: the clock row above, and under a dotted rule play and pause, the account's name (a label: the account list is already below it) and
-            // the cup. Every zone keeps its wash clear of the dividers and of the window's edge.
+            // The display folds in two: the clock row above, and under it the account's name (a label: the account list is already below it), the play tag and the mug, centred.
+            // There is no rule between the rows and no divider; every zone keeps its wash clear of its neighbours and of the window's edge.
             nameHost = new Border { Name = prefix + "WhoName", Width = NameZone, Height = 40, Child = NameRun, Background = Brushes.Transparent, VerticalAlignment = VerticalAlignment.Center };
-            var strip = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center, Children = { Circle, Divider(), nameHost, Divider(), Break } };
-            trackBox = new Border { Name = prefix + "Track", Height = SecondRowHeight, Width = ShortDisplayWidth, Child = strip, HorizontalAlignment = HorizontalAlignment.Center };
-            var rule = new EtchedDivider(false, ShortDisplayWidth - 2 * 16) { VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Center };
-            var rows = new Grid { RowDefinitions = new RowDefinitions(DisplayHeight + "," + SecondRowHeight) };
-            displayBox.Child = null; inside.Margin = new Thickness(DisplayPadding, 0); displayBox.Padding = default; displayBox.Height = DisplayHeight + SecondRowHeight;
-            Grid.SetRow(trackBox, 1); Grid.SetRow(rule, 1); rule.Margin = new Thickness(0, -1, 0, 0);
-            rows.Children.Add(inside); rows.Children.Add(trackBox); rows.Children.Add(rule);
+            var strip = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center, Children = { nameHost, Spacer(NameTagGap), Circle, Break } };
+            trackBox = new Border { Name = prefix + "Track", Height = SecondRowHeight, Width = SidebarDisplayWidth, Child = strip, HorizontalAlignment = HorizontalAlignment.Center };
+            // The top row: the LED at the left, the count at the right, the clock centred between them.
+            var top = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Height = DisplayHeight, Width = SidebarDisplayWidth };
+            inside.Children.Clear(); ledHost.Margin = new Thickness(DisplayPadding, 0, 0, 0); ClockButton.HorizontalAlignment = HorizontalAlignment.Center; countHost.Margin = new Thickness(0, 0, DisplayPadding, 0);
+            Grid.SetColumn(ClockButton, 1); Grid.SetColumn(countHost, 2);
+            top.Children.Add(ledHost); top.Children.Add(ClockButton); top.Children.Add(countHost);
+            var rows = new Grid { RowDefinitions = new RowDefinitions(DisplayHeight + "," + SecondRowHeight), Width = SidebarDisplayWidth };
+            displayBox.Child = null; displayBox.Padding = default; displayBox.Height = DisplayHeight + SecondRowHeight; displayBox.Width = SidebarDisplayWidth;
+            Grid.SetRow(trackBox, 1);
+            rows.Children.Add(top); rows.Children.Add(trackBox);
             displayBox.Child = rows;
         }
         ActualThemeVariantChanged += (_, _) => Refresh();
@@ -232,6 +242,8 @@ public sealed class StatusFace : StackPanel
             : hoverAccounts ? (tile.TryFindResource("Hover", tile.ActualThemeVariant, out var hover) && hover is IBrush hoverBrush ? hoverBrush : rest) : rest;
         tile.BoxShadow = accountsFocus ? SoftTint.FocusRing(tile) : default;
     }
+    /// <summary>The amber the break shows in the display: the theme's break colour on a dark theme, and a brighter amber on a light one, where the theme's own reads brown.</summary>
+    public static Color BreakGlyphColour(Control control) => SoftTint.IsDark(control) ? Ui.ThemeColour(control, "Break", Color.Parse("#F5A524")) : Color.Parse("#E8920F");
     /// <summary>A shadow set the theme writes (raised, sunk and so on), or none before the window has a theme.</summary>
     public static BoxShadows Res(Control control, string key) => control.TryFindResource(key, control.ActualThemeVariant, out var found) && found is BoxShadows shadows ? shadows : default;
     private Color ThemeColourOr(string key, string fallback) => Ui.ThemeColour(this, key, Color.Parse(fallback));
@@ -259,10 +271,12 @@ public sealed class StatusFace : StackPanel
         stateLight.Background = new SolidColorBrush(stateColour);
         // The state LED is a capsule set into the display: inlaid in the state's colour while recording or on a break, an empty groove when idle. The window's ring and halo
         // repeat the state, so the LED never carries it alone.
-        var groove = ThemeColourOr("DisplayGroove", "#101317"); var shade = ThemeColourOr("DisplayShade", "#A0000000");
+        var shade = ThemeColourOr("DisplayShade", "#A0000000");
         var idle = key == "Idle";
-        stateLight.Background = new SolidColorBrush(idle ? groove : stateColour);
-        stateLight.BoxShadow = new BoxShadows(new BoxShadow { IsInset = true, OffsetX = .6, OffsetY = 1, Blur = idle ? 1.6 : 1, Color = idle ? shade : SoftTint.WithAlpha(shade, .55) });
+        // The LED is seen through the display's honeycomb: lit in the state's colour, with a soft bloom on a dark theme, or a faint ghost of the text colour when idle.
+        stateLight.Background = new SolidColorBrush(idle ? SoftTint.WithAlpha(ThemeColourOr("Ink", "#18233A"), .14) : stateColour);
+        stateLight.BoxShadow = default;
+        ledGlow.BoxShadow = !idle && dark ? new BoxShadows(new BoxShadow { Blur = 7, Spread = 1, Color = SoftTint.WithAlpha(stateColour, .4) }) : default;
         Avalonia.Automation.AutomationProperties.SetName(stateLight, stateName); ToolTip.SetTip(stateLight, stateName);
         var well0 = ThemeColourOr("DisplayWell", "#101317"); var edge = ThemeColourOr("DisplayEdge", "#12FFFFFF");
         displayBox.BoxShadow = new BoxShadows(new BoxShadow { IsInset = true, OffsetY = 2, Blur = 5, Color = shade }, new[] { new BoxShadow { OffsetY = 1, Color = edge } });
@@ -316,7 +330,7 @@ public sealed class StatusFace : StackPanel
     {
         var recording = model.IsTracking && !onBreak;
         // The play tag stays the tracking colour, and turns the break colour on a break, when pressing it resumes.
-        Transport!.Colour = onBreak ? ThemeColourOr("Break", "#F5A524") : ThemeColourOr(SoftTint.IsDark(this) ? "Live" : "LiveText", "#34D399");
+        Transport!.Colour = onBreak ? BreakGlyphColour(this) : ThemeColourOr(SoftTint.IsDark(this) ? "Live" : "LiveText", "#34D399");
         Transport.Show(recording, instant: !Transport.IsAttachedToVisualTree());
         var index = shown is null ? -1 : model.Accounts.ToList().FindIndex(a => a.Name == shown);
         NameRun!.Colour = ThemeColourOr("Ink", "#18233A");
@@ -377,7 +391,7 @@ public sealed class BreakButton : Button
         var orange = Ui.ThemeColour(this, "Break", Color.Parse("#F5A524"));
         if (dots is not null)
         {
-            dots.Colour = orange; dots.Show(onBreak, onBreak || hover, instant: !dots.IsAttachedToVisualTree());
+            dots.Colour = onBreak || hover ? StatusFace.BreakGlyphColour(this) : Ui.ThemeColour(this, "Muted", Colors.Gray); dots.Show(onBreak, onBreak || hover, instant: !dots.IsAttachedToVisualTree());
             var dotTip = onBreak ? "End break" + (model.ResumeAccount is { } back ? " and resume " + back : "") : "Start break";
             ToolTip.SetTip(this, dotTip); Avalonia.Automation.AutomationProperties.SetName(this, dotTip); return;
         }

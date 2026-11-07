@@ -91,7 +91,7 @@ public sealed class Round31Tests
         try
         {
             var led = Find<Border>(pill, "PillStateLight"); Assert.Equal(new Size(6, 14), led.Bounds.Size); Assert.Equal(3.5, led.CornerRadius.TopLeft);
-            var idle = Fill(led); pill.TryFindResource("DisplayGroove", pill.ActualThemeVariant, out var groove); Assert.Equal(((ISolidColorBrush)groove!).Color, idle);
+            var idle = Fill(led); Assert.True(idle.A < 60); // Idle it is a faint ghost of the text colour, seen through the honeycomb.
             model.ToggleAccount("Account one"); Settle(pill); var live = Fill(led); Assert.NotEqual(idle, live);
             model.ToggleBreak(); Settle(pill); var onBreak = Fill(led); Assert.NotEqual(live, onBreak); Assert.NotEqual(idle, onBreak);
         }
