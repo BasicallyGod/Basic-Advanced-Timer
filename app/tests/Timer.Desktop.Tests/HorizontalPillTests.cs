@@ -11,7 +11,7 @@ using Xunit;
 
 namespace Timer.Desktop.Tests;
 
-// The pill: the day clock, then the play tile and the account on one well, then the break, with the account's list hanging below. It was one of two shapes
+// The pill: clock, account name and stacked transport controls in one display, with the account's list hanging below. It was one of two shapes
 // (the other, vertical, is gone) and an old pillshape= line is left alone in the settings file.
 public sealed class HorizontalPillTests
 {
@@ -28,7 +28,7 @@ public sealed class HorizontalPillTests
     private static void Click(Control c) { c.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
 
     [AvaloniaFact]
-    public void TheHorizontalPillRunsAlongItsCardClockFirstThenThePlayTileAndTheAccountOnOneWellThenTheBreakAtTheEnd()
+    public void TheHorizontalPillFitsTheClockNameAndControlColumnInsideItsBezel()
     {
         var model = Model(); var pill = new PillWindow(model); pill.Show(); Settle(pill);
         try
@@ -40,7 +40,8 @@ public sealed class HorizontalPillTests
             double X(Control c) => c.TranslatePoint(default, surface)!.Value.X; double Y(Control c) => c.TranslatePoint(default, surface)!.Value.Y;
             var lights = Find<Border>(pill, "PillStateLight"); var clock = Find<Button>(pill, "PillDashboard");
             var primary = Find<Button>(pill, "PillPause"); var accounts = pill.AccountsButton; var brk = Find<Button>(pill, "PillBreak");
-            Assert.True(X(lights) < X(clock)); Assert.True(X(clock) < X(accounts)); Assert.True(X(accounts) < X(primary)); Assert.True(X(primary) < X(brk)); // Left to right, all inside the one display.
+            Assert.True(X(lights) < X(clock)); Assert.True(X(clock) < X(accounts)); Assert.True(X(accounts) < X(primary));
+            Assert.Equal(X(primary), X(brk), 0.5);
             var display = Find<Border>(pill, "PillDisplay");
             foreach (var zone in new Control[] { primary, accounts, brk }) Assert.True(zone.GetVisualAncestors().Contains(display));
             // Everything is centred on the card's height, and the bezel is the same all round.

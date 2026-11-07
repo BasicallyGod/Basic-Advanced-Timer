@@ -80,15 +80,16 @@ public sealed class StatusFace : StackPanel
     public const double LedGap = 12, ClockCountGap = 14, CountNameGap = 12, NameTagGap = 8;
     /// <summary>The window of the sidebar and the compact pill, which stop at the count: padding, the LED, the clock and the count's column.</summary>
     public static double LeftWidth => DisplayPadding + 6 + LedGap + SegmentClock.Width + ClockCountGap + CountColumn + DisplayPadding;
-    /// <summary>The sidebar's display has a second row for the account's name, the play tag and the mug.</summary>
+    /// <summary>The sidebar's display has a second row for the account name and stacked controls.</summary>
     public const double SecondRowHeight = 48;
-    /// <summary>The zones of the pill's right-hand end. The name's zone is 4 wider than its six cells; the tag and the mug are each a little wider than they are, so the washes do not touch.</summary>
-    public const double TransportZone = 36, NameZone = 88, BreakZone = 38, RightPadding = 6;
-    /// <summary>The pill's window: LED, clock, count, then the name, the play tag and the break. The mug's right edge is as far from the window's edge as the LED's left edge is.</summary>
-    public static double DisplayWidth => LeftWidth - DisplayPadding + CountNameGap + NameZone + NameTagGap + TransportZone + BreakZone + RightPadding;
+    public const double NameZone = 88, ControlZone = 40, ControlHeight = 22, ControlGap = 2, RightPadding = 6;
+    /// <summary>The pill's window: LED, clock, count, account name, and one column for play/pause and break.</summary>
+    public static double DisplayWidth => LeftWidth - DisplayPadding + CountNameGap + NameZone + NameTagGap + ControlZone + RightPadding;
     public static double ShortDisplayWidth => LeftWidth;
     /// <summary>The sidebar's display is a fixed width whatever the pill does.</summary>
     public const double SidebarDisplayWidth = 212;
+    public const int SidebarNameCells = 10;
+    private const double SidebarNameZone = SidebarDisplayWidth - 2 * DisplayPadding - NameTagGap - ControlZone;
     private readonly Ellipse selectorDot = new() { Width = 10, Height = 10, VerticalAlignment = VerticalAlignment.Center };
     private readonly Chevron selectorChevron = new() { VerticalAlignment = VerticalAlignment.Center };
     private Border selectorTile = null!;
@@ -105,15 +106,21 @@ public sealed class StatusFace : StackPanel
     /// <summary>The alert count's two digits.</summary>
     public SegmentRun AlertCountDigits => alertCountRun;
     /// <summary>Hides the play key, account box and break so the pill is only its display (the compact pill). Not for the sidebar.</summary>
-    public void SetCompact(bool compact) { if (Sidebar) return; displayBox.Padding = new Thickness(DisplayPadding, 0, compact ? DisplayPadding : 6, 0); nameSpacer!.IsVisible = !compact; tagSpacer!.IsVisible = !compact; Circle.IsVisible = !compact; AccountsButton.IsVisible = !compact; Break.IsVisible = !compact; }
+    public void SetCompact(bool compact)
+    {
+        if (Sidebar) return;
+        displayBox.Padding = new Thickness(DisplayPadding, 0, compact ? DisplayPadding : RightPadding, 0);
+        nameSpacer!.IsVisible = tagSpacer!.IsVisible = AccountsButton.IsVisible = !compact;
+        transportControls.IsVisible = Circle.IsVisible = Break.IsVisible = !compact;
+    }
     public Button ClockButton { get; }
     /// <summary>The lights as a button that opens the pill's alerts; null on the sidebar.</summary>
     public Button? AlertsButton { get; }
     public Button Circle { get; }
-    /// <summary>The pill's dot-matrix play or pause symbol, the account's sixteen-segment name and the cup (null on the sidebar).</summary>
+    /// <summary>The play/pause badge and sixteen-segment account name shared by both displays.</summary>
     public TransportGlyph? Transport { get; private set; }
     public SegmentName? NameRun { get; private set; }
-    public CupGlyph? Cup { get; private set; }
+    private readonly StackPanel transportControls;
     private Border? nameHost, trackBox, nameSpacer, tagSpacer; private readonly Border ledGlow = new() { Width = 6, Height = 14, CornerRadius = new CornerRadius(3.5), IsHitTestVisible = false };
     public Button AccountsButton { get; }
     public BreakButton Break { get; }
@@ -179,25 +186,39 @@ public sealed class StatusFace : StackPanel
         SetAccountsOpen(false);
         // The primary control and the Accounts button share one well.
         well.Name = prefix + "Well";
-        // The display's right-hand controls are the same parts on the pill and the sidebar: the play or pause symbol, the account's name and the cup, each a zone that washes
-        // under the pointer exactly as the clock and the count do. On the pill they continue the one display; on the sidebar they are a second display of the same width.
+        // Both displays place the transport badges in one column. Their pointer washes stay separate.
         Transport = new TransportGlyph { Colour = ThemeColourOr("Live", "#34D399") };
-        Circle.Content = Transport; Circle.Classes.Add("zone"); Circle.Margin = default; Circle.Padding = new Thickness(0); Circle.Width = TransportZone; Circle.Height = 40; Circle.VerticalAlignment = VerticalAlignment.Center;
-        NameRun = new SegmentName { Name = prefix + "AccountName", HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        Break.VerticalAlignment = VerticalAlignment.Center; Cup = Break.Cup;
+        Circle.Content = Transport;
+        Circle.Classes.Add("zone");
+        Circle.Margin = default;
+        Circle.Padding = new Thickness(0);
+        Circle.Width = ControlZone;
+        Circle.Height = ControlHeight;
+        transportControls = new StackPanel
+        {
+            Name = prefix + "TransportControls",
+            Spacing = ControlGap,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children = { Circle, Break }
+        };
+        NameRun = new SegmentName(sidebar ? SidebarNameCells : SegmentName.Cells)
+        {
+            Name = prefix + "AccountName",
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
         Children.Add(displayBox);
         if (!sidebar)
         {
             AccountsButton.Content = NameRun; AccountsButton.Classes.Add("zone"); AccountsButton.Margin = default; AccountsButton.Padding = new Thickness(0); AccountsButton.Width = NameZone; AccountsButton.Height = 40; AccountsButton.VerticalAlignment = VerticalAlignment.Center;
-            displayBox.Padding = new Thickness(DisplayPadding, 0, 6, 0);
-            inside.Children.Add(nameSpacer); inside.Children.Add(AccountsButton); inside.Children.Add(tagSpacer); inside.Children.Add(Circle); inside.Children.Add(Break);
+            displayBox.Padding = new Thickness(DisplayPadding, 0, RightPadding, 0);
+            inside.Children.Add(nameSpacer); inside.Children.Add(AccountsButton); inside.Children.Add(tagSpacer); inside.Children.Add(transportControls);
         }
         else
         {
-            // The display folds in two: the clock row above, and under it the account's name (a label: the account list is already below it), the play tag and the mug, centred.
-            // There is no rule between the rows and no divider; every zone keeps its wash clear of its neighbours and of the window's edge.
-            nameHost = new Border { Name = prefix + "WhoName", Width = NameZone, Height = 40, Child = NameRun, Background = Brushes.Transparent, VerticalAlignment = VerticalAlignment.Center };
-            var strip = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center, Children = { nameHost, Spacer(NameTagGap), Circle, Break } };
+            // The clock row stays put. The longer name and the controls share the second row.
+            nameHost = new Border { Name = prefix + "WhoName", Width = SidebarNameZone, Height = 40, Child = NameRun, Background = Brushes.Transparent, VerticalAlignment = VerticalAlignment.Center };
+            var strip = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center, Children = { nameHost, Spacer(NameTagGap), transportControls } };
             trackBox = new Border { Name = prefix + "Track", Height = SecondRowHeight, Width = SidebarDisplayWidth, Child = strip, HorizontalAlignment = HorizontalAlignment.Center };
             // The top row: the LED at the left, the count at the right, the clock centred between them.
             var top = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Height = DisplayHeight, Width = SidebarDisplayWidth };
@@ -322,11 +343,10 @@ public sealed class StatusFace : StackPanel
         Avalonia.Automation.AutomationProperties.SetName(ClockButton, clockTip + ". Working time " + model.ClockText);
         Break.Refresh();
         PaintAccountsTile();
-        RefreshTransport(onBreak, who, shown);
+        RefreshTransport(onBreak, shown);
     }
 
-    // The display's right-hand end: the symbol for what pressing the first zone does, the account's name and (in the cup) the break.
-    private void RefreshTransport(bool onBreak, string? who, string? shown)
+    private void RefreshTransport(bool onBreak, string? shown)
     {
         var recording = model.IsTracking && !onBreak;
         // The play tag stays the tracking colour, and turns the break colour on a break, when pressing it resumes.
@@ -360,9 +380,7 @@ public sealed class BreakButton : Button
     private bool hover, focus;
     // Styles written for Button (pillBare, zone) must reach this subclass too.
     protected override Type StyleKeyOverride => typeof(Button);
-    private readonly CupGlyph? dots;
-    /// <summary>The dot-matrix cup when the break sits in the pill's display (null for the round key).</summary>
-    public CupGlyph? Cup => dots;
+    private readonly BreakBadgeGlyph? badge;
     public BreakButton(TimerModel model, string name, bool inDisplay = false)
     {
         this.model = model; Name = name;
@@ -370,9 +388,16 @@ public sealed class BreakButton : Button
         Classes.Add("pillBare"); StatusFace.MakeRoomForRing(this); HorizontalAlignment = HorizontalAlignment.Center;
         if (inDisplay)
         {
-            dots = new CupGlyph(); Classes.Add("zone"); Margin = default; Padding = new Thickness(0); Width = StatusFace.BreakZone; Height = 40; Content = dots;
+            badge = new BreakBadgeGlyph();
+            Classes.Add("zone");
+            Margin = default;
+            Padding = new Thickness(0);
+            Width = StatusFace.ControlZone;
+            Height = StatusFace.ControlHeight;
+            Content = badge;
             PointerEntered += (_, _) => { hover = true; Refresh(); };
             PointerExited += (_, _) => { hover = false; Refresh(); };
+            SoftTint.WatchKeyboardFocus(this, f => { focus = f; Refresh(); });
             ActualThemeVariantChanged += (_, _) => Refresh();
             Refresh(); return;
         }
@@ -389,11 +414,15 @@ public sealed class BreakButton : Button
     {
         var onBreak = model.IsOnBreak;
         var orange = Ui.ThemeColour(this, "Break", Color.Parse("#F5A524"));
-        if (dots is not null)
+        if (badge is not null)
         {
-            dots.Colour = onBreak || hover ? StatusFace.BreakGlyphColour(this) : Ui.ThemeColour(this, "Muted", Colors.Gray); dots.Show(onBreak, onBreak || hover, instant: !dots.IsAttachedToVisualTree());
-            var dotTip = onBreak ? "End break" + (model.ResumeAccount is { } back ? " and resume " + back : "") : "Start break";
-            ToolTip.SetTip(this, dotTip); Avalonia.Automation.AutomationProperties.SetName(this, dotTip); return;
+            var highlighted = onBreak || hover || focus;
+            badge.Colour = highlighted ? StatusFace.BreakGlyphColour(this) : Ui.ThemeColour(this, "Muted", Colors.Gray);
+            badge.Show(highlighted, instant: !badge.IsAttachedToVisualTree());
+            var badgeTip = onBreak ? "End break" + (model.ResumeAccount is { } back ? " and resume " + back : "") : "Start break";
+            ToolTip.SetTip(this, badgeTip);
+            Avalonia.Automation.AutomationProperties.SetName(this, badgeTip);
+            return;
         }
         cup.Filled = false;
         if (onBreak)

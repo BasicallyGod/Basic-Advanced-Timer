@@ -7,7 +7,7 @@ using Avalonia.VisualTree;
 namespace Timer.Desktop;
 
 /// <summary>
-/// The pieces that continue the pill's display to the right of the clock (the vacuum-fluorescent look): the play and pause tag, the break mug and a sixteen-segment account name,
+/// The pieces that continue the pill's display to the right of the clock (the vacuum-fluorescent look): the transport and break badges and a sixteen-segment account name,
 /// all seen through one honeycomb mesh. They are drawn by hand, and their motion runs on a timer that exists only while something is moving.
 /// </summary>
 /// <summary>
@@ -72,14 +72,22 @@ public abstract class SteppedControl : Control
 
 /// <summary>
 /// The play, pause and break symbols as a vacuum-fluorescent display draws them: solid phosphor strokes seen through the display's honeycomb (<see cref="Honeycomb"/>), with a
-/// soft bloom. Each glyph is drawn from true curves in its own units and scaled so its stroke is the same 1.8 pixels in both, so it stays crisp at any scale.
+/// soft bloom. Both badge outlines use the same 1.8 pixel stroke.
 /// </summary>
 public abstract class VfdGlyph : SteppedControl
 {
-    public const double GhostAlpha = 0.2;
-    /// <summary>The height of the play tag, of the mug's tile, and of the account name's cells: the three line up.</summary>
-    public const double Height20 = 20;
-    public Color Colour { get; set; } = Colors.Green;
+    public const double BadgeWidth = 36, BadgeHeight = 20, StrokeWidth = 1.8;
+    private Color colour = Colors.Green;
+    public Color Colour
+    {
+        get => colour;
+        set
+        {
+            if (colour == value) return;
+            colour = value;
+            InvalidateVisual();
+        }
+    }
     protected VfdGlyph() { IsHitTestVisible = false; }
 
     protected static StreamGeometry Build(Action<StreamGeometryContext> draw) { var g = new StreamGeometry(); using (var c = g.Open()) draw(c); return g; }
@@ -109,18 +117,15 @@ public abstract class VfdGlyph : SteppedControl
 public sealed class TransportGlyph : VfdGlyph
 {
     public const double WipeMilliseconds = 180;
-    /// <summary>The drawing is 34 by 24.2 units; this many pixels to a unit makes the tag 20 tall (the stroke 2.2 units is 1.8 pixels).</summary>
-    public const double Unit = Height20 / 24.2;
-    public static double TagWidth => 34 * Unit;
-    private static readonly StreamGeometry Tag = Poly(true, (1.1, 1.2), (23, 1.2), (32.9, 12.1), (23, 23), (1.1, 23));
-    private static readonly StreamGeometry Triangle = Fill((9, 6.8), (19, 12.1), (9, 17.4));
-    private static readonly StreamGeometry Bars = Build(c => { foreach (var x in new[] { 8.6, 14.4 }) { c.BeginFigure(new Point(x, 6.8), true); c.LineTo(new Point(x + 3.3, 6.8)); c.LineTo(new Point(x + 3.3, 17.4)); c.LineTo(new Point(x, 17.4)); c.EndFigure(true); } });
+    private static readonly StreamGeometry BadgeOutline = Poly(true, (1.2, 1.2), (24.8, 1.2), (34.8, 10), (24.8, 18.8), (1.2, 18.8));
+    private static readonly StreamGeometry Triangle = Fill((10.5, 5.6), (19, 10), (10.5, 14.4));
+    private static readonly StreamGeometry Bars = Build(c => { foreach (var x in new[] { 10.5, 16 }) { c.BeginFigure(new Point(x, 5.6), true); c.LineTo(new Point(x + 2.7, 5.6)); c.LineTo(new Point(x + 2.7, 14.4)); c.LineTo(new Point(x, 14.4)); c.EndFigure(true); } });
     private bool pause; private double progress;
     /// <summary>Whether the pause bars are showing (or on their way); otherwise the play triangle.</summary>
     public bool Paused => pause;
     /// <summary>0 with the triangle showing, 1 with the bars, and between while one fades into the other.</summary>
     public double Progress => progress;
-    public TransportGlyph() { Width = TagWidth; Height = Height20; }
+    public TransportGlyph() { Width = BadgeWidth; Height = BadgeHeight; }
     /// <summary>Shows the pause bars (true) or the play triangle (false), fading between them unless <paramref name="instant"/>.</summary>
     public void Show(bool pauseBars, bool instant)
     {
@@ -133,102 +138,77 @@ public sealed class TransportGlyph : VfdGlyph
     protected override void Advance(double milliseconds) { var step = milliseconds / WipeMilliseconds; progress = pause ? Math.Min(1, progress + step) : Math.Max(0, progress - step); }
     public override void Render(DrawingContext context)
     {
-        var w = 2.2; var scale = Matrix.CreateScale(Unit, Unit);
-        using (context.PushTransform(scale)) { Bloom(context, Tag, w, 1); Bloom(context, Triangle, 0, 1 - progress, true); Bloom(context, Bars, 0, progress, true); }
+        Bloom(context, BadgeOutline, StrokeWidth, 1);
+        Bloom(context, Triangle, 0, 1 - progress, true);
+        Bloom(context, Bars, 0, progress, true);
         using (Honeycomb.Meshed(context, new Rect(0, 0, Width, Height)))
-        using (context.PushTransform(scale)) { Ink(context, Tag, w, 1); Ink(context, Triangle, 0, 1 - progress, true); Ink(context, Bars, 0, progress, true); }
+        {
+            Ink(context, BadgeOutline, StrokeWidth, 1);
+            Ink(context, Triangle, 0, 1 - progress, true);
+            Ink(context, Bars, 0, progress, true);
+        }
     }
 }
 
-/// <summary>
-/// The break mug: a tile broken at the top holding a cup with a ring handle, and three wisps of steam. The tile is 20 tall like the play tag, level with it, and the steam rises
-/// above that. The strokes are a faint ghost at rest and light up on a break; the steam is always drawn, and while a break is on (or the pointer is over the mug) its wisps take
-/// turns lighting, slowly, each fading as the next comes up.
-/// </summary>
-public sealed class CupGlyph : VfdGlyph
+/// <summary>The break label uses the same phosphor outline and honeycomb as the transport badge.</summary>
+public sealed class BreakBadgeGlyph : VfdGlyph
 {
-    public const double FadeMilliseconds = 260, TurnMilliseconds = 900;
-    public const int Wisps = 3;
-    /// <summary>The tile is 16 units tall before its stroke; this many pixels to a unit makes it 20 with the stroke. Its strokes are thinner in units so they are 1.8 pixels like the tag's.</summary>
-    public const double Unit = (Height20 - 1.8) / 16, StrokeScale = 1.8 / Unit / 2.2;
-    /// <summary>The drawing runs 27 units across and from the steam's top (3.6) to the tile's foot (27.5); the tile's middle is at 18.4. The box is as tall as twice the tile's middle needs, so the tile sits on the box's middle line.</summary>
-    public static double MugWidth => 27 * Unit;
-    public static double BoxHeight => 2 * (18.4 - 3.9) * Unit;
-    private static readonly StreamGeometry Tile = Build(c =>
+    public const double FadeMilliseconds = 180;
+    private static readonly Geometry BadgeOutline = new RectangleGeometry(new Rect(1.2, 1.2, BadgeWidth - 2.4, BadgeHeight - 2.4), 1.4, 1.4);
+    private static readonly Lazy<Geometry> Label = new(() =>
     {
-        c.BeginFigure(new Point(6.2, 10.4), false); c.LineTo(new Point(4.8, 10.4)); c.QuadraticBezierTo(new Point(1.9, 10.4), new Point(1.9, 13.3)); c.LineTo(new Point(1.9, 23.5));
-        c.QuadraticBezierTo(new Point(1.9, 26.4), new Point(4.8, 26.4)); c.LineTo(new Point(23.2, 26.4)); c.QuadraticBezierTo(new Point(26.1, 26.4), new Point(26.1, 23.5));
-        c.LineTo(new Point(26.1, 13.3)); c.QuadraticBezierTo(new Point(26.1, 10.4), new Point(23.2, 10.4)); c.LineTo(new Point(21.8, 10.4)); c.EndFigure(false);
+        var family = new FontFamily($"avares://{typeof(BreakBadgeGlyph).Assembly.GetName().Name}/Assets/Fonts#Chakra Petch");
+        var face = new Typeface(family, FontStyle.Normal, FontWeight.SemiBold);
+        var text = new FormattedText("BREAK", System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, face, 9.5, Brushes.White);
+        return text.BuildGeometry(default);
     });
-    private static readonly StreamGeometry Cup = Build(c =>
+    public bool Highlighted { get; private set; }
+    public double Lit { get; private set; }
+    public BreakBadgeGlyph() { Width = BadgeWidth; Height = BadgeHeight; }
+
+    public void Show(bool highlighted, bool instant)
     {
-        c.BeginFigure(new Point(7.2, 15.2), false); c.LineTo(new Point(19.2, 15.2)); c.LineTo(new Point(19.2, 19.4)); c.CubicBezierTo(new Point(19.2, 21.9), new Point(17.7, 23.4), new Point(15.3, 23.4));
-        c.LineTo(new Point(11.1, 23.4)); c.CubicBezierTo(new Point(8.7, 23.4), new Point(7.2, 21.9), new Point(7.2, 19.4)); c.EndFigure(true);
-    });
-    private static readonly StreamGeometry Handle = Build(c => { c.BeginFigure(new Point(19.2, 16.4), false); c.CubicBezierTo(new Point(22.9, 15.8), new Point(22.9, 20.6), new Point(19.2, 20)); c.EndFigure(false); });
-    // Each wisp is two bows of an S: a quadratic and its smooth continuation (the reflected control point).
-    private static readonly StreamGeometry[] Steam = { Wisp(9.8), Wisp(14), Wisp(18.2) };
-    private static StreamGeometry Wisp(double x) => Build(c =>
-    {
-        c.BeginFigure(new Point(x, 9.4), false); c.QuadraticBezierTo(new Point(x - 1.5, 8), new Point(x, 6.6));
-        c.QuadraticBezierTo(new Point(x + 1.5, 5.2), new Point(x, 4.8)); c.EndFigure(false);
-    });
-    private bool on, steaming; private double lit, clock;
-    public CupGlyph() { Width = MugWidth; Height = BoxHeight; }
-    public bool On => on;
-    /// <summary>Whether the steam is moving (on a break or under the pointer, with motion allowed).</summary>
-    public bool Steaming => steaming;
-    private bool Animated => steaming && !Motion.Reduced;
-    /// <summary>How lit the mug is, 0 (a faint ghost) to 1 (a break is on).</summary>
-    public double Lit => lit;
-    /// <summary>Sets whether a break is on and whether the steam rises (on a break, or under the pointer).</summary>
-    public void Show(bool breakOn, bool steam, bool instant)
-    {
-        on = breakOn; steaming = steam;
-        if (instant || Motion.Reduced || !this.IsAttachedToVisualTree()) lit = on ? 1 : 0;
-        InvalidateVisual(); Wake();
+        var snap = instant || Motion.Reduced || !this.IsAttachedToVisualTree();
+        if (Highlighted == highlighted && (!snap || Lit == (highlighted ? 1 : 0))) return;
+        Highlighted = highlighted;
+        if (snap) Lit = Highlighted ? 1 : 0;
+        InvalidateVisual();
+        Wake();
     }
-    protected override bool Animating => lit != (on ? 1 : 0) || Animated;
+
+    protected override bool Animating => Lit != (Highlighted ? 1 : 0);
     protected override void Advance(double milliseconds)
     {
-        var step = milliseconds / FadeMilliseconds; lit = on ? Math.Min(1, lit + step) : Math.Max(0, lit - step);
-        if (Animated) clock += milliseconds;
+        var step = milliseconds / FadeMilliseconds;
+        Lit = Highlighted ? Math.Min(1, Lit + step) : Math.Max(0, Lit - step);
     }
-    private double Body => GhostAlpha + (1 - GhostAlpha) * lit;
-    /// <summary>How bright wisp <paramref name="i"/> is now: a ghost at rest, and while steaming the one whose turn it is brightest and the others fading.</summary>
-    public double WispBrightness(int i)
-    {
-        if (!Animated) return Body;
-        var dist = (((clock / TurnMilliseconds - i) % Wisps) + Wisps) % Wisps;
-        return GhostAlpha + (1 - GhostAlpha) * (.35 + .65 * lit) * Math.Max(.15, 1 - dist * .5);
-    }
+
     public override void Render(DrawingContext context)
     {
-        var shift = Matrix.CreateTranslation(-14, -18.4) * Matrix.CreateScale(Unit, Unit) * Matrix.CreateTranslation(Width / 2, Height / 2);
-        double tile = 2.2 * StrokeScale, cup = 2 * StrokeScale, handle = 1.8 * StrokeScale, steam = 1.9 * StrokeScale;
+        const double idleStrength = .62;
+        var strength = idleStrength + (1 - idleStrength) * Lit;
+        var label = Label.Value;
+        var shift = Matrix.CreateTranslation(Width / 2 - label.Bounds.Center.X, Height / 2 - label.Bounds.Center.Y);
+        Bloom(context, BadgeOutline, StrokeWidth, strength);
         using (context.PushTransform(shift))
-        {
-            Bloom(context, Tile, tile, Body); Bloom(context, Cup, cup, Body); Bloom(context, Handle, handle, Body);
-            for (var i = 0; i < Wisps; i++) Bloom(context, Steam[i], steam, WispBrightness(i));
-        }
+            Bloom(context, label, 0, strength, true);
         using (Honeycomb.Meshed(context, new Rect(0, 0, Width, Height)))
-        using (context.PushTransform(shift))
         {
-            Ink(context, Tile, tile, Body); Ink(context, Cup, cup, Body); Ink(context, Handle, handle, Body);
-            for (var i = 0; i < Wisps; i++) Ink(context, Steam[i], steam, WispBrightness(i));
+            Ink(context, BadgeOutline, StrokeWidth, strength);
+            using (context.PushTransform(shift))
+                Ink(context, label, 0, strength, true);
         }
     }
 }
 
 /// <summary>
-/// A sixteen-segment account name six cells wide, slanted a little like the old displays. Letters it cannot draw are dropped (accents are stripped, a few ligatures
+/// A sixteen-segment account name slanted a little like the old displays. Letters it cannot draw are dropped (accents are stripped, a few ligatures
 /// spelled out), and a name that cannot be drawn well enough shows as ACCT and its place in the list. A longer name scrolls a cell at a time.
 /// </summary>
 public sealed class SegmentName : SteppedControl
 {
     public const int Cells = 6;
     public const double CellWidth = 13.5, CellHeight = 20, GlyphWidth = 9.6, Slant = .158, StepMilliseconds = 380, Thickness = 1.7;
-    public static double RunWidth => Cells * CellWidth;
     // Segments by letter: a/A top left and right halves, d/D bottom, g/G middle, f/e left upper and lower, b/c right upper and lower, i/l centre upper and lower,
     // h/j upper diagonals (left, right), k/m lower diagonals (left, right), p the point.
     private static readonly Dictionary<char, string> Font = new()
@@ -269,11 +249,20 @@ public sealed class SegmentName : SteppedControl
     public string Text { get => text; set { if (value == text) return; text = value; Restart(); InvalidateVisual(); Wake(); } }
     /// <summary>How many characters the text is scrolled along.</summary>
     public int Offset => offset;
-    public bool Overflows => text.Length > Cells;
+    public int VisibleCells { get; }
+    public bool Overflows => text.Length > VisibleCells;
     /// <summary>Whether the name is on the move: a name too long for its cells always runs along (rests at each end, then goes round again) unless less motion is asked for.</summary>
     public bool Scrolling => Animating;
     public Color Colour { get; set; } = Colors.Gray;
-    public SegmentName() { Width = RunWidth + CellHeight * Slant; Height = CellHeight; IsHitTestVisible = false; }
+    public SegmentName() : this(Cells) { }
+    public SegmentName(int cells)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(cells);
+        VisibleCells = cells;
+        Width = cells * CellWidth + CellHeight * Slant;
+        Height = CellHeight;
+        IsHitTestVisible = false;
+    }
     private void Restart() { offset = 0; hold = RestSteps; stepClock = 0; atEnd = false; }
     /// <summary>Starts the run again from the first characters.</summary>
     public void Scroll() { Restart(); InvalidateVisual(); Wake(); }
@@ -287,7 +276,7 @@ public sealed class SegmentName : SteppedControl
             stepClock -= StepMilliseconds;
             if (hold > 0) { hold--; continue; }
             if (atEnd) { offset = 0; atEnd = false; hold = RestSteps; }
-            else if (offset < text.Length - Cells) { offset++; if (offset == text.Length - Cells) { atEnd = true; hold = RestSteps; } }
+            else if (offset < text.Length - VisibleCells) { offset++; if (offset == text.Length - VisibleCells) { atEnd = true; hold = RestSteps; } }
         }
     }
     public override void Render(DrawingContext context)
@@ -297,12 +286,12 @@ public sealed class SegmentName : SteppedControl
         var lit = new Pen(new SolidColorBrush(Colour), Thickness, lineCap: PenLineCap.Round);
         // On a dark theme each lit bar gives off a soft glow, as the mock draws it: the same bar again, wider and faint, under it.
         var glow = SoftTint.IsDark(this) ? new Pen(new SolidColorBrush(SoftTint.WithAlpha(Colour, .2)), Thickness * 3.2, lineCap: PenLineCap.Round) : null;
-        var shown = text.Length <= Cells ? text.PadRight(Cells) : text.Substring(Math.Min(offset, text.Length - Cells), Cells);
+        var shown = text.Length <= VisibleCells ? text.PadRight(VisibleCells) : text.Substring(Math.Min(offset, text.Length - VisibleCells), VisibleCells);
         // The glow is drawn first and outside the honeycomb, so it fills the gaps of the mesh with a soft light; the bars themselves are drawn through the mesh.
         if (glow is not null)
-            for (var i = 0; i < Cells; i++) DrawCell(context, i * CellWidth + 1, Font.TryGetValue(shown[i], out var on0) ? on0 : "", unlit, lit, glow, glowPass: true);
+            for (var i = 0; i < VisibleCells; i++) DrawCell(context, i * CellWidth + 1, Font.TryGetValue(shown[i], out var on0) ? on0 : "", unlit, lit, glow, glowPass: true);
         using (Honeycomb.Meshed(context, new Rect(0, 0, Bounds.Width, Bounds.Height)))
-            for (var i = 0; i < Cells; i++) DrawCell(context, i * CellWidth + 1, Font.TryGetValue(shown[i], out var on) ? on : "", unlit, lit, null, glowPass: false);
+            for (var i = 0; i < VisibleCells; i++) DrawCell(context, i * CellWidth + 1, Font.TryGetValue(shown[i], out var on) ? on : "", unlit, lit, null, glowPass: false);
     }
     private static Point P(double x0, double fx, double fy)
     {
