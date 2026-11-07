@@ -379,6 +379,8 @@
     <!-- A link in a note: the accent, underlined under the pointer. The words are set on the text itself, since the global text style would beat the button's colour. -->
     <Style Selector="Button.noteLink TextBlock"><Setter Property="Foreground" Value="{DynamicResource AccentText}" /></Style>
     <Style Selector="Button.noteLink:pointerover TextBlock"><Setter Property="TextDecorations" Value="Underline" /></Style>
+    <Style Selector="Button.wheelChosen"><Setter Property="Foreground" Value="{DynamicResource AccentText}" /></Style>
+    <Style Selector="Button.wheelChosen TextBlock"><Setter Property="Foreground" Value="{DynamicResource AccentText}" /></Style>
     <Style Selector="Button.pillBare:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="Transparent" /></Style>
     <Style Selector="Button.pillBare:pressed /template/ ContentPresenter"><Setter Property="Background" Value="Transparent" /></Style>
     <!-- The pressable zones of the pill's display (clock, count, play and pause, account name, cup) all wash the same way: a faint tint under the pointer, deeper pressed. -->

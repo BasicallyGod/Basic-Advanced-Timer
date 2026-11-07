@@ -440,7 +440,7 @@ public sealed class NotesTests
         {
             model.SelectNote(id); Settle(window); Click(window, "DetailsNoteReminder"); // The reminder is set from Details.
             Assert.True(Find<Avalonia.Controls.Primitives.Popup>(window, "DetailsNoteReminderPopup").IsOpen);
-            Click(window, "ReminderCell_20261010"); Click(window, "hourUp"); Click(window, "ReminderTime9"); Click(window, "ReminderSet");
+            Click(window, "ReminderCell_20261010"); Type(window, "ReminderHour", "9"); Type(window, "ReminderMinute", "0"); Click(window, "ReminderSet"); // Typed times are the fallback to the wheel.
             Assert.Equal(Day.AddDays(1).AddHours(9), NotesModel.ReminderOf(model.Notes.Find(id)!)); Assert.False(Find<Avalonia.Controls.Primitives.Popup>(window, "DetailsNoteReminderPopup").IsOpen);
             Assert.Equal(0, Listed(window)); // Today's card no longer lists it.
             model.ChangeDate(1); Settle(window); Assert.Equal(1, Listed(window));
@@ -458,9 +458,10 @@ public sealed class NotesTests
         {
             Click(window, "CardKindNotes"); Click(window, "FormBell");
             Assert.False(Find<Button>(window, "ReminderCell_20261008").IsEnabled); Assert.True(Find<Button>(window, "ReminderCell_20261010").IsEnabled); // Yesterday is off; tomorrow is on.
-            Assert.Equal("12", Find<TextBox>(window, "ReminderHour").Text); Click(window, "minutesUp"); Assert.Equal("05", Find<TextBox>(window, "ReminderMinute").Text);
-            Click(window, "minutesDown"); Click(window, "minutesDown"); Assert.Equal("55", Find<TextBox>(window, "ReminderMinute").Text);
-            Click(window, "ReminderTime9"); Assert.Equal("Today, 09:00", Find<TextBlock>(window, "ReminderSummary").Text); // No warning that it has passed.
+            Assert.Equal("12", Find<TextBox>(window, "ReminderHour").Text); Click(window, "ReminderWheelToggle"); // The wheel opens under the Time row.
+            Click(window, "WheelMinuteAfter"); Assert.Equal("05", Find<TextBox>(window, "ReminderMinute").Text);
+            Click(window, "WheelMinuteBefore"); Click(window, "WheelMinuteBefore"); Assert.Equal("55", Find<TextBox>(window, "ReminderMinute").Text);
+            Type(window, "ReminderHour", "9"); Type(window, "ReminderMinute", "0"); Assert.Equal("Today, 09:00", Find<TextBlock>(window, "ReminderSummary").Text); // No warning that it has passed.
             Click(window, "ReminderCell_20261010"); Assert.StartsWith("Tomorrow, 09:00", Find<TextBlock>(window, "ReminderSummary").Text);
             Click(window, "ReminderClose"); Assert.False(Find<Avalonia.Controls.Primitives.Popup>(window, "ReminderHost").IsOpen);
         }

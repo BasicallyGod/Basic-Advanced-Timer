@@ -113,19 +113,17 @@ public sealed class FeedbackRound5Tests
     }
 
     [AvaloniaFact]
-    public void ThePopupHasNoDayShortcutsAndItsStepperIsCentredUnderTheNumbers()
+    public void ThePopupHasNoDayShortcutsAndItsWheelColumnsSitUnderTheirNumbers()
     {
         var model = Model(out _); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
             Click(window, "CardKindNotes"); Click(window, "FormBell");
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => b.Name?.StartsWith("ReminderDay") == true);
-            var box = Find<TextBox>(window, "ReminderHour"); var up = Find<Button>(window, "hourUp");
-            Assert.True(box.FontSize <= 14); Assert.Equal(HorizontalAlignmentOf(box), HorizontalAlignmentOf(up));
-            double Centre(Control c) => c.TranslatePoint(new Point(c.Bounds.Width / 2, 0), window)!.Value.X;
-            Assert.Equal(Centre(box), Centre(up), 1); Assert.Equal(Centre(box), Centre(Find<Button>(window, "hourDown")), 1);
+            Click(window, "ReminderWheelToggle");
+            var box = Find<TextBox>(window, "ReminderHour"); Assert.True(box.FontSize <= 14);
+            Assert.Equal(54, Find<Button>(window, "WheelHourChosen").Bounds.Width); Assert.Equal(54, Find<Button>(window, "WheelMinuteChosen").Bounds.Width); // The two columns are one width.
         }
         finally { window.Close(); }
     }
-    private static Avalonia.Layout.HorizontalAlignment HorizontalAlignmentOf(Control c) => c is Button ? Avalonia.Layout.HorizontalAlignment.Center : Avalonia.Layout.HorizontalAlignment.Center;
 }
