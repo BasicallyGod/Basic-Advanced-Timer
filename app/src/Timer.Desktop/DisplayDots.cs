@@ -10,13 +10,13 @@ namespace Timer.Desktop;
 /// The pieces that continue the pill's display to the right of the clock (the 1980s hi-fi look): a dotted divider, 7 by 7 dot-matrix glyphs for play, pause and the
 /// break cup, and a sixteen-segment account name. They are drawn by hand, in whole pixels, and their motion runs on a timer that exists only while something is moving.
 /// </summary>
-public sealed class DottedDivider : Control
+public sealed class EtchedDivider : Control
 {
-    /// <summary>Every divider in every display is this: a line of dots 2 wide, 4 apart, 28 long when it stands upright.</summary>
-    public const double ColumnWidth = 2, ColumnHeight = 28, Pitch = 4, DotSize = 1.6;
+    /// <summary>Every divider in every display is this: an etched mark 2 wide, a dark groove with a pale lip beside it, 28 long when it stands upright.</summary>
+    public const double ColumnWidth = 2, ColumnHeight = 28;
     private readonly bool vertical;
-    /// <summary>An upright divider, or (with a length) the flat rule between the two rows of the sidebar's display.</summary>
-    public DottedDivider(bool vertical = true, double length = ColumnHeight)
+    /// <summary>An upright mark, or (with a length) the flat rule between the two rows of the sidebar's display.</summary>
+    public EtchedDivider(bool vertical = true, double length = ColumnHeight)
     {
         this.vertical = vertical; IsHitTestVisible = false;
         if (vertical) { Width = ColumnWidth; Height = length; } else { Width = length; Height = ColumnWidth; }
@@ -28,11 +28,11 @@ public sealed class DottedDivider : Control
     }
     public override void Render(DrawingContext context)
     {
-        var ink = Ui.ThemeColour(this, "Ink", Colors.Gray);
-        var brush = new SolidColorBrush(SoftTint.WithAlpha(ink, .26));
-        var length = vertical ? Height : Width;
-        for (var d = Pitch / 2; d < length; d += Pitch)
-            context.DrawEllipse(brush, null, vertical ? new Point(ColumnWidth / 2, d) : new Point(d, ColumnWidth / 2), DotSize / 2, DotSize / 2);
+        // A cut in the display's glass: the groove is the text colour at a low strength and the lip beside it the display's own light edge, so it reads as etched, not drawn.
+        var ink = Ui.ThemeColour(this, "Ink", Colors.Gray); var lip = Ui.ThemeColour(this, "DisplayEdge", Colors.White);
+        var groove = new SolidColorBrush(SoftTint.WithAlpha(ink, .2)); var edge = new SolidColorBrush(SoftTint.WithAlpha(lip, Math.Max(lip.A / 255.0, .1)));
+        if (vertical) { context.FillRectangle(groove, new Rect(0, 0, 1, Height)); context.FillRectangle(edge, new Rect(1, 0, 1, Height)); }
+        else { context.FillRectangle(groove, new Rect(0, 0, Width, 1)); context.FillRectangle(edge, new Rect(0, 1, Width, 1)); }
     }
 }
 
@@ -63,28 +63,30 @@ public abstract class SteppedControl : Control
     }
 }
 
-/// <summary>A 7 by 7 grid of round dots, each with its own brightness: unlit ones faint, lit ones in the glyph's colour.</summary>
+/// <summary>A grid of round dots, each with its own brightness: unlit ones faint, lit ones in the glyph's colour with, on a dark theme, a soft glow round them.</summary>
 public abstract class DotMatrix : SteppedControl
 {
-    public const int Cells = 7;
     /// <summary>The distance between dot centres; the dots are a third of it in radius.</summary>
     public const double Pitch = 3.5;
-    public const double Side = Cells * Pitch;
+    public int Columns { get; }
+    public int Rows { get; }
     public Color Colour { get; set; } = Colors.Green;
-    protected DotMatrix() { Width = Side; Height = Side; IsHitTestVisible = false; }
-    /// <summary>How lit the dot at this row and column is, 0 to 1, and the colour it takes (null for the glyph's colour).</summary>
+    protected DotMatrix(int columns, int rows) { Columns = columns; Rows = rows; Width = columns * Pitch; Height = rows * Pitch; IsHitTestVisible = false; }
+    /// <summary>How lit the dot at this row and column is, 0 to 1.</summary>
     public abstract double Level(int row, int col);
     public override void Render(DrawingContext context)
     {
-        var ink = Ui.ThemeColour(this, "Ink", Colors.Gray);
+        var ink = Ui.ThemeColour(this, "Ink", Colors.Gray); var dark = SoftTint.IsDark(this);
         var unlit = new SolidColorBrush(SoftTint.WithAlpha(ink, .1));
         var r = Pitch * .33;
-        for (var row = 0; row < Cells; row++)
-            for (var col = 0; col < Cells; col++)
+        for (var row = 0; row < Rows; row++)
+            for (var col = 0; col < Columns; col++)
             {
                 var level = Math.Clamp(Level(row, col), 0, 1);
                 var centre = new Point((col + .5) * Pitch, (row + .5) * Pitch);
                 context.DrawEllipse(unlit, null, centre, r, r);
+                // The glow the lit dots give off, as the mock draws it: a wider, fainter disc under the dot, on a dark theme only.
+                if (level > 0 && dark) context.DrawEllipse(new SolidColorBrush(SoftTint.WithAlpha(Colour, .22 * level)), null, centre, r * 2.1, r * 2.1);
                 if (level > 0) context.DrawEllipse(new SolidColorBrush(SoftTint.WithAlpha(Colour, level)), null, centre, r, r);
             }
     }
@@ -93,6 +95,8 @@ public abstract class DotMatrix : SteppedControl
 /// <summary>The play or pause symbol. A change wipes across column by column (40 ms a column, then a 140 ms fade), or swaps at once with less motion asked for.</summary>
 public sealed class TransportGlyph : DotMatrix
 {
+    public const int Cells = 7;
+    public TransportGlyph() : base(Cells, Cells) { }
     private static readonly string[] Play = { "1000000", "1110000", "1111100", "1111111", "1111100", "1110000", "1000000" };
     private static readonly string[] Pause = { "0110110", "0110110", "0110110", "0110110", "0110110", "0110110", "0110110" };
     public const double ColumnMilliseconds = 40, FadeMilliseconds = 140;
@@ -121,45 +125,55 @@ public sealed class TransportGlyph : DotMatrix
     }
 }
 
-/// <summary>The break cup: its body fills from the bottom up (70 ms a row) when a break starts and empties from the top down when it ends, with two wisps of steam that tilt together.</summary>
+/// <summary>
+/// The break mug, nine dots across and nine down: two wisps of steam, a blank row, then the mug with its handle. Its outline fills from the bottom up (70 ms a row) when a
+/// break starts and empties from the top down when it ends. The steam is always drawn, dim and still at rest and bright and tilting together (left, upright, right,
+/// upright, 330 ms a frame) while a break is on or the pointer is over the mug.
+/// </summary>
 public sealed class CupGlyph : DotMatrix
 {
-    private static readonly string[] Cup = { "0000000", "0000000", "0000000", "1111110", "1111111", "1111101", "0111110" };
-    private static readonly string[][] Steam = { new[] { "1001000", "0100100" }, new[] { "0100100", "0100100" }, new[] { "0010010", "0100100" }, new[] { "0100100", "0100100" } };
+    public const int Size = 9, BodyTop = 3, BodyRows = 6;
+    // The body: a rim, the walls, a handle on the right and the base.
+    private static readonly string[] Cup = { "000000000", "000000000", "000000000", "111111000", "100001110", "100001001", "100001110", "100001000", "011110000" };
+    private static readonly string[][] Steam = { new[] { "010010000", "001001000" }, new[] { "001001000", "001001000" }, new[] { "000100100", "001001000" }, new[] { "001001000", "001001000" } };
     public const double RowMilliseconds = 70, SteamMilliseconds = 330;
+    public CupGlyph() : base(Size, Size) { }
     private bool on, steaming; private double fill; private double steamClock;
-    /// <summary>How many body rows are lit (0 to 4), as of now.</summary>
+    /// <summary>How many body rows are lit (0 to <see cref="BodyRows"/>), as of now.</summary>
     public double FilledRows => fill;
-    /// <summary>The steam frame showing, 0 to 3.</summary>
-    public int SteamFrame => (int)(steamClock / SteamMilliseconds) % Steam.Length;
+    /// <summary>The steam frame showing, 0 to 3 (1 while it stands still).</summary>
+    public int SteamFrame => Animated ? (int)(steamClock / SteamMilliseconds) % Steam.Length : 1;
     public bool On => on;
+    /// <summary>Whether the steam is moving (on a break or under the pointer, with motion allowed).</summary>
     public bool Steaming => steaming;
-    /// <summary>Sets whether a break is on (the cup full) and whether the steam rises (on a break, or under the pointer).</summary>
+    private bool Animated => steaming && !Motion.Reduced;
+    /// <summary>Sets whether a break is on (the mug full) and whether the steam rises (on a break, or under the pointer).</summary>
     public void Show(bool breakOn, bool steam, bool instant)
     {
         on = breakOn; steaming = steam;
-        if (instant || Motion.Reduced || !this.IsAttachedToVisualTree()) fill = on ? 4 : 0;
+        if (instant || Motion.Reduced || !this.IsAttachedToVisualTree()) fill = on ? BodyRows : 0;
         InvalidateVisual(); Wake();
     }
-    protected override bool Animating => (on && fill < 4) || (!on && fill > 0) || (steaming && !Motion.Reduced);
+    protected override bool Animating => (on && fill < BodyRows) || (!on && fill > 0) || Animated;
     protected override void Advance(double milliseconds)
     {
         var rows = milliseconds / RowMilliseconds;
-        if (on) fill = Math.Min(4, fill + rows); else fill = Math.Max(0, fill - rows);
-        if (steaming && !Motion.Reduced) steamClock += milliseconds;
+        if (on) fill = Math.Min(BodyRows, fill + rows); else fill = Math.Max(0, fill - rows);
+        if (Animated) steamClock += milliseconds;
     }
     public override double Level(int row, int col)
     {
-        if (row >= 3)
+        if (row >= BodyTop)
         {
             if (Cup[row][col] != '1') return 0;
-            // Rows fill from the bottom (row 6) up, and empty from the top down; an unfilled cup is its outline in a dimmer tone.
-            var rowsFromBottom = 6 - row;
+            // Rows fill from the base up, and empty from the rim down; an empty mug is its outline in a dimmer tone.
+            var rowsFromBottom = Size - 1 - row;
             var lit = Math.Clamp(fill - rowsFromBottom, 0, 1);
             return .5 + .5 * lit;
         }
-        if (!steaming || row > 1) return 0;
-        return Steam[SteamFrame][row][col] == '1' ? .85 : 0;
+        if (row > 1) return 0;
+        // The steam is always there: dim and still at rest, bright and moving while it steams.
+        return Steam[SteamFrame][row][col] == '1' ? (Animated ? .9 : on ? .9 : .5) : 0;
     }
 }
 
@@ -206,31 +220,31 @@ public sealed class SegmentName : SteppedControl
     public static string ForAccount(string name, int number) => Normalise(name) ?? "ACCT " + (number + 1).ToString("00");
 
     private string text = "";
-    private int offset; private double stepClock; private bool scrolling; private bool pausedAtEnd;
-    public string Text { get => text; set { if (value == text) return; text = value; offset = 0; scrolling = false; InvalidateVisual(); } }
+    private int offset, hold; private double stepClock; private bool atEnd;
+    /// <summary>How many steps a long name rests at each end of its run: about a second at the start and at the end.</summary>
+    public const int RestSteps = 3;
+    public string Text { get => text; set { if (value == text) return; text = value; Restart(); InvalidateVisual(); Wake(); } }
     /// <summary>How many characters the text is scrolled along.</summary>
     public int Offset => offset;
     public bool Overflows => text.Length > Cells;
-    public bool Scrolling => scrolling;
+    /// <summary>Whether the name is on the move: a name too long for its cells always runs along (rests at each end, then goes round again) unless less motion is asked for.</summary>
+    public bool Scrolling => Animating;
     public Color Colour { get; set; } = Colors.Gray;
     public SegmentName() { Width = RunWidth + CellHeight * Slant; Height = CellHeight; IsHitTestVisible = false; }
-    /// <summary>Starts one pass along a long name (nothing for one that fits, or with less motion asked for).</summary>
-    public void Scroll()
-    {
-        if (!Overflows || Motion.Reduced) return;
-        scrolling = true; stepClock = 0; pausedAtEnd = false; Wake();
-    }
-    protected override bool Animating => scrolling;
+    private void Restart() { offset = 0; hold = RestSteps; stepClock = 0; atEnd = false; }
+    /// <summary>Starts the run again from the first characters.</summary>
+    public void Scroll() { Restart(); InvalidateVisual(); Wake(); }
+    protected override bool Animating => Overflows && !Motion.Reduced;
     protected override void Advance(double milliseconds)
     {
-        if (!scrolling) return;
+        if (!Animating) { offset = 0; return; }
         stepClock += milliseconds;
-        while (stepClock >= StepMilliseconds && scrolling)
+        while (stepClock >= StepMilliseconds)
         {
             stepClock -= StepMilliseconds;
-            if (pausedAtEnd) { offset = 0; scrolling = false; pausedAtEnd = false; }
-            else if (offset < text.Length - Cells) offset++;
-            else pausedAtEnd = true;
+            if (hold > 0) { hold--; continue; }
+            if (atEnd) { offset = 0; atEnd = false; hold = RestSteps; }
+            else if (offset < text.Length - Cells) { offset++; if (offset == text.Length - Cells) { atEnd = true; hold = RestSteps; } }
         }
     }
     public override void Render(DrawingContext context)
@@ -238,11 +252,13 @@ public sealed class SegmentName : SteppedControl
         var ink = Ui.ThemeColour(this, "Ink", Colors.Gray);
         var unlit = new Pen(new SolidColorBrush(SoftTint.WithAlpha(ink, .09)), Thickness, lineCap: PenLineCap.Round);
         var lit = new Pen(new SolidColorBrush(Colour), Thickness, lineCap: PenLineCap.Round);
+        // On a dark theme each lit bar gives off a soft glow, as the mock draws it: the same bar again, wider and faint, under it.
+        var glow = SoftTint.IsDark(this) ? new Pen(new SolidColorBrush(SoftTint.WithAlpha(Colour, .2)), Thickness * 3.2, lineCap: PenLineCap.Round) : null;
         var shown = text.Length <= Cells ? text.PadRight(Cells) : text.Substring(Math.Min(offset, text.Length - Cells), Cells);
         for (var i = 0; i < Cells; i++)
         {
             var on = Font.TryGetValue(shown[i], out var segments) ? segments : "";
-            DrawCell(context, i * CellWidth + 1, on, unlit, lit);
+            DrawCell(context, i * CellWidth + 1, on, unlit, lit, glow);
         }
     }
     private static Point P(double x0, double fx, double fy)
@@ -251,7 +267,7 @@ public sealed class SegmentName : SteppedControl
         var y = inset + fy * h; var x = x0 + fx * w;
         return new Point(x + (CellHeight - y) * Slant, y);
     }
-    private static void DrawCell(DrawingContext context, double x0, string on, Pen unlit, Pen lit)
+    private static void DrawCell(DrawingContext context, double x0, string on, Pen unlit, Pen lit, Pen? glow)
     {
         // The ends of each bar are pulled in a hair so neighbouring segments leave a gap, as on the real thing.
         (char Id, double X1, double Y1, double X2, double Y2)[] bars =
@@ -265,7 +281,9 @@ public sealed class SegmentName : SteppedControl
             var a = P(x0, ax, ay); var b = P(x0, bx, by);
             var dx = b.X - a.X; var dy = b.Y - a.Y; var len = Math.Sqrt(dx * dx + dy * dy); var trim = Math.Min(1.1, len / 4);
             var u = new Vector(dx / len, dy / len);
-            context.DrawLine(on.Contains(id) ? lit : unlit, a + u * trim, b - u * trim);
+            var isOn = on.Contains(id);
+            if (isOn && glow is not null) context.DrawLine(glow, a + u * trim, b - u * trim);
+            context.DrawLine(isOn ? lit : unlit, a + u * trim, b - u * trim);
         }
         var p = P(x0, 1.18, 1);
         context.DrawEllipse(on.Contains('p') ? lit.Brush : unlit.Brush, null, p, 1, 1);

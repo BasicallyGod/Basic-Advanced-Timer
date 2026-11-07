@@ -77,12 +77,12 @@ public sealed class StatusFace : StackPanel
     /// <summary>The display window is as tall as the well beside it, with its digits 28 tall and the count's 15; the count's column is 24 wide.</summary>
     public const double DisplayHeight = 52, CountDigitHeight = 15, CountColumn = 24, DisplayPadding = 10, DividerGap = 9;
     /// <summary>The window's width, which is one size whatever the time or the count: padding, the LED, a divider, the clock, a divider and the count's column.</summary>
-    public static double LeftWidth => 2 * DisplayPadding + 6 + 2 * (2 * DividerGap + DottedDivider.ColumnWidth) + SegmentClock.Width + CountColumn;
+    public static double LeftWidth => 2 * DisplayPadding + 6 + 2 * (2 * DividerGap + EtchedDivider.ColumnWidth) + SegmentClock.Width + CountColumn;
     /// <summary>The pill's window continues past the count: a divider, then the play and pause zone, the account's name and the break.</summary>
     /// <summary>The sidebar's display has a second row for the play dots, the name and the cup, under a dotted rule.</summary>
     public const double SecondRowHeight = 48;
-    public const double TransportZone = 36, NameZone = 90, BreakZone = 36;
-    public static double DisplayWidth => LeftWidth - DisplayPadding + (2 * DividerGap + DottedDivider.ColumnWidth) + TransportZone + NameZone + BreakZone + 6;
+    public const double TransportZone = 34, NameZone = 88, BreakZone = 38;
+    public static double DisplayWidth => LeftWidth - DisplayPadding + (2 * DividerGap + EtchedDivider.ColumnWidth) + TransportZone + NameZone + BreakZone + 6;
     /// <summary>The window of the sidebar and the compact pill, which stop at the count.</summary>
     public static double ShortDisplayWidth => LeftWidth;
     private readonly Ellipse selectorDot = new() { Width = 10, Height = 10, VerticalAlignment = VerticalAlignment.Center };
@@ -110,8 +110,7 @@ public sealed class StatusFace : StackPanel
     public TransportGlyph? Transport { get; private set; }
     public SegmentName? NameRun { get; private set; }
     public CupGlyph? Cup { get; private set; }
-    private DottedDivider? transportDivider; private Border? nameHost, trackBox;
-    private bool wasTracking; private string? scrolledFor;
+    private EtchedDivider? transportDivider; private Border? nameHost, trackBox;
     public Button AccountsButton { get; }
     public BreakButton Break { get; }
     private bool accountsOpen, hoverAccounts; private double accountsAmount;
@@ -142,7 +141,7 @@ public sealed class StatusFace : StackPanel
             AlertsButton.Content = countStack; AlertsButton.VerticalAlignment = VerticalAlignment.Center; AlertsButton.HorizontalContentAlignment = HorizontalAlignment.Center; countHost = AlertsButton;
         }
         else countHost = countStack;
-        DottedDivider Divider() => new() { Margin = new Thickness(DividerGap, 0), VerticalAlignment = VerticalAlignment.Center };
+        EtchedDivider Divider() => new() { Margin = new Thickness(DividerGap, 0), VerticalAlignment = VerticalAlignment.Center };
         var inside = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center, Spacing = 0 };
         inside.Children.Add(stateLight); inside.Children.Add(Divider()); inside.Children.Add(ClockButton); inside.Children.Add(Divider()); inside.Children.Add(countHost);
         displayBox = new Border { Name = prefix + "Display", Height = DisplayHeight, CornerRadius = new CornerRadius(14), Padding = new Thickness(DisplayPadding, 0), Child = inside, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
@@ -184,7 +183,6 @@ public sealed class StatusFace : StackPanel
         if (!sidebar)
         {
             AccountsButton.Content = NameRun; AccountsButton.Classes.Add("zone"); AccountsButton.Margin = default; AccountsButton.Padding = new Thickness(0); AccountsButton.Width = NameZone; AccountsButton.Height = 40; AccountsButton.VerticalAlignment = VerticalAlignment.Center;
-            AccountsButton.PointerEntered += (_, _) => NameRun.Scroll();
             displayBox.Padding = new Thickness(DisplayPadding, 0, 6, 0);
             inside.Children.Add(transportDivider); inside.Children.Add(Circle); inside.Children.Add(AccountsButton); inside.Children.Add(Break);
         }
@@ -195,7 +193,7 @@ public sealed class StatusFace : StackPanel
             nameHost = new Border { Name = prefix + "WhoName", Width = NameZone, Height = 40, Child = NameRun, Background = Brushes.Transparent, VerticalAlignment = VerticalAlignment.Center };
             var strip = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center, Children = { Circle, Divider(), nameHost, Divider(), Break } };
             trackBox = new Border { Name = prefix + "Track", Height = SecondRowHeight, Width = ShortDisplayWidth, Child = strip, HorizontalAlignment = HorizontalAlignment.Center };
-            var rule = new DottedDivider(false, ShortDisplayWidth - 2 * 16) { VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Center };
+            var rule = new EtchedDivider(false, ShortDisplayWidth - 2 * 16) { VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Center };
             var rows = new Grid { RowDefinitions = new RowDefinitions(DisplayHeight + "," + SecondRowHeight) };
             displayBox.Child = null; inside.Margin = new Thickness(DisplayPadding, 0); displayBox.Padding = default; displayBox.Height = DisplayHeight + SecondRowHeight;
             Grid.SetRow(trackBox, 1); Grid.SetRow(rule, 1); rule.Margin = new Thickness(0, -1, 0, 0);
@@ -322,9 +320,6 @@ public sealed class StatusFace : StackPanel
         var index = shown is null ? -1 : model.Accounts.ToList().FindIndex(a => a.Name == shown);
         NameRun!.Colour = ThemeColourOr("Ink", "#18233A");
         NameRun.Text = shown is null ? "CHOOSE" : SegmentName.ForAccount(model.Accounts.FirstOrDefault(a => a.Name == shown)?.Display ?? shown, Math.Max(0, index));
-        // A long name runs along once when recording starts (and again whenever the pointer is over it).
-        if (recording && !wasTracking || (recording && scrolledFor != shown)) NameRun.Scroll();
-        wasTracking = recording; scrolledFor = recording ? shown : null;
         if (nameHost is not null)
         {
             // The words the old card showed under the name now live in its tooltip and accessible name.
