@@ -160,7 +160,7 @@ public sealed class BreakBadgeGlyph : VfdGlyph
         var family = new FontFamily($"avares://{typeof(BreakBadgeGlyph).Assembly.GetName().Name}/Assets/Fonts#Chakra Petch");
         var face = new Typeface(family, FontStyle.Normal, FontWeight.SemiBold);
         var text = new FormattedText("BREAK", System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, face, 9.5, Brushes.White);
-        return text.BuildGeometry(default);
+        return text.BuildGeometry(default) ?? new StreamGeometry();
     });
     public bool Highlighted { get; private set; }
     public double Lit { get; private set; }
