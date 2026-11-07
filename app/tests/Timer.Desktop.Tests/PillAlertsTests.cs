@@ -34,6 +34,21 @@ public sealed class PillAlertsTests
     }
 
     [AvaloniaFact]
+    public void TheOpenRowsKeysAreSmallAndOnlyTheMainOneHasAnAccentEdgeAndNoneCarriesALamp()
+    {
+        var model = Demo(); var (window, card) = Host(model);
+        try
+        {
+            card.Open(); Settle(window);
+            var keys = window.GetVisualDescendants().OfType<Button>().Where(b => b.Name is "AlertDone" or "AlertLater" or "AlertOpenWeek" or "AlertOk" or "AlertResume" or "AlertStay").ToList();
+            Assert.NotEmpty(keys);
+            Assert.All(keys, k => { Assert.Contains("small", k.Classes); Assert.DoesNotContain("chip", k.Classes); });
+            Assert.True(keys.Count(k => k.Classes.Contains("accentOutline")) <= 1, "one main key at most");
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public void WhatIsWaitingIsMostUrgentFirstAndTheKeysStayTheSame()
     {
         var model = Demo(); var items = model.Alerts;
