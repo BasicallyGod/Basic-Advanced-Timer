@@ -52,8 +52,8 @@
         <Grid ColumnDefinitions="20,Auto" ColumnSpacing="8" Background="Transparent">
           <Border Name="PART_CheckRing" Width="20" Height="20" CornerRadius="10" BorderThickness="1.6" Background="{DynamicResource Panel}" BorderBrush="{DynamicResource KeyEdge}" BoxShadow="{DynamicResource ShadowThumb}" VerticalAlignment="Center">
             <Grid>
-              <Path Name="PART_CheckMark" Data="M 3.9,8.6 L 7.2,11.9 L 12.9,5.1" Stroke="{DynamicResource AccentText}" StrokeThickness="2" StrokeLineCap="Round" StrokeJoin="Round" IsVisible="False" />
-              <Path Name="PART_MixedMark" Data="M 4,8 L 12,8" Stroke="{DynamicResource AccentText}" StrokeThickness="2" StrokeLineCap="Round" IsVisible="False" />
+              <Path Name="PART_CheckMark" Data="M 3.9,8.6 L 7.2,11.9 L 12.9,5.1" Stroke="{DynamicResource AccentLit}" StrokeThickness="2.2" StrokeLineCap="Round" StrokeJoin="Round" IsVisible="False" />
+              <Path Name="PART_MixedMark" Data="M 4,8 L 12,8" Stroke="{DynamicResource AccentLit}" StrokeThickness="2.2" StrokeLineCap="Round" IsVisible="False" />
             </Grid>
           </Border>
           <ContentPresenter Name="PART_ContentPresenter" Grid.Column="1" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}" VerticalAlignment="Center" RecognizesAccessKey="True" />
@@ -61,7 +61,7 @@
         </Grid>
       </ControlTemplate>
     </Setter>
-    <Style Selector="^:checked /template/ Border#PART_CheckRing, ^:indeterminate /template/ Border#PART_CheckRing"><Setter Property="Background" Value="{DynamicResource Well}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /></Style>
+    <Style Selector="^:checked /template/ Border#PART_CheckRing, ^:indeterminate /template/ Border#PART_CheckRing"><Setter Property="Background" Value="{DynamicResource Well}" /><Setter Property="BorderBrush" Value="{DynamicResource AccentLit}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /></Style>
     <Style Selector="^:checked /template/ Path#PART_CheckMark"><Setter Property="IsVisible" Value="True" /></Style>
     <Style Selector="^:indeterminate /template/ Path#PART_MixedMark"><Setter Property="IsVisible" Value="True" /></Style>
     <Style Selector="^:pointerover /template/ Border#PART_CheckRing"><Setter Property="BorderBrush" Value="{DynamicResource Muted}" /></Style>

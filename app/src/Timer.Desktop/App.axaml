@@ -437,6 +437,7 @@
     <Style Selector="Button.ctl.chip.more"><Setter Property="Padding" Value="12,0" /></Style>
     <Style Selector="Button.ctl.chip:pointerover TextBlock"><Setter Property="Foreground" Value="{DynamicResource Ink}" /></Style>
     <Style Selector="Button.ctl.small"><Setter Property="CornerRadius" Value="9" /><Setter Property="Padding" Value="11,0" /><Setter Property="FontSize" Value="12.5" /></Style>
+    <Style Selector="Button.ctl.accentText TextBlock"><Setter Property="Foreground" Value="{DynamicResource AccentText}" /></Style>
     <Style Selector="Button.ctl.accentOutline"><Setter Property="BorderBrush" Value="{DynamicResource AccentLit}" /><Setter Property="Foreground" Value="{DynamicResource AccentText}" /><Setter Property="BorderThickness" Value="1.5" /></Style>
     <Style Selector="Button.ctl.accentOutline /template/ ContentPresenter#PART_ContentPresenter, Button.ctl.accentOutline:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="BorderBrush" Value="{DynamicResource AccentLit}" /><Setter Property="Foreground" Value="{DynamicResource AccentText}" /></Style>
     <Style Selector="Button.ctl.accentOutline TextBlock"><Setter Property="Foreground" Value="{DynamicResource AccentText}" /></Style>

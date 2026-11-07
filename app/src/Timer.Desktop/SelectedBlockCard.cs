@@ -259,7 +259,7 @@ public sealed partial class SelectedBlockCard : Border
         body.Children.Add(rowsScroll);
         // Merge is always pressable: when it cannot work, pressing it says why in the toast.
         var merge = Ui.Ctl("MergeSelected", "Merge", IconKind.Merge, null, () => model.MergeSelection(), small: true);
-        merge.Classes.Set("primary", model.CanMergeSelection);
+        merge.Classes.Set("accentText", model.CanMergeSelection); // A momentary key: its words light, no fill and no lamp.
         var buttons = Ui.Horizontal(merge,
             Ui.Ctl("CopySelected", "Copy", IconKind.Copy, "Copy", () => model.CopySelection(), small: true, key: "Ctrl C"),
             Ui.Ctl("DeleteSelected", "Delete", IconKind.Trash, "Delete", () => model.DeleteSelection(), small: true, key: "Del"));
