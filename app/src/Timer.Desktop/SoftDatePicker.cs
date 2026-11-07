@@ -25,15 +25,14 @@ public sealed class SoftDatePicker : Border
     public Func<DateTime, bool>? DayHasTime { get; set; }
 
     /// <summary>
-    /// The inside of a day button, shared with the reminder's month so both calendars read the same: the number, a lamp under it when the day is the chosen one
-    /// (one-of-N, like the week-start days), and a small dot in the corner when the day holds time. Weekends are drawn quieter through their class.
+    /// The inside of a day button, shared with the reminder's month so both calendars read the same: the number, and a small dot in the corner
+    /// when the day holds time. The chosen day is shown by its wash alone, with no lamp. Weekends are drawn quieter through their class.
     /// </summary>
     public static Control DayContent(string number, double size, bool chosen, bool hasTime, bool bold)
     {
         var grid = new Grid { HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch };
         grid.Children.Add(new TextBlock { Text = number, FontSize = size, FontWeight = bold ? FontWeight.SemiBold : FontWeight.Normal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Name = "DayNumber" });
         if (hasTime) { var dot = new Avalonia.Controls.Shapes.Ellipse { Width = 4, Height = 4, Name = "DayTimeDot", HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 4, 5, 0), IsHitTestVisible = false }; dot.Bind(Avalonia.Controls.Shapes.Shape.FillProperty, dot.GetResourceObservable("Muted")); grid.Children.Add(dot); }
-        if (chosen) { var lamp = new Border { Width = 10, Height = 2.5, CornerRadius = new CornerRadius(1.5), Name = "DayLamp", HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 3), IsHitTestVisible = false }; lamp.Bind(Border.BackgroundProperty, lamp.GetResourceObservable("AccentLit")); grid.Children.Add(lamp); }
         return grid;
     }
 

@@ -783,7 +783,7 @@ public sealed class DashboardWindow : Window
         var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 0, Name = "DayTotals", HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         workingValue.Name = "TotalsWorkingValue";
         // The one headline figure is drawn in segment digits, as a clock is; the plain text stays for decimal hours, which segments cannot draw, and for screen readers.
-        var headline = new SegmentRun { Name = "TotalsWorkingSegments", DigitHeight = 20, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 2, 0, 0) };
+        var headline = new SegmentRun { Name = "TotalsWorkingSegments", DigitHeight = 20, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 2, 0, 0) };
         workingSegments = headline;
         var workingStat = Stat("Working time", workingValue, "TotalsWorking"); ((StackPanel)workingStat).Children.Add(headline);
         strip.Children.Add(workingStat);
