@@ -963,6 +963,8 @@ public enum IconKind { NotesList, Check, Clock, Search, Bell, Repeat, Note, Minu
 public sealed class IconGlyph : Control
 {
     public const double StrokeWidth = 1.6;
+    internal static readonly Geometry BellOutline = Geometry.Parse(
+        "M 4.5,12.75 L 4.5,8.25 A 4.5,4.5 0 0 1 13.5,8.25 L 13.5,12.75 L 14.625,14.25 L 3.375,14.25 Z M 7.5,15.75 L 10.5,15.75");
     public static TimeSpan HoverDuration => Motion.Ease(200);
     public static readonly StyledProperty<double> HoverProperty = AvaloniaProperty.Register<IconGlyph, double>(nameof(Hover));
     static IconGlyph() => AffectsRender<IconGlyph>(HoverProperty);
@@ -1150,8 +1152,7 @@ public sealed class IconGlyph : Control
                 context.DrawGeometry(null, pen, Geometry.Parse("M 9,5.25 L 9,9 L 11.75,10.5"));
                 break;
             case IconKind.Bell:
-                context.DrawGeometry(null, pen, Geometry.Parse("M 4.5,12.75 L 4.5,8.25 A 4.5,4.5 0 0 1 13.5,8.25 L 13.5,12.75 L 14.625,14.25 L 3.375,14.25 Z"));
-                context.DrawLine(pen, new Point(7.5, 15.75), new Point(10.5, 15.75));
+                context.DrawGeometry(null, pen, BellOutline);
                 break;
             case IconKind.Repeat:
                 // Two arrows chasing each other round a loop: this repeats.
