@@ -63,16 +63,16 @@ public sealed class SidebarTests
             Click(window, "NotesTab");
             // The left column is the views alone: no accounts list, so nothing in it can be mistaken for the sidebar's rows.
             Assert.DoesNotContain(Find<Border>(window, "NotesViews").GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "ACCOUNTS");
-            Click(window, "NotesAccountFilter"); // One button; the list of accounts hangs under it.
+            // One button; the list of accounts hangs under it.
             var one = Find<Button>(window, "NotesAccount_Accountone"); var two = Find<Button>(window, "NotesAccount_Accounttwo");
-            Assert.Contains(one.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "#Accountone"); Assert.Contains(one.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "2"); // Tagged as a note carries it, with its count.
-            Assert.False(Has(window, "NotesAccountClear")); Assert.Equal(4, window.GetVisualDescendants().OfType<TextBlock>().Count(t => t.Name?.StartsWith("PageNoteText_") == true));
+            Assert.Contains(one.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Account one  2"); // Tagged as a note carries it, with its count.
+            Assert.Contains("chipOn", Find<Button>(window, "NotesAccountAll").Classes); Assert.Equal(4, window.GetVisualDescendants().OfType<TextBlock>().Count(t => t.Name?.StartsWith("PageNoteText_") == true));
             Click(window, "NotesAccount_Accountone"); one = Find<Button>(window, "NotesAccount_Accountone");
-            Assert.Contains("tickDone", one.GetVisualDescendants().OfType<Border>().First(b => b.Classes.Contains("tick")).Classes); Assert.Equal(2, window.GetVisualDescendants().OfType<TextBlock>().Count(t => t.Name?.StartsWith("PageNoteText_") == true)); Assert.True(Has(window, "NotesAccountClear"));
+            Assert.Contains("chipOn", one.Classes); Assert.Equal(2, window.GetVisualDescendants().OfType<TextBlock>().Count(t => t.Name?.StartsWith("PageNoteText_") == true)); Assert.DoesNotContain("chipOn", Find<Button>(window, "NotesAccountAll").Classes);
             Click(window, "NotesAccount_Accounttwo"); // Several at once.
             Assert.Equal(3, window.GetVisualDescendants().OfType<TextBlock>().Count(t => t.Name?.StartsWith("PageNoteText_") == true));
             Click(window, "NotesAccount_Accountone"); Assert.Equal(1, window.GetVisualDescendants().OfType<TextBlock>().Count(t => t.Name?.StartsWith("PageNoteText_") == true)); // Pressing a chosen one takes it off.
-            Click(window, "NotesAccountClear"); Assert.Equal(4, window.GetVisualDescendants().OfType<TextBlock>().Count(t => t.Name?.StartsWith("PageNoteText_") == true)); Assert.False(Has(window, "NotesAccountClear"));
+            Click(window, "NotesAccountAll"); Assert.Equal(4, window.GetVisualDescendants().OfType<TextBlock>().Count(t => t.Name?.StartsWith("PageNoteText_") == true)); Assert.Contains("chipOn", Find<Button>(window, "NotesAccountAll").Classes);
         }
         finally { window.Close(); }
     }

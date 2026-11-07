@@ -225,7 +225,7 @@ public static class TimelineGestures
         if (note.Snapped)
         {
             var line = new Border { Name = SnapLineName, Width = 3, Height = card.Height + 16, CornerRadius = new CornerRadius(1.5), IsHitTestVisible = false, ZIndex = 12 };
-            line.Bind(Border.BackgroundProperty, line.GetResourceObservable("Accent")); Canvas.SetLeft(line, x - 1.5); Canvas.SetTop(line, top - 8); canvas.Children.Add(line);
+            line.Bind(Border.BackgroundProperty, line.GetResourceObservable("AccentLit")); Canvas.SetLeft(line, x - 1.5); Canvas.SetTop(line, top - 8); canvas.Children.Add(line);
         }
         var label = new TextBlock { Text = text, FontSize = 11.5, FontWeight = Avalonia.Media.FontWeight.SemiBold };
         var chip = new Border { Name = SnapChipName, Child = label, Padding = new Thickness(9, 3), CornerRadius = new CornerRadius(9), IsHitTestVisible = false, ZIndex = 13 };

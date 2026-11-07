@@ -53,7 +53,7 @@ public sealed class Round18Tests
             var pph = model.TimelinePixelsPerHour;
             Assert.Equal(ReviewViews.TimelineGutter + 8 * pph, Canvas.GetLeft(late) + 10, .5); Assert.Equal(ReviewViews.TimelineGutter + 15.5 * pph, Canvas.GetLeft(coming) + 10, .5);
             var lateDot = late.Children.OfType<Avalonia.Controls.Shapes.Ellipse>().Last(); var comingDot = coming.Children.OfType<Avalonia.Controls.Shapes.Ellipse>().Last();
-            Assert.Equal(Theme(lateDot, "Overtime"), Brush(lateDot)); Assert.Equal(Theme(comingDot, "Accent"), Brush(comingDot));
+            Assert.Equal(Theme(lateDot, "Overtime"), Brush(lateDot)); Assert.Equal(Theme(comingDot, "AccentLit"), Brush(comingDot));
             // The meeting row sits lower to make room for the pins, as the quiet day below has it.
             var lane = Find<Border>(window, "MeetingLane");
             Assert.Equal(28 + 14 + TimelineGuide.PinRoom, Canvas.GetTop(lane), .5);

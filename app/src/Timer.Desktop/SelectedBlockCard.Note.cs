@@ -16,7 +16,7 @@ public sealed partial class SelectedBlockCard
     private sealed class NoteFields
     {
         public long Id; public bool Settling;
-        public TextBox Words = null!; public ComboBox Account = null!; public TextBlock ReminderWords = null!; public ContentControl StarHost = null!;
+        public TextBox Words = null!; public ChoiceStrip Account = null!; public TextBlock ReminderWords = null!; public ContentControl StarHost = null!;
     }
     private NoteFields? noteFields;
 
@@ -42,9 +42,7 @@ public sealed partial class SelectedBlockCard
         f.Words = Box("DetailsNoteWords", notes.Words(note), true); f.Words.Height = double.NaN; f.Words.MinHeight = 64; f.Words.TextWrapping = TextWrapping.Wrap; f.Words.VerticalContentAlignment = VerticalAlignment.Top;
         var accounts = new List<string> { NoAccount }; accounts.AddRange(model.ReviewAccounts.Where(a => !BreakAccount.Is(a.Name)).Select(a => a.Name));
         var chosen = notes.AccountOf(note); if (chosen is not null && !accounts.Contains(chosen, StringComparer.OrdinalIgnoreCase)) accounts.Add(chosen);
-        f.Account = new ComboBox { Name = "DetailsNoteAccount", ItemsSource = accounts, HorizontalAlignment = HorizontalAlignment.Stretch, Height = 38,
-            ItemTemplate = new Avalonia.Controls.Templates.FuncDataTemplate<string>((name, _) => name == NoAccount ? new TextBlock { Text = NoAccount, VerticalAlignment = VerticalAlignment.Center, Classes = { "muted" } }
-                : Ui.Horizontal(Swatch(name ?? ""), new TextBlock { Text = name, VerticalAlignment = VerticalAlignment.Center })) };
+        f.Account = AccountStrip("DetailsNoteAccount", accounts);
         f.Account.SelectedItem = accounts.FirstOrDefault(a => chosen is not null && a.Equals(chosen, StringComparison.OrdinalIgnoreCase)) ?? NoAccount;
 
         // The reminder is a button that shows the time (or says there is none) and opens the same card a reminder is set in everywhere, hung under it.
@@ -62,7 +60,8 @@ public sealed partial class SelectedBlockCard
         var reminderHost = new Grid { Children = { reminderButton, popup } };
 
         var wordsStack = new StackPanel { Spacing = 5 }; wordsStack.Children.Add(Label("Note")); wordsStack.Children.Add(f.Words); body.Children.Add(wordsStack);
-        var row = Ui.Grid("1.1*,1.2*"); row.ColumnSpacing = 12; Field(row, 0, "Account", f.Account); Field(row, 1, "Reminder", reminderHost);
+        var accountRow = new StackPanel { Spacing = 5 }; accountRow.Children.Add(Label("Account")); accountRow.Children.Add(f.Account); body.Children.Add(accountRow);
+        var row = Ui.Grid("*"); Field(row, 0, "Reminder", reminderHost);
         body.Children.Add(row);
         Committing(f.Words, () => ApplyNote(f));
         f.Account.SelectionChanged += (_, _) => ApplyNote(f);

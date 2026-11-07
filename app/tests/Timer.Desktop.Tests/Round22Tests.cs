@@ -49,7 +49,7 @@ public sealed class Round22Tests
             var app = Application.Current!;
             Avalonia.Media.Color Colour(string key) => ((Avalonia.Media.SolidColorBrush)app.FindResource(window.ActualThemeVariant, key)!).Color;
             var star = Colour("ImportantStar"); var accent = Colour("Accent");
-            Assert.True(star.R > star.B + 80 && star.R >= accent.R); // Warm: far from the accent's blue.
+            Assert.True(star.R > star.B + 80 && Hue(accent) > 250); // Warm gold, far from the orchid accent.
             Assert.NotEqual(Colour("ImportantTint"), Colour("Panel"));
             Assert.True(Hue(Colour("ImportantTint")) < 60 && Hue(Colour("ImportantEdge")) < 60);
         }

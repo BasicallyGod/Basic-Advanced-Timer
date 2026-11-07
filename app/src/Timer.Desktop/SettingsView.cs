@@ -188,7 +188,7 @@ public sealed class SettingsView : Grid
         var left = Section("Working hours", new ShiftEditor(model, () => { }, null));
         // The first day of the week used to be asked for only in the first-run setup; it is here too, and the week on screen follows it.
         var days = new[] { DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Saturday, DayOfWeek.Sunday };
-        var start = new ComboBox { Name = "WeekStartsOn", ItemsSource = days.Select(d => d.ToString()).ToList(), Width = 150, Height = 36, MinHeight = 36, FontSize = 13.5 };
+        var start = new ChoiceStrip { Name = "WeekStartsOn", Look = ChoiceLook.Days, ItemsSource = days.Select(d => d.ToString()).ToList(), ShortLabel = d => d[..3] };
         Avalonia.Automation.AutomationProperties.SetName(start, "Week starts on");
         var syncing = false;
         void SyncStart() { syncing = true; start.SelectedIndex = Array.IndexOf(days, model.WeekStartsOn); syncing = false; }
@@ -214,7 +214,7 @@ public sealed class SettingsView : Grid
         dayStart.HorizontalAlignment = HorizontalAlignment.Right; // Only the time box: the whole setting is one time.
         syncs.Add(SyncDayStart); SyncDayStart();
         var side = new StackPanel();
-        side.Children.Add(Section("Week", Rows(Row("Week starts on", "The Week overview and the exports begin here.", start), Row("Day starts at", "Where one day ends and the next begins. Leave it at midnight unless you work through it.", dayStart), Row("How time is written", "A 90 minute block reads 01:30, or 1.50h. Exports follow it.", format))));
+        side.Children.Add(Section("Week", Rows(Row("Week starts on", "The Week overview and the exports begin here.", new Border(), start), Row("Day starts at", "Where one day ends and the next begins. Leave it at midnight unless you work through it.", dayStart), Row("How time is written", "A 90 minute block reads 01:30, or 1.50h. Exports follow it.", format))));
         Ui.Put(grid, left); Ui.Put(grid, side, 1);
         return grid;
     }
@@ -343,7 +343,11 @@ public sealed class SettingsView : Grid
         weekChoice = Ui.DialogButton("Week", () => ChoosePeriod(false), "ExportWeekChoice", true); monthChoice = Ui.DialogButton("Month", () => ChoosePeriod(true), "ExportMonthChoice", false);
         stack.Children.Add(Ui.Horizontal(weekChoice, monthChoice));
         periodLabel = Ui.Text("Week", 13, "muted"); periodPick = new ComboBox { Name = "ExportPeriodPick", HorizontalAlignment = HorizontalAlignment.Stretch, MaxWidth = 360 };
-        var pickRow = new StackPanel { Spacing = 4, HorizontalAlignment = HorizontalAlignment.Left }; pickRow.Children.Add(periodLabel); pickRow.Children.Add(periodPick); pickRow.Width = 360;
+        // The lists run newest first, so the earlier period is the next place down the list.
+        var earlier = Ui.IconButton(IconKind.Previous, "Earlier", "ExportPeriodEarlier", () => { if (periodPick.SelectedIndex + 1 < periodPick.ItemCount) periodPick.SelectedIndex++; });
+        var later = Ui.IconButton(IconKind.Next, "Later", "ExportPeriodLater", () => { if (periodPick.SelectedIndex > 0) periodPick.SelectedIndex--; });
+        var pickLine = Ui.Grid("Auto,*,Auto"); pickLine.ColumnSpacing = 6; Ui.Put(pickLine, earlier); Ui.Put(pickLine, periodPick, 1); Ui.Put(pickLine, later, 2); earlier.VerticalAlignment = later.VerticalAlignment = VerticalAlignment.Center;
+        var pickRow = new StackPanel { Spacing = 4, HorizontalAlignment = HorizontalAlignment.Left }; pickRow.Children.Add(periodLabel); pickRow.Children.Add(pickLine); pickRow.Width = 360;
         stack.Children.Add(pickRow);
         var note = Ui.Text("Two CSV files are written: the hours by account and day, and every entry. Hundredths of an hour are shared out so each total adds up exactly. The running entry is provisional until it is saved.", 12, "muted");
         note.TextWrapping = TextWrapping.Wrap; stack.Children.Add(note);

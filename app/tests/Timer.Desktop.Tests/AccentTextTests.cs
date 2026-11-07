@@ -98,7 +98,7 @@ public sealed class AccentTextTests
         }
         finally { setup.Close(); }
         // The audit must really have seen the buttons that sit on the accent, or a pass would mean nothing.
-        foreach (var expected in new[] { "Add", "Merge", "Set" }) Assert.True(Checked.Contains(expected), "The audit never saw \"" + expected + "\" on the accent. It saw: " + string.Join(", ", Checked));
+        foreach (var expected in new[] { "Add", "Set" }) Assert.True(Checked.Contains(expected), "The audit never saw \"" + expected + "\" on the accent. It saw: " + string.Join(", ", Checked));
         Assert.True(found.Count == 0, "Words on the accent that are not the accent's text colour:\n" + string.Join("\n", found.Distinct()));
     }
 
@@ -112,7 +112,7 @@ public sealed class AccentTextTests
             var same = model.Engine.Sessions.Where(s => s.Account == model.Engine.Sessions[0].Account).Take(2).ToArray(); Assert.Equal(2, same.Length);
             model.SelectBlock(same, false); Settle(window);
             var merge = window.GetVisualDescendants().OfType<Button>().First(b => b.Name == "MergeSelected" || b.Name == "Merge");
-            Assert.Contains("primary", merge.Classes); Assert.Equal("AccentInk", merge.GetVisualDescendants().OfType<IconGlyph>().First().ColourKey);
+            Assert.Contains("accentText", merge.Classes); Assert.DoesNotContain("primary", merge.Classes); // Merge lights its words only, with no fill.
             var plain = window.GetVisualDescendants().OfType<Button>().First(b => b.Name == "CopySelected");
             Assert.Equal("Ink", plain.GetVisualDescendants().OfType<IconGlyph>().First().ColourKey);
         }

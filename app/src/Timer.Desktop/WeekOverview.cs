@@ -205,7 +205,7 @@ public static class WeekOverview
         var label = Ui.Horizontal(); label.HorizontalAlignment = HorizontalAlignment.Center; label.Spacing = 5; label.VerticalAlignment = VerticalAlignment.Top;
         var name = Ui.Text(d.Date.ToString("ddd d", british), 12, d.IsToday ? "accent" : "muted"); if (d.IsToday) name.FontWeight = FontWeight.Bold;
         var underline = new Border { BorderThickness = new Thickness(0, 0, 0, d.IsToday ? 2 : 0), Child = name, Name = "WeekDayLabel" };
-        if (d.IsToday) underline.BorderBrush = Brush(model, "Accent");
+        if (d.IsToday) underline.BorderBrush = new SolidColorBrush(Color.Parse(ThemeEngine.LitOf(model.CurrentTheme)));
         label.Children.Add(underline);
         if (d.Marked) label.Children.Add(new Border { Name = "WeekDayMarker", Width = 6, Height = 6, CornerRadius = new CornerRadius(3), Background = Brush(model, "Ink"), VerticalAlignment = VerticalAlignment.Center });
         label.Margin = new Thickness(0, 6, 0, 0);

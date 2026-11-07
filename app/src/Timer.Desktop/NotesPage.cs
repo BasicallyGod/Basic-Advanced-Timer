@@ -24,10 +24,8 @@ public sealed class NotesPage : Grid
     private readonly StackPanel listColumn = new() { Spacing = 8, Margin = new Thickness(14, 4, 14, 14) };
     private readonly ContentControl formHost = new() { Name = "PageForm", ClipToBounds = false };
     private readonly Border viewsTrack = new() { Name = "NotesViews", HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-    private readonly Button accountButton = new() { Name = "NotesAccountFilter" };
+    private readonly WrapPanel accountChips = new() { Name = "NotesAccountChips", Orientation = Orientation.Horizontal, Margin = new Thickness(14, 0, 14, 8), ItemSpacing = 7, LineSpacing = 7 };
     private readonly Popup whenHost = new() { Placement = PlacementMode.Bottom, IsLightDismissEnabled = true, Name = "PageWhenHost" };
-    private Border? filterCard;
-    private readonly Popup filterHost = new() { Placement = PlacementMode.Bottom, IsLightDismissEnabled = true, Name = "NotesAccountHost" };
     private NoteView view = NoteView.All; private readonly List<string> accountFilters = new(); private string query = "";
     private string? shown;
     // The form: one state, drawn in the add line at the top, or in the row that is open for editing.
@@ -39,20 +37,18 @@ public sealed class NotesPage : Grid
     {
         this.model = model; Name = "NotesPage"; ClipToBounds = false;
         var card = new Border { Name = "NotesListCard", CornerRadius = new CornerRadius(18), BorderThickness = new Thickness(1), ClipToBounds = true }; card.Classes.Add("dayCard");
-        var inner = Ui.Grid("*", "Auto,Auto,*");
+        var inner = Ui.Grid("*", "Auto,Auto,Auto,*");
         var formBox = new Border { Child = formHost, Padding = new Thickness(14, 14, 14, 8) };
-        accountButton.Classes.Add("ctl"); accountButton.Classes.Add("small"); accountButton.Height = 34; accountButton.Padding = new Thickness(11, 0); accountButton.Click += (_, _) => OpenAccountFilter();
-        Avalonia.Automation.AutomationProperties.SetName(accountButton, "Filter by account");
-        var filterRow = Ui.Grid("*,Auto"); filterRow.Margin = new Thickness(14, 0, 14, 8); Ui.Put(filterRow, viewsTrack); Ui.Put(filterRow, accountButton, 1);
-        Ui.Put(inner, formBox); Ui.Put(inner, filterRow, 0, 1);
+        var filterRow = Ui.Grid("*"); filterRow.Margin = new Thickness(14, 0, 14, 8); Ui.Put(filterRow, viewsTrack);
+        Ui.Put(inner, formBox); Ui.Put(inner, filterRow, 0, 1); Ui.Put(inner, accountChips, 0, 2);
         var pageScroll = new ScrollViewer { Content = listColumn, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Name = "NotesPageScroll" }; Ui.LeaveRoomForTrack(pageScroll, listColumn);
-        Ui.Put(inner, pageScroll, 0, 2);
-        inner.Children.Add(whenHost); inner.Children.Add(filterHost); card.Child = inner; Children.Add(card);
+        Ui.Put(inner, pageScroll, 0, 3);
+        inner.Children.Add(whenHost); card.Child = inner; Children.Add(card);
         AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Notes.NoteIdChanged += NoteIdChanged; };
         DetachedFromVisualTree += (_, _) => { model.PropertyChanged -= Changed; Notes.NoteIdChanged -= NoteIdChanged; };
         activity = new ViewActivity(this, active => { if (active) Sync(); });
         // Escape puts a row being edited back as it was.
-        AddHandler(KeyDownEvent, (_, e) => { if (e.Key == Key.Escape && !whenHost.IsOpen && !filterHost.IsOpen && (editing is not null || removing is not null)) { EndEdit(); Redraw(); e.Handled = true; } }, Avalonia.Interactivity.RoutingStrategies.Bubble);
+        AddHandler(KeyDownEvent, (_, e) => { if (e.Key == Key.Escape && !whenHost.IsOpen && (editing is not null || removing is not null)) { EndEdit(); Redraw(); e.Handled = true; } }, Avalonia.Interactivity.RoutingStrategies.Bubble);
         Blank(); DrawForm(); Sync();
     }
     private readonly ViewActivity activity;
@@ -137,48 +133,23 @@ public sealed class NotesPage : Grid
         stack.Children.Add(title); stack.Children.Add(sub); return stack;
     }
 
-    // ---- The account filter: one button, with a list of ticks under it ----
+    // ---- The account filter: an All chip and a lit chip per account, any number at once ----
 
     private void DrawAccountButton()
     {
-        var text = accountFilters.Count == 0 ? "All accounts" : accountFilters.Count == 1 ? accountFilters[0] : accountFilters.Count + " accounts";
-        accountButton.Content = Ui.Horizontal(new IconGlyph(IconKind.Accounts), Ui.Text(text, 13), new Chevron());
-        accountButton.Classes.Set("on", accountFilters.Count > 0);
-    }
-
-    internal void OpenAccountFilter()
-    {
-        filterHost.PlacementTarget = accountButton; filterHost.Placement = PlacementMode.BottomEdgeAlignedRight; filterHost.VerticalOffset = -HangingCard.Room.Top + 6; filterHost.HorizontalOffset = HangingCard.Room.Right;
-        filterHost.Child = BuildAccountFilterCard(); filterHost.IsOpen = !filterHost.IsOpen;
-    }
-
-    /// <summary>The list of accounts with a tick each and the number of notes it carries; any number can be ticked. Clear drops them all.</summary>
-    internal Control BuildAccountFilterCard()
-    {
-        var rows = new StackPanel { Spacing = 2, Margin = new Thickness(4) };
+        accountChips.Children.Clear();
         var listed = Notes.Listed();
+        accountChips.Children.Add(ChoiceStrip.LitChip(this, "NotesAccountAll", "All accounts", null, accountFilters.Count == 0, () => { accountFilters.Clear(); shown = null; Sync(); }));
         foreach (var a in model.Accounts.Where(x => !BreakAccount.Is(x.Name)))
         {
             var count = listed.Count(n => string.Equals(Notes.AccountOf(n), a.Name, StringComparison.OrdinalIgnoreCase));
             var on = accountFilters.Any(f => string.Equals(f, a.Name, StringComparison.OrdinalIgnoreCase));
-            var tick = new Border { Width = 18, Height = 18, CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(1.4), VerticalAlignment = VerticalAlignment.Center }; tick.Classes.Add("tick"); tick.Classes.Set("tickDone", on);
-            if (on) tick.Child = new Avalonia.Controls.Shapes.Path { Data = Geometry.Parse("M 3.2,8.2 L 6.6,11.4 L 12.2,4.6"), StrokeThickness = 1.8, StrokeLineCap = PenLineCap.Round, StrokeJoin = PenLineJoin.Round };
-            var line = Ui.Grid("Auto,Auto,*,Auto"); line.ColumnSpacing = 9;
-            Ui.Put(line, tick); Ui.Put(line, NoteParts.Dot(model, a.Name), 1);
-            Ui.Put(line, new TextBlock { Text = "#" + a.Display.Replace(" ", ""), FontSize = 13, VerticalAlignment = VerticalAlignment.Center }, 2); Ui.Put(line, NoteParts.Ink(count.ToString(CultureInfo.InvariantCulture), "Muted", 12), 3);
-            var row = Ui.Button("", () => { ToggleAccount(a.Name); BuildAccountFilterCard(); }, "NotesAccount_" + a.Name.Replace(" ", "")); row.Classes.Add("pillBare"); row.Content = line; row.HorizontalAlignment = HorizontalAlignment.Stretch; row.HorizontalContentAlignment = HorizontalAlignment.Stretch; row.Padding = new Thickness(8, 6);
-            Avalonia.Automation.AutomationProperties.SetName(row, (on ? "Stop filtering by " : "Filter by ") + a.Display + ", " + count + (count == 1 ? " note" : " notes"));
-            rows.Children.Add(row);
+            var chip = ChoiceStrip.LitChip(this, "NotesAccount_" + a.Name.Replace(" ", ""), a.Display + "  " + count, Ui.Visible(a.Colour), on, () => ToggleAccount(a.Name));
+            Avalonia.Automation.AutomationProperties.SetName(chip, (on ? "Stop filtering by " : "Filter by ") + a.Display + ", " + count + (count == 1 ? " note" : " notes"));
+            accountChips.Children.Add(chip);
         }
-        var foot = Ui.Grid("*,Auto"); foot.Margin = new Thickness(10, 8, 10, 6);
-        Ui.Put(foot, Ui.Text(accountFilters.Count == 0 ? "Every account" : accountFilters.Count + (accountFilters.Count == 1 ? " account chosen" : " accounts chosen"), 12, "muted"));
-        if (accountFilters.Count > 0) { var clear = Ui.Button("Clear", () => { accountFilters.Clear(); shown = null; Sync(); BuildAccountFilterCard(); }, "NotesAccountClear"); clear.Classes.Add("flat"); clear.FontSize = 12.5; clear.FontWeight = FontWeight.SemiBold; Ui.Put(foot, clear, 1); }
-        var column = new StackPanel { Width = 250 }; column.Children.Add(rows); column.Children.Add(Ui.Rule()); column.Children.Add(foot);
-        // One card for the page's life, whose contents are drawn again as ticks change: a popup keeps showing the child it was opened with.
-        if (filterCard is null) { filterCard = new Border { CornerRadius = new CornerRadius(16), BorderThickness = new Thickness(1), Margin = HangingCard.Room, BoxShadow = HangingCard.Shadow, Name = "NotesAccountCard" }; filterCard.Classes.Add("surface"); filterCard.Classes.Add("flyoutCard"); }
-        filterCard.Child = column;
-        return filterCard;
     }
+
     private void ToggleAccount(string name)
     {
         var at = accountFilters.FindIndex(f => string.Equals(f, name, StringComparison.OrdinalIgnoreCase));
@@ -194,7 +165,7 @@ public sealed class NotesPage : Grid
         if (editing == note.Id) return Editor(note);
         var isMeeting = NotesModel.IsMeeting(note); var plain = Notes.Text(note); var acct = Notes.AccountOf(note);
         var line = Ui.Grid("Auto,*,Auto,Auto"); line.ColumnSpacing = 10; line.VerticalAlignment = VerticalAlignment.Center;
-        Control lead = isMeeting ? new IconGlyph(IconKind.Today) { TintKey = "Accent", VerticalAlignment = VerticalAlignment.Center } : NoteParts.Tick(Notes, note);
+        Control lead = isMeeting ? new IconGlyph(IconKind.Today) { TintKey = "AccentLit", VerticalAlignment = VerticalAlignment.Center } : NoteParts.Tick(Notes, note);
         Ui.Put(line, lead);
         var text = new TextBlock { FontSize = 14, TextTrimming = TextTrimming.CharacterEllipsis, TextWrapping = TextWrapping.NoWrap, FontWeight = isMeeting ? FontWeight.SemiBold : FontWeight.Normal, Name = "PageNoteText_" + note.Id, VerticalAlignment = VerticalAlignment.Center }; NoteLinks.Fill(text, Notes.Shown(note));
         if (note.Done) { text.TextDecorations = TextDecorations.Strikethrough; text.Classes.Add("muted"); }
@@ -350,17 +321,14 @@ public sealed class NotesPage : Grid
         return field;
     }
 
-    // The kind picker: Note or Meeting, a small key with a chevron that opens a short menu.
+    // The kind: a two-way slider, Note or Meeting.
     private Control KindPicker()
     {
-        var button = new Button { Name = "PageKind", Height = 36, Padding = new Thickness(12, 0), Content = Ui.Horizontal(Ui.Text(meeting ? "Meeting" : "Note", 13.5), new Chevron()) };
-        button.Classes.Add("ctl"); button.Classes.Add("small");
-        Avalonia.Automation.AutomationProperties.SetName(button, "Kind: " + (meeting ? "Meeting" : "Note"));
-        var flyout = new MenuFlyout { Placement = PlacementMode.BottomEdgeAlignedLeft };
-        var note = new MenuItem { Header = "Note", Name = "PageKindNote" }; note.Click += (_, _) => SetKind(false);
-        var meet = new MenuItem { Header = "Meeting", Name = "PageKindMeeting" }; meet.Click += (_, _) => SetKind(true);
-        flyout.Items.Add(note); flyout.Items.Add(meet); button.Flyout = flyout;
-        return button;
+        var note = Seg("PageKindNote", "Note", !meeting, () => SetKind(false));
+        var meet = Seg("PageKindMeeting", "Meeting", meeting, () => SetKind(true));
+        var track = new Border { Name = "PageKind", Height = 36, Child = Ui.Horizontal(note, meet) }; track.Classes.Add("segTrack");
+        Avalonia.Automation.AutomationProperties.SetName(track, "Kind: " + (meeting ? "Meeting" : "Note"));
+        return track;
     }
 
     // The reminder (a bell and the time when set) for a note.
@@ -414,7 +382,7 @@ public sealed class NotesPage : Grid
         }
         start.LostFocus += (_, _) => CommitStart(); start.KeyDown += (_, e) => { if (e.Key == Key.Enter) { CommitStart(); e.Handled = true; } };
         var to = Ui.Text("to", 13, "muted"); to.VerticalAlignment = VerticalAlignment.Center; Add(start); Add(new Border { Child = to, Height = 36 }); Add(end); // The margin goes on the box round the word, which the layout audit would count as squeezing it.
-        var repeats = new ComboBox { Name = "PageRepeat", ItemsSource = NotesModel.Offered(repeat), Width = 150, Height = 36, MinHeight = 36, FontSize = 13.5, IsEnabled = !archived };
+        var repeats = new ChoiceStrip { Name = "PageRepeat", Look = ChoiceLook.Segments, ItemsSource = NotesModel.Offered(repeat), IsEnabled = !archived };
         repeats.SelectedItem = NotesModel.Label(repeat);
         repeats.SelectionChanged += (_, _) => { if (repeats.SelectedItem is string label) repeat = Enum.GetValues<RepeatChoice>().First(c => NotesModel.Label(c) == label); };
         Add(repeats);
@@ -422,16 +390,11 @@ public sealed class NotesPage : Grid
         return row;
     }
 
-    private ComboBox AccountBox()
+    private ChoiceStrip AccountBox()
     {
         var names = new List<string> { "No account" }; names.AddRange(model.Accounts.Where(a => !BreakAccount.Is(a.Name)).Select(a => a.Name));
-        var accounts = new ComboBox { Name = "PageAccount", ItemsSource = names, Width = 168, Height = 36, MinHeight = 36, IsEnabled = !archived, FontSize = 13.5,
-            ItemTemplate = new Avalonia.Controls.Templates.FuncDataTemplate<string>((name, _) =>
-            {
-                // The words' ink sits a little above the middle of their line, so the dot is lifted a pixel to read as level with them.
-                var dot = name == "No account" ? NoteParts.Dot(model, null) : NoteParts.Dot(model, name); dot.Margin = new Thickness(0, 0, 0, 2);
-                return Ui.Horizontal(dot, new TextBlock { Text = name, VerticalAlignment = VerticalAlignment.Center });
-            }) };
+        var accounts = new ChoiceStrip { Name = "PageAccount", Look = ChoiceLook.Chips, ItemsSource = names, IsEnabled = !archived,
+            DotFor = shown => shown == "No account" ? null : model.Accounts.FirstOrDefault(x => x.Name.Equals(shown, StringComparison.OrdinalIgnoreCase)) is { } found ? Ui.Visible(found.Colour) : null };
         accounts.SelectedItem = account is null ? "No account" : names.FirstOrDefault(n => n.Equals(account, StringComparison.OrdinalIgnoreCase)) ?? "No account";
         accounts.SelectionChanged += (_, _) => account = accounts.SelectedItem is string chosen && chosen != "No account" ? chosen : null;
         return accounts;
@@ -452,7 +415,7 @@ public sealed class NotesPage : Grid
     {
         var isMeeting = meeting; var column = new StackPanel { Spacing = 10 };
         var top = Ui.Grid("Auto,*"); top.ColumnSpacing = 12;
-        Control lead = isMeeting ? new IconGlyph(IconKind.Today) { TintKey = "Accent", VerticalAlignment = VerticalAlignment.Center } : NoteParts.Tick(Notes, note);
+        Control lead = isMeeting ? new IconGlyph(IconKind.Today) { TintKey = "AccentLit", VerticalAlignment = VerticalAlignment.Center } : NoteParts.Tick(Notes, note);
         Ui.Put(top, lead); var words = Words(isMeeting ? "Meeting name" : "Write a note", out var suggestions); Ui.Put(top, words, 1);
         column.Children.Add(top); column.Children.Add(suggestions);
         var options = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(32, 0, 0, 0) };

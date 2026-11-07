@@ -159,4 +159,18 @@ public sealed class ThemeTests
         }
         finally { Avalonia.Application.Current!.RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Default; if (Directory.Exists(folder)) Directory.Delete(folder, true); }
     }
+
+    [Fact]
+    public void TheLitAccentHoldsThreeToOneOnThePageTheCardAndASunkWellInBothLooks()
+    {
+        foreach (var theme in new[] { AppThemes.Light, AppThemes.Dark })
+        {
+            var lit = ThemeEngine.AccentLit(theme.Colours);
+            var well = theme.Dark ? ThemeColours.Mix(theme.Colour("Surface"), "#000000", .2) : ThemeColours.Mix(theme.Colour("Surface"), theme.Colour("Ink"), .03);
+            foreach (var ground in new[] { theme.Colour("Surface"), theme.Colour("Panel"), well })
+                Assert.True(ThemeColours.Contrast(lit, ground) >= 3.3, $"{theme.Name} lit accent {lit} on {ground}");
+            // The pale accent stays the one that carries ink, and the lit tone is the same hue family, only deeper (Light) or a little more saturated (Dark).
+            Assert.True(ThemeColours.Contrast(theme.Colour("AccentInk"), theme.Colour("Accent")) >= 4.5);
+        }
+    }
 }

@@ -125,7 +125,7 @@ public sealed class NotesInteractionTests
             {
                 page.SetKind(meeting); Settle(window);
                 Assert.False(Find<ContentControl>(window, "PageForm").ClipToBounds);
-                Assert.False(Find<Button>(window, "PageKind").ClipToBounds);
+                Assert.False(Find<Border>(window, "PageKind").ClipToBounds);
             }
         }
         finally { window.Close(); }

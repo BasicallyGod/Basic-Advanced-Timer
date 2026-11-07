@@ -23,7 +23,7 @@ public sealed partial class SelectedBlockCard : Border
     private string? shown;
     // The one selected block as the card last saw it, and its boxes. An edit made here replaces the block's row, and the card is then brought up to date in place (see
     // Refresh) rather than rebuilt, so a box that has the focus, or that is about to get it, is still the live one and every commit reads the block as it is now.
-    private TimerModel.SelectedBlock? current; private TextBox? startBox, endBox, lengthBox, noteBox; private ComboBox? accountBox; private int builtAccounts; private bool settingAccount;
+    private TimerModel.SelectedBlock? current; private TextBox? startBox, endBox, lengthBox, noteBox; private ChoiceStrip? accountBox; private int builtAccounts; private bool settingAccount;
     public SelectedBlockCard(TimerModel model)
     {
         this.model = model; Name = "SelectedBlockCard";
@@ -121,6 +121,12 @@ public sealed partial class SelectedBlockCard : Border
         var chip = new Border { CornerRadius = new CornerRadius(999), Padding = new Thickness(8, 2), VerticalAlignment = VerticalAlignment.Center, BorderThickness = new Thickness(1), Child = new TextBlock { Text = text, FontSize = 12 } };
         chip.Classes.Add("chip"); if (plain) chip.Classes.Add("plainChip"); return chip;
     }
+    /// <summary>The account choice: a chip for each account, led by its colour, with the chosen one lit.</summary>
+    private ChoiceStrip AccountStrip(string name, IReadOnlyList<string> names) => new()
+    {
+        Name = name, Look = ChoiceLook.Chips, ItemsSource = names,
+        DotFor = shown => shown == NoAccount || BreakAccount.Is(BreakAccount.Stored(shown)) ? null : model.ReviewAccounts.FirstOrDefault(a => a.Name.Equals(shown, StringComparison.OrdinalIgnoreCase)) is { } found ? Ui.Visible(found.Colour) : null,
+    };
     private Control Swatch(string account, double size = 14)
     {
         var colour = model.ReviewAccounts.FirstOrDefault(a => a.Name.Equals(account, StringComparison.OrdinalIgnoreCase))?.Colour ?? "#91B7D5";
@@ -172,12 +178,11 @@ public sealed partial class SelectedBlockCard : Border
         var day = block.Start.Date;
         var body = new StackPanel { Spacing = 12 };
         stackHost = new Border { Name = "StackHost", IsVisible = false }; body.Children.Add(stackHost);
-        var fields = Ui.Grid("1.7*,*,*,*"); fields.ColumnSpacing = 10;
+        var fields = Ui.Grid("*,*,*"); fields.ColumnSpacing = 10;
         // Account: one of the accounts, shown with its colour. A merged block's account and times are read-only.
         var names = model.ReviewAccounts.Select(a => a.Name).Append(block.Account).Distinct(StringComparer.OrdinalIgnoreCase).Select(BreakAccount.Display).ToList();
         if (!names.Contains(BreakAccount.Display(BreakAccount.Name))) names.Add(BreakAccount.Display(BreakAccount.Name));
-        var account = new ComboBox { Name = "SelectedAccount", ItemsSource = names, HorizontalAlignment = HorizontalAlignment.Stretch, IsEnabled = !group, Height = 38,
-            ItemTemplate = new Avalonia.Controls.Templates.FuncDataTemplate<string>((name, _) => Ui.Horizontal(Swatch(BreakAccount.Stored(name ?? "")), new TextBlock { Text = name, VerticalAlignment = VerticalAlignment.Center })) };
+        var account = AccountStrip("SelectedAccount", names); account.IsEnabled = !group;
         account.SelectedItem = names.FirstOrDefault(n => n.Equals(BreakAccount.Display(block.Account), StringComparison.OrdinalIgnoreCase));
         if (!group)
             account.SelectionChanged += (_, _) =>
@@ -190,7 +195,8 @@ public sealed partial class SelectedBlockCard : Border
         // Two small keys beside the labels set the start to the end of the block before, or the end to the start of the block after, for anyone who types times.
         Control? fitStart = group ? null : FitKey("FitToPrevious", IconKind.Previous, "Start where the block before ends", () => { if (current is { Row: not null } now) model.FitToPrevious(now.Row); });
         Control? fitEnd = group ? null : FitKey("FitToNext", IconKind.Next, "End where the block after starts", () => { if (current is { Row: not null } now) model.FitToNext(now.Row); });
-        Field(fields, 0, "Account", account); Field(fields, 1, "Start", start, fitStart); Field(fields, 2, "End", end, fitEnd); Field(fields, 3, "Length", length);
+        var accountRow = new StackPanel { Spacing = 5 }; accountRow.Children.Add(Label("Account")); accountRow.Children.Add(account); body.Children.Add(accountRow);
+        Field(fields, 0, "Start", start, fitStart); Field(fields, 1, "End", end, fitEnd); Field(fields, 2, "Length", length);
         body.Children.Add(fields);
         if (!group)
         {
@@ -253,7 +259,7 @@ public sealed partial class SelectedBlockCard : Border
         body.Children.Add(rowsScroll);
         // Merge is always pressable: when it cannot work, pressing it says why in the toast.
         var merge = Ui.Ctl("MergeSelected", "Merge", IconKind.Merge, null, () => model.MergeSelection(), small: true);
-        merge.Classes.Set("primary", model.CanMergeSelection);
+        merge.Classes.Set("accentText", model.CanMergeSelection); // A momentary key: its words light, no fill and no lamp.
         var buttons = Ui.Horizontal(merge,
             Ui.Ctl("CopySelected", "Copy", IconKind.Copy, "Copy", () => model.CopySelection(), small: true, key: "Ctrl C"),
             Ui.Ctl("DeleteSelected", "Delete", IconKind.Trash, "Delete", () => model.DeleteSelection(), small: true, key: "Del"));

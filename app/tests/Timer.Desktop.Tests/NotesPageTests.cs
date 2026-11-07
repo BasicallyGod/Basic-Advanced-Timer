@@ -117,9 +117,9 @@ public sealed class NotesPageTests
         {
             Click(window, "NotesTab");
             string CountOf(string name) => Find<Button>(window, name).GetVisualDescendants().OfType<TextBlock>().Last().Text!;
-            Assert.Equal("5", CountOf("NotesView_All")); Assert.Equal("1", CountOf("NotesView_Overdue")); Click(window, "NotesAccountFilter"); Assert.Equal("2", CountOf("NotesAccount_Accounttwo")); Click(window, "NotesAccountFilter");
+            Assert.Equal("5", CountOf("NotesView_All")); Assert.Equal("1", CountOf("NotesView_Overdue")); Assert.EndsWith("2", Find<Button>(window, "NotesAccount_Accounttwo").GetVisualDescendants().OfType<TextBlock>().Last().Text!); 
             Click(window, "NotesView_Overdue"); Assert.Single(window.GetVisualDescendants().OfType<Border>().Where(b => b.Name?.StartsWith("PageRow_") == true));
-            Click(window, "NotesView_All"); Click(window, "NotesAccountFilter"); Click(window, "NotesAccount_Accounttwo"); Assert.Equal(2, window.GetVisualDescendants().OfType<Border>().Count(b => b.Name?.StartsWith("PageRow_") == true));
+            Click(window, "NotesView_All"); Click(window, "NotesAccount_Accounttwo"); Assert.Equal(2, window.GetVisualDescendants().OfType<Border>().Count(b => b.Name?.StartsWith("PageRow_") == true));
             Type(window, "NotesSearch", "zzz"); Settle(window); Assert.Equal("No match", Find<TextBlock>(window, "NotesPageEmpty").Text);
             Type(window, "NotesSearch", "call"); Settle(window); Assert.Single(window.GetVisualDescendants().OfType<Border>().Where(b => b.Name?.StartsWith("PageRow_") == true));
         }
@@ -174,8 +174,9 @@ public sealed class NotesPageTests
         {
             Click(window, "NotesTab"); Click(window, "PageNoteOpen_" + IdOf(model, "Client call"));
             double Mid(Control c) => c.TranslatePoint(new Point(0, c.Bounds.Height / 2), window)!.Value.Y;
-            var day = Find<Button>(window, "PageWhen"); var start = Find<TextBox>(window, "PageStart"); var end = Find<TextBox>(window, "PageEnd"); var repeat = Find<ComboBox>(window, "PageRepeat"); var account = Find<ComboBox>(window, "PageAccount");
-            foreach (var c in new Control[] { start, end, repeat, account }) Assert.Equal(Mid(day), Mid(c), 4);
+            var day = Find<Button>(window, "PageWhen"); var start = Find<TextBox>(window, "PageStart"); var end = Find<TextBox>(window, "PageEnd"); var repeat = Find<ChoiceStrip>(window, "PageRepeat"); var account = Find<ChoiceStrip>(window, "PageAccount");
+            Assert.NotNull(repeat); Assert.NotNull(account); // chips and segments may wrap onto a second line
+            foreach (var c in new Control[] { start, end }) Assert.Equal(Mid(day), Mid(c), 4);
             Assert.Equal("14:00", start.Text); Assert.Equal("15:00", end.Text);
             Assert.Equal("Start, HH:mm", ToolTip.GetTip(start)?.ToString());
         }
@@ -268,12 +269,11 @@ public sealed class NotesPageTests
             Assert.Equal(7, tabs.GetVisualDescendants().OfType<Button>().Count(b => b.Name?.StartsWith("NotesView_") == true)); // All, Important, Today, Overdue, Upcoming, Meetings, Done.
             Assert.Contains("selected", Find<Button>(window, "NotesView_All").Classes);
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<WrapPanel>(), w => w.Name == "NotesAccountPills"); // The row of account pills is gone.
-            Assert.Contains(Find<Button>(window, "NotesAccountFilter").GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "All accounts");
-            Click(window, "NotesAccountFilter"); Click(window, "NotesAccount_Accountone");
-            Assert.Contains(Find<Button>(window, "NotesAccountFilter").GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Account one");
+            Assert.Contains("chipOn", Find<Button>(window, "NotesAccountAll").Classes);
+            Click(window, "NotesAccount_Accountone");
+            Assert.Contains("chipOn", Find<Button>(window, "NotesAccount_Accountone").Classes); Assert.DoesNotContain("chipOn", Find<Button>(window, "NotesAccountAll").Classes);
             Click(window, "NotesAccount_Accounttwo");
-            Assert.Contains(Find<Button>(window, "NotesAccountFilter").GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "2 accounts");
-            Assert.Contains(Find<Button>(window, "NotesAccountFilter").Classes, c => c == "on");
+            Assert.Contains("chipOn", Find<Button>(window, "NotesAccount_Accounttwo").Classes); Assert.Contains("chipOn", Find<Button>(window, "NotesAccount_Accountone").Classes);
         }
         finally { window.Close(); }
     }

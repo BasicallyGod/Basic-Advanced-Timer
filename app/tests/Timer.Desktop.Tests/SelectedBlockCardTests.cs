@@ -95,7 +95,7 @@ public sealed class SelectedBlockCardTests
         try
         {
             var row = engine.Sessions[0]; model.SelectBlock(new[] { row }, false); Settle(window);
-            var account = Find<ComboBox>(window, "SelectedAccount"); Assert.Contains("Break", account.ItemsSource!.Cast<string>());
+            var account = Find<ChoiceStrip>(window, "SelectedAccount"); Assert.Contains("Break", account.ItemsSource!.Cast<string>());
             account.SelectedItem = "Account two"; Settle(window);
             Assert.Equal("Account two", engine.Sessions[0].Account); Assert.Equal("30", engine.Sessions[0].Minutes); Assert.Equal("09:00:00", engine.Sessions[0].Start);
             Assert.True(model.UndoEdit()); Assert.Equal("Account one", engine.Sessions[0].Account);
@@ -146,7 +146,7 @@ public sealed class SelectedBlockCardTests
             var group = model.Editor.Entries(Day, Day.AddDays(1)).Single(e => e.GroupId is not null);
             model.SelectBlock(group.Sources, false); Settle(window);
             Assert.Equal("Details", Find<TextBlock>(window, "SelectedTitle").Text); Assert.Equal("Merged · 2 blocks", Kind(window));
-            Assert.False(Find<TextBox>(window, "SelectedStart").IsEnabled); Assert.False(Find<ComboBox>(window, "SelectedAccount").IsEnabled);
+            Assert.False(Find<TextBox>(window, "SelectedStart").IsEnabled); Assert.False(Find<ChoiceStrip>(window, "SelectedAccount").IsEnabled);
             Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "09:00–09:30"); Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "09:30–10:00");
             Click(window, "UnmergeSelected"); Settle(window);
             Assert.DoesNotContain(model.Editor.Entries(Day, Day.AddDays(1)), e => e.GroupId is not null); Assert.Contains("Unmerged", model.Notice);
@@ -242,7 +242,7 @@ public sealed class SelectedBlockCardTests
         try
         {
             model.SelectBlock(new[] { model.Engine.Sessions[0] }, false); Settle(window);
-            Assert.Equal(new CornerRadius(12), Find<TextBox>(window, "SelectedStart").CornerRadius); Assert.Equal(new CornerRadius(12), Find<ComboBox>(window, "SelectedAccount").CornerRadius);
+            Assert.Equal(new CornerRadius(12), Find<TextBox>(window, "SelectedStart").CornerRadius);
             foreach (var theme in new[] { AppThemes.Light, AppThemes.Dark })
             {
                 var dictionary = (ResourceDictionary)Avalonia.Application.Current!.Resources.ThemeDictionaries[ThemeEngine.VariantFor(theme)]!;

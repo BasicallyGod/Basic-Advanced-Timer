@@ -86,7 +86,7 @@
     <Style Selector="TextBlock.clockIdle"><Setter Property="Foreground" Value="{DynamicResource Clock}" /></Style>
     <Style Selector="TextBlock.idle"><Setter Property="Foreground" Value="{DynamicResource Idle}" /></Style>
     <Style Selector=":is(Border).selectionStrip"><Setter Property="Background" Value="{DynamicResource Panel}" /><Setter Property="BorderBrush" Value="{DynamicResource Line}" /></Style>
-    <Style Selector="Ellipse.stepDot"><Setter Property="Fill" Value="{DynamicResource Accent}" /></Style>
+    <Style Selector="Ellipse.stepDot"><Setter Property="Fill" Value="{DynamicResource AccentLit}" /></Style>
     <Style Selector="Ellipse.live"><Setter Property="Fill" Value="{DynamicResource Live}" /></Style>
     <Style Selector="Ellipse.break"><Setter Property="Fill" Value="{DynamicResource Break}" /></Style>
     <Style Selector="Ellipse.idle"><Setter Property="Fill" Value="{DynamicResource Idle}" /></Style>
@@ -146,7 +146,7 @@
     <Style Selector="Button.weekDay"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderThickness" Value="0" /><Setter Property="CornerRadius" Value="12" /></Style>
     <!-- No fill under the pointer or the press: a day's column would hide the schedule line and hour lines behind it. -->
     <Style Selector="Button.weekDay /template/ ContentPresenter, Button.weekDay:pointerover /template/ ContentPresenter, Button.weekDay:pressed /template/ ContentPresenter"><Setter Property="Background" Value="Transparent" /></Style>
-    <Style Selector="Border.rowSelected"><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /><Setter Property="BorderThickness" Value="3,1,1,1" /><Setter Property="Background" Value="{DynamicResource Well}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /></Style>
+    <Style Selector="Border.rowSelected"><Setter Property="BorderBrush" Value="{DynamicResource AccentLit}" /><Setter Property="BorderThickness" Value="3,1,1,1" /><Setter Property="Background" Value="{DynamicResource Well}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /></Style>
     <Style Selector="Border.ruleBelow"><Setter Property="BorderBrush" Value="{DynamicResource Line}" /></Style>
     <Style Selector="Border.badge"><Setter Property="Background" Value="{DynamicResource Overtime}" /></Style>
     <Style Selector="Border.accentChip"><Setter Property="Background" Value="{DynamicResource Selected}" /><Setter Property="BorderBrush" Value="Transparent" /></Style>
@@ -175,8 +175,8 @@
     <!-- The dim layer behind a dialog, in the theme's shadow colour. -->
     <Style Selector="Border.scrim"><Setter Property="Background" Value="{DynamicResource ShadowColor}" /></Style>
     <!-- A selected block is shown by its left strip, in the accent colour, and not by an outline. The class stays on the block so it can be found. -->
-    <Style Selector="Border.selectedEdge"><Setter Property="Background" Value="{DynamicResource Accent}" /></Style>
-    <Style Selector="Border#DayProgressFill"><Setter Property="Background" Value="{DynamicResource Accent}" /></Style>
+    <Style Selector="Border.selectedEdge"><Setter Property="Background" Value="{DynamicResource AccentLit}" /></Style>
+    <Style Selector="Border#DayProgressFill"><Setter Property="Background" Value="{DynamicResource AccentLit}" /></Style>
     <!-- On a break the whole pill is that colour, so the bar is drawn in the pill's text colour. -->
     <Style Selector="Border#DayProgressFill.progressBreak"><Setter Property="Background" Value="{DynamicResource Ink}" /></Style>
     <!-- The now marker on today's timeline is drawn in the accent colour, with its chip's text in the accent's own text colour. -->
@@ -184,8 +184,8 @@
     <Style Selector="Border.track"><Setter Property="Background" Value="{DynamicResource Hover}" /></Style>
     <Style Selector="Border.barAllocated"><Setter Property="Background" Value="{DynamicResource Muted}" /></Style>
     <Style Selector="Border.barBreaks"><Setter Property="Background" Value="{DynamicResource Break}" /></Style>
-    <Style Selector="Border.nowLine"><Setter Property="Background" Value="{DynamicResource Accent}" /></Style>
-    <Style Selector="Ellipse.nowDot"><Setter Property="Fill" Value="{DynamicResource Accent}" /><Setter Property="Stroke" Value="{DynamicResource Surface}" /><Setter Property="StrokeThickness" Value="2" /></Style>
+    <Style Selector="Border.nowLine"><Setter Property="Background" Value="{DynamicResource AccentLit}" /></Style>
+    <Style Selector="Ellipse.nowDot"><Setter Property="Fill" Value="{DynamicResource AccentLit}" /><Setter Property="Stroke" Value="{DynamicResource Surface}" /><Setter Property="StrokeThickness" Value="2" /></Style>
     <Style Selector="Border.nowChip"><Setter Property="Background" Value="{DynamicResource Accent}" /></Style>
     <Style Selector="TextBlock.nowChipText"><Setter Property="Foreground" Value="{DynamicResource AccentInk}" /></Style>
     <Style Selector="Button.mergeSelected">
@@ -281,7 +281,7 @@
       <Setter Property="Foreground" Value="{DynamicResource Ink}" />
     </Style>
     <Style Selector="Button.softDay.todayDay /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="BorderBrush" Value="{DynamicResource Accent}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentLit}" />
       <Setter Property="BorderThickness" Value="1.3" />
     </Style>
     <!-- The calendar in the date pickers: soft round days, the accent for the chosen one, no grey blocks (the rest comes from the Calendar resources ThemeEngine writes). -->
@@ -292,7 +292,7 @@
     <Style Selector="CalendarDayButton:today /template/ TextBlock"><Setter Property="Foreground" Value="{DynamicResource AccentInk}" /></Style>
     <Style Selector="CalendarDayButton:today /template/ Border#Root"><Setter Property="Background" Value="{DynamicResource Accent}" /></Style>
     <Style Selector="CalendarItem /template/ Button"><Setter Property="Background" Value="Transparent" /><Setter Property="Foreground" Value="{DynamicResource Ink}" /></Style>
-    <Style Selector="Border.accentEdge"><Setter Property="Background" Value="{DynamicResource Accent}" /></Style>
+    <Style Selector="Border.accentEdge"><Setter Property="Background" Value="{DynamicResource AccentLit}" /></Style>
     <!-- A button that cannot be used keeps the outlined look, only dimmer, so it never outshines the ones that can. -->
     <Style Selector="Button:disabled /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource Panel}" />
@@ -399,7 +399,7 @@
     <Style Selector="Button.choiceTile /template/ ContentPresenter"><Setter Property="Background" Value="{DynamicResource Panel}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowKey}" /></Style>
     <Style Selector="Button.choiceTile:pointerover /template/ ContentPresenter"><Setter Property="Background" Value="{DynamicResource KeyHover}" /><Setter Property="Foreground" Value="{DynamicResource Ink}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowKeyHover}" /></Style>
     <Style Selector="Button.choiceTile.selected /template/ ContentPresenter, Button.choiceTile.selected:pointerover /template/ ContentPresenter">
-      <Setter Property="Background" Value="{DynamicResource Well}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /><Setter Property="BorderThickness" Value="2" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" />
+      <Setter Property="Background" Value="{DynamicResource Well}" /><Setter Property="BorderBrush" Value="{DynamicResource AccentLit}" /><Setter Property="BorderThickness" Value="2" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" />
     </Style>
     <!-- The section list on the settings page: quiet rows, and the chosen one in the selection tint with the accent for its words. -->
     <!-- A theme picture keeps its own colours, so a chosen one shows by its accent border alone. -->
@@ -432,9 +432,14 @@
     <Style Selector="Button.ctl:pressed /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Well}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /></Style>
     <Style Selector="Button.ctl:disabled"><Setter Property="Opacity" Value="0.5" /></Style>
     <Style Selector="Button.ctl:disabled /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="BoxShadow" Value="none" /><Setter Property="Background" Value="Transparent" /><Setter Property="Foreground" Value="{DynamicResource Muted}" /></Style>
+    <!-- Chips of a ChoiceStrip: raised keys whose lamp, not their fill, says which is chosen. -->
+    <Style Selector="Button.ctl.chip"><Setter Property="Height" Value="30" /><Setter Property="Padding" Value="11,0,12,0" /><Setter Property="CornerRadius" Value="11" /><Setter Property="Foreground" Value="{DynamicResource Muted}" /></Style>
+    <Style Selector="Button.ctl.chip.more"><Setter Property="Padding" Value="12,0" /></Style>
+    <Style Selector="Button.ctl.chip:pointerover TextBlock"><Setter Property="Foreground" Value="{DynamicResource Ink}" /></Style>
     <Style Selector="Button.ctl.small"><Setter Property="CornerRadius" Value="9" /><Setter Property="Padding" Value="11,0" /><Setter Property="FontSize" Value="12.5" /></Style>
-    <Style Selector="Button.ctl.accentOutline"><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /><Setter Property="Foreground" Value="{DynamicResource AccentText}" /><Setter Property="BorderThickness" Value="1.5" /></Style>
-    <Style Selector="Button.ctl.accentOutline /template/ ContentPresenter#PART_ContentPresenter, Button.ctl.accentOutline:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /><Setter Property="Foreground" Value="{DynamicResource AccentText}" /></Style>
+    <Style Selector="Button.ctl.accentText TextBlock"><Setter Property="Foreground" Value="{DynamicResource AccentText}" /></Style>
+    <Style Selector="Button.ctl.accentOutline"><Setter Property="BorderBrush" Value="{DynamicResource AccentLit}" /><Setter Property="Foreground" Value="{DynamicResource AccentText}" /><Setter Property="BorderThickness" Value="1.5" /></Style>
+    <Style Selector="Button.ctl.accentOutline /template/ ContentPresenter#PART_ContentPresenter, Button.ctl.accentOutline:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="BorderBrush" Value="{DynamicResource AccentLit}" /><Setter Property="Foreground" Value="{DynamicResource AccentText}" /></Style>
     <Style Selector="Button.ctl.accentOutline TextBlock"><Setter Property="Foreground" Value="{DynamicResource AccentText}" /></Style>
     <Style Selector="Button.ctl.primary"><Setter Property="Background" Value="{DynamicResource Accent}" /><Setter Property="Foreground" Value="{DynamicResource AccentInk}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
     <!-- The global TextBlock style gives every text the Ink colour, which beats what the button hands down, so a primary button's words are set here. -->
@@ -456,8 +461,8 @@
     <Style Selector="Button.toolButton:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource KeyHover}" /><Setter Property="Foreground" Value="{DynamicResource Ink}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowKeyHover}" /></Style>
     <Style Selector="Button.toolButton:pressed /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Well}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /></Style>
     <Style Selector="Button.toolButton.dialogButton"><Setter Property="MinHeight" Value="36" /><Setter Property="Padding" Value="16,0" /><Setter Property="FontSize" Value="14" /></Style>
-    <Style Selector="Button.toolButton.mainAction"><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /><Setter Property="BorderThickness" Value="1.5" /></Style>
-    <Style Selector="Button.toolButton.mainAction /template/ ContentPresenter#PART_ContentPresenter, Button.toolButton.mainAction:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
+    <Style Selector="Button.toolButton.mainAction"><Setter Property="BorderBrush" Value="{DynamicResource AccentLit}" /><Setter Property="BorderThickness" Value="1.5" /></Style>
+    <Style Selector="Button.toolButton.mainAction /template/ ContentPresenter#PART_ContentPresenter, Button.toolButton.mainAction:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="BorderBrush" Value="{DynamicResource AccentLit}" /></Style>
     <Style Selector="Button.toolButton.mainAction TextBlock"><Setter Property="Foreground" Value="{DynamicResource AccentText}" /></Style>
     <!-- A place you look into (the timeline's day): sunk into its card. -->
     <Style Selector="Border.trough"><Setter Property="Background" Value="{DynamicResource Well}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /></Style>

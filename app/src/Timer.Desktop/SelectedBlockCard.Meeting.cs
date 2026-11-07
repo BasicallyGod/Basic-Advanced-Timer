@@ -18,7 +18,7 @@ public sealed partial class SelectedBlockCard
         public long Id; public bool Series, Later, Settling, Dirty, Saved; public DateTime Day;
         public TimeSpan LastStart, LastEnd;
         public TextBlock State = null!; public Button Save = null!, Discard = null!;
-        public TextBox Name = null!, Start = null!, End = null!; public ComboBox Account = null!, Repeat = null!; public TextBlock DayWords = null!; public Border ScopeHost = null!;
+        public TextBox Name = null!, Start = null!, End = null!; public ChoiceStrip Account = null!, Repeat = null!; public TextBlock DayWords = null!; public Border ScopeHost = null!;
     }
     private MeetingFields? meetingFields;
     private bool IsSeries(DayNote meeting) => model.Notes.SeriesOf(meeting) is not null && !model.Notes.IsArchivedRepeat(meeting);
@@ -49,12 +49,10 @@ public sealed partial class SelectedBlockCard
         f.Name = Box("DetailsMeetingName", notes.Words(meeting), true);
         var accounts = new List<string> { NoAccount }; accounts.AddRange(model.ReviewAccounts.Where(a => !BreakAccount.Is(a.Name)).Select(a => a.Name));
         var chosen = notes.AccountOf(meeting); if (chosen is not null && !accounts.Contains(chosen, StringComparer.OrdinalIgnoreCase)) accounts.Add(chosen);
-        f.Account = new ComboBox { Name = "DetailsMeetingAccount", ItemsSource = accounts, HorizontalAlignment = HorizontalAlignment.Stretch, Height = 38,
-            ItemTemplate = new Avalonia.Controls.Templates.FuncDataTemplate<string>((name, _) => name == NoAccount ? new TextBlock { Text = NoAccount, VerticalAlignment = VerticalAlignment.Center, Classes = { "muted" } }
-                : Ui.Horizontal(Swatch(name ?? ""), new TextBlock { Text = name, VerticalAlignment = VerticalAlignment.Center })) };
+        f.Account = AccountStrip("DetailsMeetingAccount", accounts);
         f.Account.SelectedItem = accounts.FirstOrDefault(a => chosen is not null && a.Equals(chosen, StringComparison.OrdinalIgnoreCase)) ?? NoAccount;
         f.Start = Box("DetailsMeetingStart", Hm(meeting.At), true); f.End = Box("DetailsMeetingEnd", Hm(meeting.End), true);
-        f.Repeat = new ComboBox { Name = "DetailsMeetingRepeat", ItemsSource = NotesModel.Offered(notes.RepeatOf(meeting)), HorizontalAlignment = HorizontalAlignment.Stretch, Height = 38 };
+        f.Repeat = new ChoiceStrip { Name = "DetailsMeetingRepeat", Look = ChoiceLook.Segments, ItemsSource = NotesModel.Offered(notes.RepeatOf(meeting)) };
         f.Repeat.SelectedItem = NotesModel.Label(notes.RepeatOf(meeting));
 
         // The day is chosen on the same small calendar as a reminder's, in its day-only form, hung under the button.
@@ -73,9 +71,10 @@ public sealed partial class SelectedBlockCard
         dayButton.Width = double.NaN; dayButton.Height = 38; dayButton.Padding = new Thickness(12, 0); dayButton.Content = Ui.Horizontal(new IconGlyph(IconKind.Today), f.DayWords);
         var dayHost = new Grid { Children = { dayButton, popup } };
 
-        var row1 = Ui.Grid("2*,*"); row1.ColumnSpacing = 10; Field(row1, 0, "Name", f.Name); Field(row1, 1, "Account", f.Account);
-        var row2 = Ui.Grid("Auto,*,*,1.9*"); row2.ColumnSpacing = 10; Field(row2, 0, "Day", dayHost); Field(row2, 1, "Start", f.Start); Field(row2, 2, "End", f.End); Field(row2, 3, "Repeat", f.Repeat);
-        body.Children.Add(row1); body.Children.Add(row2);
+        var row1 = Ui.Grid("*,Auto"); row1.ColumnSpacing = 10; Field(row1, 0, "Name", f.Name); Field(row1, 1, "Day", dayHost);
+        var accountRow = new StackPanel { Spacing = 5 }; accountRow.Children.Add(Label("Account")); accountRow.Children.Add(f.Account);
+        var row2 = Ui.Grid("100,100,*"); row2.ColumnSpacing = 10; Field(row2, 0, "Start", f.Start); Field(row2, 1, "End", f.End); Field(row2, 2, "Repeat", f.Repeat);
+        body.Children.Add(row1); body.Children.Add(accountRow); body.Children.Add(row2);
         if (series)
         {
             f.ScopeHost = new Border { Name = "DetailsScope" }; var scope = new StackPanel { Spacing = 5 }; scope.Children.Add(Label("Changes apply to")); scope.Children.Add(f.ScopeHost); body.Children.Add(scope);

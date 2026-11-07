@@ -398,7 +398,8 @@ public sealed class AccountIndicator : Control
         FrameMonitor.Bump("draw AccountIndicator");
         base.Render(context);
         var running = model.ActiveAccount == Account.Name;
-        // The row's play key is a small round key, as the mock draws it: raised off the row, a step lighter under the pointer, and sunk with the symbol in green while it records.
+        if (!Ring) { RenderBare(context, running); return; }
+        // The old ring version below is kept for the budget ring that a plain list can draw round the button.
         if (!Ring)
         {
             var glowNow = Math.Clamp(Glow, 0, 1);
@@ -468,6 +469,21 @@ public sealed class AccountIndicator : Control
             if (Ring && glow > 0) using (context.PushOpacity(glow)) context.DrawGeometry(accentInk, null, triangle);
         }
     }
+    /// <summary>
+    /// The row's play control: one bare glyph with no key behind it. A solid play triangle or pause bars in the quiet colour at rest so it reads as a button, the text colour and a
+    /// well behind it when the pointer is over the row, and green while the account records (with a soft bloom on a dark theme, where a glow can be seen).
+    /// </summary>
+    private void RenderBare(DrawingContext context, bool running)
+    {
+        var hover = Math.Clamp(Glow, 0, 1); var k = Width / 26.0;
+        if (hover > .02) using (context.PushOpacity(hover)) context.DrawRectangle(Resource("Well"), null, new RoundedRect(new Rect(0, 0, Width, Height), 9 * k));
+        var brush = running ? Resource("LiveText") : hover > .5 ? Resource("Ink") : Resource("Muted");
+        using var scaled = context.PushTransform(Matrix.CreateScale(k, k));
+        Geometry shape; if (running) { var g = new StreamGeometry(); using (var c = g.Open()) { foreach (var x in new[] { 8.5, 14.0 }) { c.BeginFigure(new Point(x, 6.5), true); c.LineTo(new Point(x + 3.5, 6.5)); c.LineTo(new Point(x + 3.5, 19.5)); c.LineTo(new Point(x, 19.5)); c.EndFigure(true); } } shape = g; }
+        else shape = Geometry.Parse("M 10,6.5 L 19.5,13 L 10,19.5 Z");
+        if (running && SoftTint.IsDark(this)) { var live = Ui.ThemeColour(this, "Live", Colors.Green); context.DrawGeometry(null, new Pen(new SolidColorBrush(SoftTint.WithAlpha(live, .22)), 4, lineJoin: PenLineJoin.Round), shape); }
+        context.DrawGeometry(brush, new Pen(brush, 1, lineJoin: PenLineJoin.Round), shape);
+    }
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
@@ -477,7 +493,11 @@ public sealed class AccountIndicator : Control
         ? brush : Brushes.Gray;
 }
 
-/// <summary>A thin bar for how much of a budget is used, with a small tick where the budget period has got to, so pace is easy to judge.</summary>
+/// <summary>
+/// How much of a budget is used, as a row of equal cells with a small tick where the budget period has got to, so pace is easy to judge. The cells are whole device pixels
+/// wide with whole device pixel gaps, and their number is chosen so that they fill the bar exactly where an exact fit exists (otherwise the last pixel or two stay empty), so every
+/// cell and every gap is the same width at any size and at any Windows scale.
+/// </summary>
 public sealed class BudgetBar : Control
 {
     public double Ratio { get; private set; }
@@ -494,17 +514,43 @@ public sealed class BudgetBar : Control
         if (change.Property.Name == nameof(ActualThemeVariant)) InvalidateVisual();
     }
     private IBrush Resource(string key) => this.TryFindResource(key, ActualThemeVariant, out var value) && value is IBrush brush ? brush : Brushes.Gray;
+
+    /// <summary>The fit of cells to a bar <paramref name="width"/> device pixels wide: how many, how wide each is and the gap between, all whole device pixels. <paramref name="scale"/> is the display scaling.</summary>
+    public static (int Count, int Cell, int Gap, int Used) Fit(int width, double scale)
+    {
+        scale = Math.Max(1, scale); var gaps = new[] { Math.Max(1, (int)Math.Round(2 * scale)), Math.Max(2, (int)Math.Round(3 * scale)) };
+        int lo = (int)Math.Round(8 * scale), hi = (int)Math.Round(12 * scale), prefer = (int)Math.Round(9 * scale);
+        // Every pitch (cell plus gap) and gap in range is tried: the one that leaves the least over wins (nothing, where an exact fit exists), then the one nearest the preferred size.
+        (int Gap, int Pitch)? best = null; var bestRest = int.MaxValue; var bestScore = double.MaxValue;
+        foreach (var gap in gaps)
+            for (var pitch = lo; pitch <= hi; pitch++)
+            {
+                if (pitch <= gap + 2) continue;
+                var rest = (width + gap) % pitch; var score = Math.Abs(pitch - prefer) + (gap == gaps[0] ? 0 : .5);
+                if (rest < bestRest || (rest == bestRest && score < bestScore)) { bestRest = rest; bestScore = score; best = (gap, pitch); }
+            }
+        var (g, p) = best ?? (gaps[0], prefer);
+        var count = Math.Max(1, (width + g) / p);
+        return (count, p - g, g, count * p - g);
+    }
     public override void Render(DrawingContext context)
     {
         FrameMonitor.Bump("draw BudgetBar");
-        var width = Bounds.Width; var top = 2.0; var height = 6.0;
-        context.DrawRectangle(Resource("Line"), null, new Rect(0, top, width, height), 3, 3);
-        var fill = Math.Clamp(Ratio, 0, 1) * width;
+        var scale = (VisualRoot as Avalonia.Rendering.IRenderRoot)?.RenderScaling ?? 1.0; scale = scale <= 0 ? 1 : scale;
+        var widthPx = (int)Math.Round(Bounds.Width * scale); if (widthPx < 8) return;
+        var (count, cell, gap, used) = Fit(widthPx, scale); var pitch = cell + gap;
+        var top = 2.0; var height = 6.0;
+        var filled = Math.Clamp((int)Math.Round(Math.Clamp(Ratio, 0, 1) * count), 0, count);
+        if (Ratio > 0 && filled == 0) filled = 1; // Something used always lights a cell.
         // Neutral while there is room (green means tracking only), amber from 80%, red once the budget is spent.
-        var colour = Ratio >= 1 ? Resource("Overtime") : Ratio >= .8 ? Resource("BudgetWarning") : Resource("Muted");
-        if (fill > 0) context.DrawRectangle(colour, null, new Rect(0, top, Math.Max(fill, height), height), 3, 3);
-        // The marker says where an even spread of the budget would have got to by now. Once the budget is spent there is nothing left to pace, so it goes.
-        if (Ratio < 1) using (context.PushOpacity(.7)) context.DrawRectangle(Resource("Ink"), null, new Rect(Math.Clamp(Pace, 0, 1) * (width - 2), 0, 2, 10), 1, 1);
+        var colour = Ratio >= 1 ? Resource("Overtime") : Ratio >= .8 ? Resource("BudgetWarning") : Resource("Muted"); var track = Resource("Line");
+        for (var i = 0; i < count; i++) context.DrawRectangle(i < filled ? colour : track, null, new Rect(i * pitch / scale, top, cell / scale, height), 2, 2);
+        // The marker says where an even spread of the budget would have got to by now, on a whole device pixel. Once the budget is spent there is nothing left to pace, so it goes.
+        if (Ratio < 1) using (context.PushOpacity(.7))
+        {
+            var x = Math.Round(Math.Clamp(Pace, 0, 1) * (used - 2 * scale)) / scale;
+            context.DrawRectangle(Resource("Ink"), null, new Rect(x, 0, Math.Max(1, Math.Round(2 * scale)) / scale, 10), 1, 1);
+        }
     }
 }
 
@@ -856,7 +902,7 @@ public sealed class PauseGlyph : Control
         var glow = Math.Clamp(Glow, 0, 1);
         using var grow = context.PushTransform(Matrix.CreateTranslation(-7, -7) * Matrix.CreateScale(1 + .08 * glow, 1 + .08 * glow) * Matrix.CreateTranslation(7, 7));
         var normal = this.TryFindResource("Ink", ActualThemeVariant, out var value) ? value as IBrush : Brushes.Gray;
-        var tint = this.TryFindResource("Accent", ActualThemeVariant, out var accentValue) ? accentValue as IBrush : normal;
+        var tint = this.TryFindResource("AccentLit", ActualThemeVariant, out var accentValue) ? accentValue as IBrush : normal;
         // The accent can be too faint on a theme's panel, so it is only mixed in as the pointer arrives and the shape itself is what grows.
         var brush = Fixed ?? (glow > .5 ? tint : normal);
         if (Playing)
@@ -1294,7 +1340,7 @@ public sealed class IconGlyph : Control
                 context.DrawRectangle(tint, pen, body, 4.5, 4.5);
                 var dotCentre = new Point(body.Left + 3.6, 9);
                 context.DrawEllipse(brush, null, dotCentre, .9, .9);
-                if (hover > 0.02 && this.TryFindResource(DotKey ?? "Accent", ActualThemeVariant, out var statusFound) && statusFound is IBrush status)
+                if (hover > 0.02 && this.TryFindResource(DotKey ?? "AccentLit", ActualThemeVariant, out var statusFound) && statusFound is IBrush status)
                     using (context.PushOpacity(hover)) context.DrawEllipse(status, null, dotCentre, 1.5, 1.5);
                 context.DrawLine(pen, new Point(body.Left + 6.5, 8), new Point(body.Right - 3.1, 8));
                 context.DrawLine(new Pen(brush, 1, lineCap: PenLineCap.Round), new Point(body.Left + 6.5, 10.5), new Point(body.Left + 9.5, 10.5));

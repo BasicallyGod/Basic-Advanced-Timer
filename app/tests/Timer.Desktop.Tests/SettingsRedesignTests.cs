@@ -90,7 +90,7 @@ public sealed class SettingsRedesignTests
         try
         {
             view.ShowSection("day"); Dispatcher.UIThread.RunJobs();
-            var box = Find<ComboBox>(view, "WeekStartsOn"); Assert.Equal((int)DayOfWeek.Monday == 1 ? 0 : 0, box.SelectedIndex);
+            var box = Find<ChoiceStrip>(view, "WeekStartsOn"); Assert.Equal((int)DayOfWeek.Monday == 1 ? 0 : 0, box.SelectedIndex);
             box.SelectedIndex = 6; Assert.Equal(DayOfWeek.Sunday, model.WeekStartsOn);
             model.SetWeekStart(DayOfWeek.Wednesday); Dispatcher.UIThread.RunJobs(); Assert.Equal(2, box.SelectedIndex); // Changed elsewhere: the box follows.
         }

@@ -55,7 +55,7 @@ public sealed class Round26Tests
         try
         {
             Press(window, Near(window, Tile(window)));
-            var handle = Find<Border>(window, "StackHandleEnd"); var accent = Color.Parse(model.CurrentTheme.Colour("Accent"));
+            var handle = Find<Border>(window, "StackHandleEnd"); var accent = Color.Parse(ThemeEngine.LitOf(model.CurrentTheme)); // The lit tone, which holds 3 to 1 on Light, where the pale accent does not.
             Assert.Equal(accent, Assert.IsAssignableFrom<ISolidColorBrush>(handle.Background).Color);
         }
         finally { window.Close(); }

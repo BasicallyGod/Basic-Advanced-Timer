@@ -104,7 +104,7 @@ Dispatcher.UIThread.RunJobs(); using var panelFrame = dashboard.CaptureRenderedF
         try
         {
             Dispatcher.UIThread.RunJobs(); using var frame = editor.CaptureRenderedFrame();
-            var accounts = editor.GetVisualDescendants().OfType<ComboBox>().Single(c => c.Name == "EntryAccount");
+            var accounts = editor.GetVisualDescendants().OfType<ChoiceStrip>().Single(c => c.Name == "EntryAccount");
             var items = accounts.ItemsSource!.Cast<string>().ToList();
             Assert.Contains("Break", items); Assert.DoesNotContain("Lunch", items);
             accounts.SelectedItem = "Break";

@@ -102,8 +102,8 @@ public sealed class DialogTests
         var card = Card(0);
         Assert.Contains("mergeSelected", card.Classes); Assert.Equal(new Thickness(0), card.BorderThickness); // A ring round the block, not a border that moves its text.
         Assert.Equal(1, card.BoxShadow.Count); var ring = card.BoxShadow[0]; Assert.Equal(3, ring.Spread); Assert.Equal(0, ring.Blur);
-        Assert.True(dashboard.TryFindResource("Accent", dashboard.ActualThemeVariant, out var found));
-        Assert.Equal(Assert.IsAssignableFrom<Avalonia.Media.ISolidColorBrush>(found).Color, ring.Color); // In the theme's accent colour.
+        Assert.True(dashboard.TryFindResource("AccentLit", dashboard.ActualThemeVariant, out var found));
+        Assert.Equal(Assert.IsAssignableFrom<Avalonia.Media.ISolidColorBrush>(found).Color, ring.Color); // In the theme's lit accent, which reads on every ground.
         Assert.Equal(0, Card(1).BoxShadow.Count); Assert.DoesNotContain("mergeSelected", Card(1).Classes); // The other block is untouched.
         dashboard.Close();
     }
