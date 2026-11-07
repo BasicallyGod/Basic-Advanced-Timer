@@ -82,7 +82,8 @@ public sealed class StatusFace : StackPanel
     public static double LeftWidth => DisplayPadding + 6 + LedGap + SegmentClock.Width + ClockCountGap + CountColumn + DisplayPadding;
     /// <summary>The sidebar's display has a second row for the account name and stacked controls.</summary>
     public const double SecondRowHeight = 48;
-    public const double NameZone = 88, ControlZone = 40, ControlHeight = 22, ControlGap = 2, RightPadding = 6;
+    // Keep the two badges together close to the height of the clock's 28 px digits.
+    public const double NameZone = 88, ControlZone = 34, ControlHeight = 16, ControlGap = 1, RightPadding = 6;
     /// <summary>The pill's window: LED, clock, count, account name, and one column for play/pause and break.</summary>
     public static double DisplayWidth => LeftWidth - DisplayPadding + CountNameGap + NameZone + NameTagGap + ControlZone + RightPadding;
     public static double ShortDisplayWidth => LeftWidth;
