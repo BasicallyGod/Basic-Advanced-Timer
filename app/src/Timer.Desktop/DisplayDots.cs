@@ -72,11 +72,11 @@ public abstract class SteppedControl : Control
 
 /// <summary>
 /// The play, pause and break symbols as a vacuum-fluorescent display draws them: solid phosphor strokes seen through the display's honeycomb (<see cref="Honeycomb"/>), with a
-/// soft bloom. Both badge outlines use the same 1.8 pixel stroke.
+/// soft bloom. Both badge outlines use the same stroke.
 /// </summary>
 public abstract class VfdGlyph : SteppedControl
 {
-    public const double BadgeWidth = 36, BadgeHeight = 20, StrokeWidth = 1.8;
+    public const double BadgeWidth = 30, BadgeHeight = 14, StrokeWidth = 1.4;
     private Color colour = Colors.Green;
     public Color Colour
     {
@@ -113,13 +113,23 @@ public abstract class VfdGlyph : SteppedControl
     }
 }
 
-/// <summary>The play or pause symbol: a pentagon tag, 20 tall, with a triangle or two bars inside it, clear of its edges. A change cross-fades between the two, or swaps at once with less motion asked for.</summary>
+/// <summary>A pointed play/pause badge that cross-fades between the triangle and bars, or swaps instantly with reduced motion.</summary>
 public sealed class TransportGlyph : VfdGlyph
 {
     public const double WipeMilliseconds = 180;
-    private static readonly StreamGeometry BadgeOutline = Poly(true, (1.2, 1.2), (24.8, 1.2), (34.8, 10), (24.8, 18.8), (1.2, 18.8));
-    private static readonly StreamGeometry Triangle = Fill((10.5, 5.6), (19, 10), (10.5, 14.4));
-    private static readonly StreamGeometry Bars = Build(c => { foreach (var x in new[] { 10.5, 16 }) { c.BeginFigure(new Point(x, 5.6), true); c.LineTo(new Point(x + 2.7, 5.6)); c.LineTo(new Point(x + 2.7, 14.4)); c.LineTo(new Point(x, 14.4)); c.EndFigure(true); } });
+    private static readonly StreamGeometry BadgeOutline = Poly(true, (1, 1), (20.5, 1), (29, 7), (20.5, 13), (1, 13));
+    private static readonly StreamGeometry Triangle = Fill((8.8, 4.1), (15.9, 7), (8.8, 9.9));
+    private static readonly StreamGeometry Bars = Build(c =>
+    {
+        foreach (var x in new[] { 8.8, 13.3 })
+        {
+            c.BeginFigure(new Point(x, 4.1), true);
+            c.LineTo(new Point(x + 2.2, 4.1));
+            c.LineTo(new Point(x + 2.2, 9.9));
+            c.LineTo(new Point(x, 9.9));
+            c.EndFigure(true);
+        }
+    });
     private bool pause; private double progress;
     /// <summary>Whether the pause bars are showing (or on their way); otherwise the play triangle.</summary>
     public bool Paused => pause;
@@ -154,12 +164,12 @@ public sealed class TransportGlyph : VfdGlyph
 public sealed class BreakBadgeGlyph : VfdGlyph
 {
     public const double FadeMilliseconds = 180;
-    private static readonly Geometry BadgeOutline = new RectangleGeometry(new Rect(1.2, 1.2, BadgeWidth - 2.4, BadgeHeight - 2.4), 1.4, 1.4);
+    private static readonly Geometry BadgeOutline = new RectangleGeometry(new Rect(1, 1, BadgeWidth - 2, BadgeHeight - 2), 1.2, 1.2);
     private static readonly Lazy<Geometry> Label = new(() =>
     {
         var family = new FontFamily($"avares://{typeof(BreakBadgeGlyph).Assembly.GetName().Name}/Assets/Fonts#Chakra Petch");
         var face = new Typeface(family, FontStyle.Normal, FontWeight.SemiBold);
-        var text = new FormattedText("BREAK", System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, face, 9.5, Brushes.White);
+        var text = new FormattedText("BREAK", System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, face, 8, Brushes.White);
         return text.BuildGeometry(default) ?? new StreamGeometry();
     });
     public bool Highlighted { get; private set; }

@@ -227,6 +227,11 @@ public sealed class PillTests
                 Assert.Equal(At(play).X, At(brk).X, 0.5);
                 Assert.True(At(play).Y + play.Bounds.Height <= At(brk).Y);
                 Assert.InRange(At(brk).Y + brk.Bounds.Height, 0, display.Bounds.Height + 0.5);
+                var playBadge = play.GetVisualDescendants().OfType<TransportGlyph>().Single();
+                var breakBadge = brk.GetVisualDescendants().OfType<BreakBadgeGlyph>().Single();
+                var clock = display.GetVisualDescendants().OfType<SegmentRun>().Single(run => run.Name == "ClockMain");
+                var badgePairHeight = At(breakBadge).Y + breakBadge.Bounds.Height - At(playBadge).Y;
+                Assert.InRange(badgePairHeight, clock.Bounds.Height, clock.Bounds.Height + 4);
             }
             Check(pill, "Pill", "PillBreak", 6);
             Check(dashboard, "Sidebar", "DashboardBreak", 10);
