@@ -393,7 +393,7 @@ public sealed class NotesPage : Grid
     private ChoiceStrip AccountBox()
     {
         var names = new List<string> { "No account" }; names.AddRange(model.Accounts.Where(a => !BreakAccount.Is(a.Name)).Select(a => a.Name));
-        var accounts = new ChoiceStrip { Name = "PageAccount", Look = ChoiceLook.Chips, ItemsSource = names, IsEnabled = !archived,
+        var accounts = new ChoiceStrip { Name = "PageAccount", Look = ChoiceLook.Dropdown, Width = 168, ItemsSource = names, IsEnabled = !archived,
             DotFor = shown => shown == "No account" ? null : model.Accounts.FirstOrDefault(x => x.Name.Equals(shown, StringComparison.OrdinalIgnoreCase)) is { } found ? Ui.Visible(found.Colour) : null };
         accounts.SelectedItem = account is null ? "No account" : names.FirstOrDefault(n => n.Equals(account, StringComparison.OrdinalIgnoreCase)) ?? "No account";
         accounts.SelectionChanged += (_, _) => account = accounts.SelectedItem is string chosen && chosen != "No account" ? chosen : null;

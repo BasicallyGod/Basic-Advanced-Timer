@@ -15,7 +15,7 @@ public sealed class EntryDialog : Dialog
         root.Children.Add(Ui.Text(start.ToString("dddd, d MMMM yyyy"), 13, "muted"));
         var names = model.ReviewAccounts.Select(a => a.Name).Concat(model.Engine.Sessions.Select(s => s.Account)).Distinct(StringComparer.OrdinalIgnoreCase).Select(BreakAccount.Display).ToArray();
         var initialAccount = names.FirstOrDefault(n => n.Equals(BreakAccount.Display(model.SelectedAccount ?? ""), StringComparison.OrdinalIgnoreCase)) ?? names.First();
-        var accounts = new ChoiceStrip { Name = "EntryAccount", Look = ChoiceLook.Chips, ItemsSource = names, SelectedItem = initialAccount,
+        var accounts = new ChoiceStrip { Name = "EntryAccount", Look = ChoiceLook.Dropdown, ItemsSource = names, SelectedItem = initialAccount,
             DotFor = shown => BreakAccount.Is(BreakAccount.Stored(shown)) ? null : model.ReviewAccounts.FirstOrDefault(a => a.Name.Equals(shown, StringComparison.OrdinalIgnoreCase)) is { } found ? Ui.Visible(found.Colour) : null };
         root.Children.Add(Ui.Text("Account", 12, "muted"));
         root.Children.Add(accounts);

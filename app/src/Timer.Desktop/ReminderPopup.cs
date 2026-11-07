@@ -33,7 +33,7 @@ public sealed class ReminderPopup : Border
     private readonly TextBlock summary = new() { Name = "ReminderSummary", FontSize = 12.5, FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
     /// <summary>The width of the hour and minute boxes with the colon between them, which the four quick times share, one above the other, so the time side is one even column.</summary>
     public const double TimeColumnWidth = 44 + 4 + 6 + 4 + 44;
-    public const double Wide = 338, DayOnlyWide = 222;
+    public const double Wide = 222, DayOnlyWide = 222;
     private StackPanel? monthPanel; private Button? dateField, wheelToggle; private TimeWheel? wheel;
     private bool syncing;
     // A reminder cannot be set for a day that has gone, but a meeting can be put on one (to note what happened), so only the reminder greys them.
@@ -80,12 +80,11 @@ public sealed class ReminderPopup : Border
         }
         else column.Children.Add(calendar);
 
-        var footer = Ui.Grid("*,Auto,Auto"); footer.ColumnSpacing = 8; footer.Margin = new Thickness(0, 0, 0, 0);
-        Ui.Put(footer, summary);
-        if (!dayOnly) Ui.Put(footer, Ui.Ctl("ReminderRemove", "Remove", null, "Remove", () => answer(null), small: true), 1); // Room either side of the word.
-        if (!dayOnly) footer.Children.OfType<Button>().First(b => b.Name == "ReminderRemove").Padding = new Thickness(20, 0);
-        var set = Ui.Ctl("ReminderSet", "Set", null, "Set", () => answer(Chosen), small: true); set.Classes.Add("primary"); Ui.Put(footer, set, 2);
-        var rule = Ui.Rule(); rule.Margin = new Thickness(0, 2, 0, 0); column.Children.Add(rule); column.Children.Add(footer);
+        var footer = Ui.Grid("*,Auto,Auto"); summary.HorizontalAlignment = HorizontalAlignment.Left; footer.ColumnSpacing = 8; footer.Margin = new Thickness(0, 0, 0, 0);
+        if (!dayOnly) Ui.Put(footer, Ui.Ctl("ReminderRemove", "Remove", null, "Remove", () => answer(null), small: true), 0); // Room either side of the word.
+        if (!dayOnly) { var remove = footer.Children.OfType<Button>().First(b => b.Name == "ReminderRemove"); remove.Padding = new Thickness(20, 0); remove.HorizontalAlignment = HorizontalAlignment.Left; }
+        var set = Ui.Ctl("ReminderSet", "Set", null, "Set", () => answer(Chosen), small: true); set.Classes.Add("primary"); Ui.Put(footer, set, 2); footer.ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto");
+        var rule = Ui.Rule(); rule.Margin = new Thickness(0, 2, 0, 0); column.Children.Add(rule); column.Children.Add(summary); column.Children.Add(footer);
         Child = column;
 
         hourBox.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty && !syncing && int.TryParse(hourBox.Text, out var h) && h is >= 0 and <= 23) { hour = h; Redraw(false); } };
