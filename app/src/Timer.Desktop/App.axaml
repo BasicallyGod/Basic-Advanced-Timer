@@ -275,6 +275,8 @@
     <Style Selector="Button.softDay:pointerover /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource Hover}" />
     </Style>
+    <Style Selector="Button.softDay.weekendDay TextBlock"><Setter Property="Foreground" Value="{DynamicResource Muted}" /></Style>
+    <Style Selector="Button.softDay.chosenDay TextBlock"><Setter Property="Foreground" Value="{DynamicResource Ink}" /></Style>
     <Style Selector="Button.softDay.outsideMonth"><Setter Property="Opacity" Value="0.42" /></Style>
     <Style Selector="Button.softDay.chosenDay /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="{DynamicResource Selected}" />

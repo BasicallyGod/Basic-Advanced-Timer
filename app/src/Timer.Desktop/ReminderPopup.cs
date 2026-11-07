@@ -149,7 +149,7 @@ public sealed class ReminderPopup : Border
             var button = Ui.Button(day.Day.ToString(CultureInfo.InvariantCulture), () => { chosen = day; Redraw(false); }, "ReminderCell_" + day.ToString("yyyyMMdd", CultureInfo.InvariantCulture));
             button.Classes.Add("softDay"); button.Width = double.NaN; button.Height = 26; button.HorizontalAlignment = HorizontalAlignment.Stretch; button.FontSize = 12.5;
             button.IsEnabled = allowPast || day >= today; // A day that has gone cannot be a reminder.
-            button.Classes.Set("chosenDay", chosen.Date == day); button.Classes.Set("todayDay", today == day);
+            button.Classes.Set("chosenDay", chosen.Date == day); button.Classes.Set("weekendDay", day.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday); button.Content = SoftDatePicker.DayContent(day.Day.ToString(CultureInfo.InvariantCulture), 12.5, chosen.Date == day, false, false); button.Classes.Set("todayDay", today == day);
             AutomationProperties.SetName(button, day.ToString("d MMMM", CultureInfo.GetCultureInfo("en-GB")));
             Ui.Put(days, button, i % 7, i / 7);
         }

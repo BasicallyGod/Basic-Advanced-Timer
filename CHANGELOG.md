@@ -10,6 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 |---|---|---|
+| Calendar polish (phase 8, PR B): weekends are drawn quieter, a day that holds time carries a small dot (the header calendar), the chosen day has a lamp under its number, and the reminder month uses the same day content (`SoftDatePicker.DayContent`). | pending | `SoftCalendarTests`. |
 | Reminder card as iOS rows (phase 6, PR B): a Date row and a Time row, the month opening under Date and a new three-row `TimeWheel` (hours by one, minutes by five, press, keys or mouse wheel) under Time, with typed hour and minute boxes kept as the fallback; the quick times and steppers are gone; the meeting day card is the month alone. | pending | `TimeWheel.cs`, `ReminderPopup.cs`, `TimeWheelTests`. |
 | Glass timeline (phase 5, PR B): the day lies in dark glass in both looks (a `ThemeVariantScope` asking for Dark; code-drawn colours read `TimerModel.GlassTheme`), selected and recording blocks, tiles, meetings and the now line carry a soft bloom, and Working time is a segment-digit headline (plain text for decimal hours). Outlined phosphor blocks and a drawn graticule are not done. | pending | `ReviewViews.Ring`, `TotalsWorkingSegments`. |
 | Phase 3 finished: the Notes kind is a two-way slider, the Notes account filter is an All chip plus a lit chip per account (any number at once, shown under the views), and the export period has Earlier and Later keys beside its list. | pending | `ChoiceStrip.LitChip`, `ExportPeriodEarlier`/`Later`. |

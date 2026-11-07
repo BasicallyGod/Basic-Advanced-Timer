@@ -430,7 +430,7 @@ public sealed class DashboardWindow : Window
         datePick = Ui.Ctl("DatePick", null, null, "Pick a day", () => dateCalendar.IsOpen = !dateCalendar.IsOpen);
         datePick.Width = double.NaN; datePick.Padding = new Thickness(12, 0); datePick.Content = Ui.Horizontal(new IconGlyph(IconKind.Today), date);
         // The calendar hangs from the date button by a point, like the bell's card, and the same button closes it again.
-        var datePicker = new SoftDatePicker { Name = "DateCalendar", BoxShadow = HangingCard.Shadow }; datePicker.Classes.Add("flyoutCard");
+        var datePicker = new SoftDatePicker { Name = "DateCalendar", BoxShadow = HangingCard.Shadow }; datePicker.Classes.Add("flyoutCard"); datePicker.DayHasTime = day => model.WorkingOn(day) > TimeSpan.Zero;
         dateCalendar = new Popup { Placement = Avalonia.Controls.PlacementMode.Bottom, Name = "DateCalendarPopup", PlacementTarget = datePick, Child = HangingCard.Hang(datePicker, -1), VerticalOffset = HangingCard.TopOffset };
         HangingCard.CloseOnOutsidePress(dateCalendar, datePick);
         dateCalendar.Opened += (_, _) => { datePicker.View(model.SelectedDate, model.SelectedDate); datePick.Classes.Set("on", true); };
