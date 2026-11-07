@@ -361,6 +361,7 @@ public sealed class DashboardWindow : Window
     private Button todayButton = null!; private TextBlock todayWords = null!;
     private Control? totalsStrip; private Button zoomOut = null!, zoomIn = null!;
     private Sidebar sidebar = null!; private StatusFace face = null!;
+    private SegmentRun? workingSegments;
     private readonly TextBlock workingValue = Value(), allocatedValue = Value(), unallocatedValue = Value();
     private static TextBlock Value() => new() { FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock date = Ui.Text("", 14); private Button datePick = null!;
@@ -429,7 +430,7 @@ public sealed class DashboardWindow : Window
         datePick = Ui.Ctl("DatePick", null, null, "Pick a day", () => dateCalendar.IsOpen = !dateCalendar.IsOpen);
         datePick.Width = double.NaN; datePick.Padding = new Thickness(12, 0); datePick.Content = Ui.Horizontal(new IconGlyph(IconKind.Today), date);
         // The calendar hangs from the date button by a point, like the bell's card, and the same button closes it again.
-        var datePicker = new SoftDatePicker { Name = "DateCalendar", BoxShadow = HangingCard.Shadow }; datePicker.Classes.Add("flyoutCard");
+        var datePicker = new SoftDatePicker { Name = "DateCalendar", BoxShadow = HangingCard.Shadow }; datePicker.Classes.Add("flyoutCard"); datePicker.DayHasTime = day => model.WorkingOn(day) > TimeSpan.Zero;
         dateCalendar = new Popup { Placement = Avalonia.Controls.PlacementMode.Bottom, Name = "DateCalendarPopup", PlacementTarget = datePick, Child = HangingCard.Hang(datePicker, -1), VerticalOffset = HangingCard.TopOffset };
         HangingCard.CloseOnOutsidePress(dateCalendar, datePick);
         dateCalendar.Opened += (_, _) => { datePicker.View(model.SelectedDate, model.SelectedDate); datePick.Classes.Set("on", true); };
@@ -475,6 +476,7 @@ public sealed class DashboardWindow : Window
         // The day itself sits in a sunk trough set into the card, as the mock draws it: the card is the stage, the timeline a place you look into.
         // The left and right edges are the display's lip: they cast a soft shadow over the day, so it reads as lying below them. Room above the hour labels keeps them off the top edge.
         var lip = new Grid(); lip.Children.Add(timelineHost);
+        // Dark glass in both looks: the day lies in a scope that always asks for the Dark theme, so every theme colour used inside it resolves dark.
         Border LipShadow(bool left)
         {
             var edge = new Border { Width = 8, IsHitTestVisible = false, HorizontalAlignment = left ? HorizontalAlignment.Left : HorizontalAlignment.Right, Name = left ? "TimelineLipLeft" : "TimelineLipRight" };
@@ -488,7 +490,10 @@ public sealed class DashboardWindow : Window
             return edge;
         }
         lip.Children.Add(LipShadow(true)); lip.Children.Add(LipShadow(false));
-        var trough = new Border { Name = "TimelineTrough", Child = lip, CornerRadius = new CornerRadius(14), Margin = new Thickness(14, 0, 14, 0), Padding = new Thickness(0, 6, 0, 0), ClipToBounds = true }; trough.Classes.Add("trough");
+        var glass = new Avalonia.Controls.ThemeVariantScope { RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Dark, Child = lip };
+        var trough = new Border { Name = "TimelineTrough", Child = glass, CornerRadius = new CornerRadius(14), Margin = new Thickness(14, 0, 14, 0), Padding = new Thickness(0, 6, 0, 0), ClipToBounds = true }; trough.Classes.Add("trough");
+        // The glass itself: the Dark theme's well, a touch lighter at the top, drawn over the sunk look so the inset shadow stays.
+        trough.Background = new LinearGradientBrush { StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative), GradientStops = { new GradientStop(Color.Parse(ThemeColours.Mix(model.GlassTheme.Colour("Surface"), model.GlassTheme.Colour("Panel"), .55)), 0), new GradientStop(Color.Parse(model.GlassTheme.Colour("Surface")), 1) } };
         var cardGrid = Ui.Grid("*", "Auto,Auto"); Ui.Put(cardGrid, trough); Ui.Put(cardGrid, tools, 0, 1);
         timelineCard = new Border { Name = "TimelineCard", Child = cardGrid, CornerRadius = new CornerRadius(18), BorderThickness = new Thickness(1), Padding = new Thickness(0, 14, 0, 9), VerticalAlignment = VerticalAlignment.Top };
         timelineCard.Classes.Add("dayCard");
@@ -777,7 +782,11 @@ public sealed class DashboardWindow : Window
         }
         var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 0, Name = "DayTotals", HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         workingValue.Name = "TotalsWorkingValue";
-        strip.Children.Add(Stat("Working time", workingValue, "TotalsWorking"));
+        // The one headline figure is drawn in segment digits, as a clock is; the plain text stays for decimal hours, which segments cannot draw, and for screen readers.
+        var headline = new SegmentRun { Name = "TotalsWorkingSegments", DigitHeight = 20, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 2, 0, 0) };
+        workingSegments = headline;
+        var workingStat = Stat("Working time", workingValue, "TotalsWorking"); ((StackPanel)workingStat).Children.Add(headline);
+        strip.Children.Add(workingStat);
         dayBar.Margin = new Thickness(16, 0, 0, 0);
         strip.Children.Add(dayBar);
         var allocated = Stat("Allocated", allocatedValue, "TotalsAllocated"); allocated.Margin = new Thickness(16, 0, 0, 0); strip.Children.Add(allocated);
@@ -795,7 +804,13 @@ public sealed class DashboardWindow : Window
         var shown = model.SelectedDate.Date;
         var allocatedToday = model.AllocatedOn(shown); var plan = model.Engine.Plan(shown);
         var working = model.WorkingOn(shown);
-        workingValue.Text = model.Format(working); allocatedValue.Text = model.Format(allocatedToday); unallocatedValue.Text = model.Format(model.UnallocatedOn(shown));
+        workingValue.Text = model.Format(working);
+        if (workingSegments is not null)
+        {
+            var segmentsFit = !model.DecimalHours; workingSegments.IsVisible = segmentsFit; workingValue.IsVisible = !segmentsFit;
+            if (segmentsFit) { workingSegments.Text = workingValue.Text; Avalonia.Automation.AutomationProperties.SetName(workingSegments, "Working time " + workingValue.Text); }
+        }
+        allocatedValue.Text = model.Format(allocatedToday); unallocatedValue.Text = model.Format(model.UnallocatedOn(shown));
         breaksValue.Text = model.Format(model.BreakTimeOn(shown));
         var scheduled = model.ScheduledOn(shown);
         // The bar is always there and always the same width, so the figures beside it never move from one day to the next. A day with nothing scheduled and no time

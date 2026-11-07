@@ -178,7 +178,7 @@ public sealed class FeedbackRound10Tests
         {
             var card = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineRecording");
             Assert.Equal(new Thickness(0), card.BorderThickness); // Not a border, which left the left side bare.
-            Assert.Equal(1, card.BoxShadow.Count); var ring = card.BoxShadow[0]; Assert.Equal(3, ring.Spread); Assert.Equal(0, ring.Blur);
+            Assert.Equal(2, card.BoxShadow.Count); var ring = card.BoxShadow[0]; Assert.Equal(3, ring.Spread); Assert.Equal(0, ring.Blur);
         }
         finally { window.Close(); }
     }

@@ -681,6 +681,8 @@ public sealed class TimerModel : INotifyPropertyChanged
         var (fill, ink) = AccountTones.Vivid(Ui.Visible(accountColour));
         return new ThemeDerivation.BlockLook(fill, ThemeColours.Mix(fill, "#000000", .2), ink);
     }
+    /// <summary>The timeline is dark glass in both looks, so everything drawn in code on it reads its colours from the Dark theme whatever the page wears.</summary>
+    public ThemeDefinition GlassTheme => AppThemes.Dark;
     public void SetTheme(string theme)
     {
         if (theme != ThemeLibrary.System && theme != AppThemes.Sun && Themes.All(t => t.Name != theme)) throw new ArgumentException("Unknown theme", nameof(theme));

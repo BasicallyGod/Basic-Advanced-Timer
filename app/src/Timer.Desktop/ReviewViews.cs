@@ -172,9 +172,11 @@ public static partial class ReviewViews
     }
 
     /// <summary>A diagonal hatch in two quiet shades of the theme, for a break: time that is kept apart from the day's work.</summary>
-    internal static Brush Hatch(TimerModel model)
+    /// <summary>The 3 pixel ring of a selected or recording block, with a soft bloom of the same colour round it, as glass lit from inside. The ring stays the first shadow.</summary>
+    internal static BoxShadows Ring(Color colour) => new(new BoxShadow { Spread = 3, Color = colour }, new[] { new BoxShadow { Blur = 12, Spread = 1, Color = Color.FromArgb(0x70, colour.R, colour.G, colour.B) } });
+    internal static Brush Hatch(TimerModel model) => Hatch(model.CurrentTheme);
+    internal static Brush Hatch(ThemeDefinition theme)
     {
-        var theme = model.CurrentTheme;
         var a = Color.Parse(ThemeColours.Mix(theme.Colour("Surface"), theme.Colour("Panel"), .5)); var b = Color.Parse(theme.Colour("Line"));
         return new LinearGradientBrush
         {
@@ -284,7 +286,7 @@ public static partial class ReviewViews
         var liveOverStack = liveStacks.Count > 0;
         var loose = intervals.Where(i => !stacked.Contains(i) && !(liveOverStack && ReferenceEquals(i, recordingInterval))).ToList();
         var placement = PlaceLanes(loose.Select(i => (i, i.Start, i.End)));
-        var accent = Color.Parse(ThemeEngine.LitOf(model.CurrentTheme));
+        var accent = Color.Parse(ThemeEngine.LitOf(model.GlassTheme));
         foreach (var interval in loose.Concat(liveOverStack ? new[] { recordingInterval! } : Array.Empty<Interval>()).OrderBy(i => i.Start))
         {
             var recordingNow = IsRecording(interval);
@@ -300,7 +302,7 @@ public static partial class ReviewViews
             var width = Math.Max(MinimumBlockWidth, (end - drawStart).TotalHours * pixelsPerHour - BlockGap);
             var height = onStack ? LiveLane : laneCount == 1 ? bandHeight : (bandHeight - LaneGap * (laneCount - 1)) / laneCount;
             var cardTop = onStack ? LiveTop(bandTop, bandHeight) : bandTop + lane * (height + LaneGap);
-            var ink = isBreak ? model.CurrentTheme.Colour("Muted") : look.Text;
+            var ink = isBreak ? model.GlassTheme.Colour("Muted") : look.Text;
             var display = model.Label(interval.Account);
             // What is written on the block depends on the room it has: the whole block, a line, the duration alone, or nothing but the colour.
             var text = new StackPanel { Spacing = 2, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Margin = detail == BlockDetail.Full ? new Thickness(width < 84 ? 7 : 10, 6) : new Thickness(8, 0) };
@@ -337,7 +339,7 @@ public static partial class ReviewViews
             // The card itself is not clipped, or the selection ring round it would be cut off; what is inside it is clipped instead.
             var card = new Border { Width = width, Height = height, CornerRadius = new CornerRadius(CornerFor(laneCount, width, height)) };
             if (marquees.Count > 0) { card.PointerEntered += (_, _) => marquees.ForEach(m => m.Hover(true)); card.PointerExited += (_, _) => marquees.ForEach(m => m.Hover(false)); }
-            if (isBreak) { card.Background = Hatch(model); card.BorderBrush = Brush.Parse(model.CurrentTheme.Colour("Line")); card.BorderThickness = new Thickness(1); }
+            if (isBreak) { card.Background = Hatch(model.GlassTheme); card.BorderBrush = Brush.Parse(model.GlassTheme.Colour("Line")); card.BorderThickness = new Thickness(1); }
             else
             {
                 // A gentle gradient from the block's own fill to a slightly deeper shade of it, so a block has body without any text losing its contrast.
@@ -374,7 +376,7 @@ public static partial class ReviewViews
             if (model.IsSelected(selectionSources))
             {
                 // A selected block has a ring in the theme's accent colour round it, and the `mergeSelected` class so it can be found.
-                card.Classes.Add("mergeSelected"); card.BoxShadow = new BoxShadows(new BoxShadow { Spread = 3, Color = accent }); card.ZIndex = 3;
+                card.Classes.Add("mergeSelected"); card.BoxShadow = Ring(accent); card.ZIndex = 3;
             }
             ToolTip.SetTip(card, $"{display} · {interval.Start:HH:mm:ss} – {end:HH:mm:ss} · {model.Format(duration)}" + (string.IsNullOrWhiteSpace(note) ? "" : "\n" + note));
             if (interval.Row is { } row)
@@ -389,7 +391,7 @@ public static partial class ReviewViews
                 // The block that is recording now. A green ring and the stop menu make it clear why it can't be dragged. The ring is the same 3 pixels all round and
                 // outside the block as the selection ring (a border left the left side bare and ate into the block), so it is drawn the same way, in green.
                 card.Classes.Add("recording"); card.Name = "TimelineRecording"; card.Cursor = new Cursor(StandardCursorType.Arrow);
-                card.BoxShadow = new BoxShadows(new BoxShadow { Spread = 3, Color = Color.Parse(model.CurrentTheme.Colour("Live")) }); card.ZIndex = 3;
+                card.BoxShadow = Ring(Color.Parse(model.GlassTheme.Colour("Live"))); card.ZIndex = 3;
                 if (text.GetLogicalDescendants().OfType<TextBlock>().FirstOrDefault(t => t.Name == "BlockName") is { } liveName) liveName.Text = "● " + liveName.Text;
                 var stop = new MenuItem { Header = "Stop tracking" }; stop.Click += (_, _) => model.TogglePause();
                 card.ContextMenu = new ContextMenu { ItemsSource = new[] { stop } };
@@ -471,13 +473,13 @@ public static partial class ReviewViews
                 // A press drags it (the middle moves it, an edge resizes it); a click that goes nowhere selects it, and the Details card edits it.
                 MeetingGestures.Attach(card, canvas, model, meeting, pixelsPerHour, span);
                 Canvas.SetLeft(card, X(MeetingStart(meeting)) + 1); Canvas.SetTop(card, meetingTop + row * (height + LaneGap)); canvas.Children.Add(card);
-                if (model.SelectedMeetingId == meeting.Id) { card.Classes.Add("mergeSelected"); card.BoxShadow = new BoxShadows(new BoxShadow { Spread = 3, Color = accent }); card.ZIndex = 3; }
+                if (model.SelectedMeetingId == meeting.Id) { card.Classes.Add("mergeSelected"); card.BoxShadow = Ring(accent); card.ZIndex = 3; }
             }
         }
         // For today, a line down through the band at the current time, a dot at the top and a chip under it saying what it is. It moves on every half minute while on screen.
         if (day == model.TodayKey)
         {
-            var nowLine = new Border { Name = "NowMarker", Width = 2, Height = BandBottom + 8 - AxisY, Tag = "NowLine", IsHitTestVisible = false, ZIndex = 10 }; nowLine.Classes.Add("nowLine");
+            var nowLine = new Border { Name = "NowMarker", Width = 2, Height = BandBottom + 8 - AxisY, Tag = "NowLine", IsHitTestVisible = false, ZIndex = 10 }; nowLine.Classes.Add("nowLine"); nowLine.BoxShadow = new BoxShadows(new BoxShadow { Blur = 8, Spread = 0, Color = Color.FromArgb(0x80, accent.R, accent.G, accent.B) });
             var nowDot = new Avalonia.Controls.Shapes.Ellipse { Width = 10, Height = 10, Tag = "NowDot", IsHitTestVisible = false, ZIndex = 10 }; nowDot.Classes.Add("nowDot");
             var nowText = new TextBlock { FontSize = 12, FontWeight = FontWeight.Bold, TextAlignment = TextAlignment.Center, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Classes = { "nowChipText" } };
             var nowChip = new Border { Name = "NowChip", Child = nowText, CornerRadius = new CornerRadius(7), Height = 20, Width = 52, IsHitTestVisible = false, ZIndex = 10 }; nowChip.Classes.Add("nowChip"); // A fixed width, so it stays centred on the line whatever the digits.

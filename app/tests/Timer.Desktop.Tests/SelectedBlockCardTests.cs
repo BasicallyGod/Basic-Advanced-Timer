@@ -195,7 +195,7 @@ public sealed class SelectedBlockCardTests
             model.SelectBlock(new[] { engine.Sessions[0] }, false); Settle(window);
             var card = Find<Border>(window, "TimelineEntry0");
             Assert.False(card.ClipToBounds); // The card is not clipped, or the ring round it would be cut off.
-            Assert.Equal(1, card.BoxShadow.Count); Assert.Equal(3, card.BoxShadow[0].Spread);
+            Assert.Equal(2, card.BoxShadow.Count); Assert.Equal(3, card.BoxShadow[0].Spread); // The ring, then its bloom.
             var time = card.GetVisualDescendants().OfType<TextBlock>().First(t => t.Name == "BlockDuration");
             Assert.DoesNotContain("clock", time.Classes); Assert.Equal(FontWeight.SemiBold, time.FontWeight);
         }

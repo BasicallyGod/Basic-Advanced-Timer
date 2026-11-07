@@ -84,19 +84,16 @@ public sealed class FeedbackRound6Tests
     }
 
     [AvaloniaFact]
-    public void TheReminderPopupsPresetTimesAreOneColumnAsWideAsTheHourAndMinuteBoxes()
+    public void TheReminderPopupIsIosRowsWithAThreeRowWheelUnderTheTimeRow()
     {
         var model = Model(false); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
             Click(window, "CardKindNotes"); Click(window, "FormBell");
-            var a = Find<Button>(window, "ReminderTime9"); var b = Find<Button>(window, "ReminderTime12"); var c = Find<Button>(window, "ReminderTime15");
-            Point At(Control x) => x.TranslatePoint(default, window)!.Value;
-            // One column, top to bottom, all the same width as the hour : minute boxes above them, so the time side is one even column and the picker is no wider than it needs.
-            Assert.Equal(At(a).X, At(b).X, 1); Assert.Equal(At(a).X, At(c).X, 1); Assert.True(At(a).Y < At(b).Y && At(b).Y < At(c).Y);
-            Assert.All(new[] { a, b, c }, x => Assert.Equal(ReminderPopup.TimeColumnWidth, x.Bounds.Width, 1));
-            var hour = Find<TextBox>(window, "ReminderHour"); var minute = Find<TextBox>(window, "ReminderMinute");
-            Assert.Equal(ReminderPopup.TimeColumnWidth, At(minute).X + minute.Bounds.Width - At(hour).X, 1.5); // The boxes and the colon span the same width.
+            Assert.NotNull(Find<Button>(window, "ReminderDateField")); Assert.NotNull(Find<StackPanel>(window, "ReminderMonthPanel"));
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => b.Name?.StartsWith("ReminderTime") == true); // No quick times.
+            Assert.False(Find<Border>(window, "TimeWheel").IsVisible); Click(window, "ReminderWheelToggle"); Assert.True(Find<Border>(window, "TimeWheel").IsVisible);
+            foreach (var name in new[] { "WheelHourBefore", "WheelHourChosen", "WheelHourAfter", "WheelMinuteBefore", "WheelMinuteChosen", "WheelMinuteAfter" }) Assert.NotNull(Find<Button>(window, name));
             Assert.Equal(ReminderPopup.Wide, Find<ReminderPopup>(window, "ReminderPopup").Width);
         }
         finally { window.Close(); }
