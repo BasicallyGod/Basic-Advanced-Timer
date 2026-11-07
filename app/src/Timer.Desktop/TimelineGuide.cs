@@ -51,7 +51,7 @@ public static class TimelineGuide
         double X(DateTime time) => gutter + (time - day).TotalHours * pixelsPerHour;
         var pins = new List<Pin>();
         bool Late(Pin pin) => pin.Notes.Any(model.Notes.IsLate);
-        string ColourKey(Pin pin) => Late(pin) ? "Overtime" : "Accent";
+        string ColourKey(Pin pin) => Late(pin) ? "Overtime" : "AccentLit";
         // Notes within a pin's width of each other are one pin, so none is hidden behind another.
         var groups = new List<List<DayNote>>();
         foreach (var note in pinned)
@@ -108,9 +108,9 @@ public static class TimelineGuide
 
         // ---- the guide
         var line = new Line { Name = "TimelineGuideLine", StartPoint = new Point(1, 0), EndPoint = new Point(1, canvas.Height - axisY), StrokeThickness = 2, StrokeDashArray = new Avalonia.Collections.AvaloniaList<double> { 2.5, 2 }, Opacity = .75, IsHitTestVisible = false, IsVisible = false, ZIndex = 9 };
-        Paint(line, Shape.StrokeProperty, "Accent");
+        Paint(line, Shape.StrokeProperty, "AccentLit");
         var guideDot = new Ellipse { Name = "TimelineGuideDot", Width = 9, Height = 9, StrokeThickness = 2, IsHitTestVisible = false, IsVisible = false, ZIndex = 9 };
-        Paint(guideDot, Shape.StrokeProperty, "Accent"); Paint(guideDot, Shape.FillProperty, "Panel");
+        Paint(guideDot, Shape.StrokeProperty, "AccentLit"); Paint(guideDot, Shape.FillProperty, "Panel");
         var chipText = new TextBlock { FontSize = 12, FontWeight = FontWeight.Bold, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
         Paint(chipText, TextBlock.ForegroundProperty, "AccentText");
         var chip = new Border { Name = "TimelineGuideChip", Width = 52, Height = 21, CornerRadius = new CornerRadius(7), BorderThickness = new Thickness(1), Child = chipText, IsHitTestVisible = false, IsVisible = false, ZIndex = 9 };
@@ -120,7 +120,7 @@ public static class TimelineGuide
         // What the line crosses among the blocks is ringed by the block's own shadow, the way a selected block is, so the ring is always the same width all round (a ring drawn as a
         // separate shape was sometimes a pixel or two off). A selected or recording block already has its own ring and is left alone.
         var ringed = new Dictionary<Control, (BoxShadows Shadow, int Z)>();
-        var accent = Color.Parse(model.CurrentTheme.Colour("Accent")); var ringColour = Color.FromArgb(0x99, accent.R, accent.G, accent.B);
+        var accent = Color.Parse(ThemeEngine.LitOf(model.CurrentTheme)); var ringColour = Color.FromArgb(0x99, accent.R, accent.G, accent.B);
         void Unring(Func<Control, bool>? keep = null)
         {
             foreach (var (card, before) in ringed.ToList())
@@ -170,7 +170,7 @@ public static class TimelineGuide
             Canvas.SetLeft(chip, x - chip.Width / 2); Canvas.SetTop(chip, 1);
             // Quiet while free, the accent wash while it is on a note.
             if (near is null) { Paint(chip, Border.BackgroundProperty, "Panel"); Paint(chip, Border.BorderBrushProperty, "Line"); }
-            else { Paint(chip, Border.BackgroundProperty, "Selected"); Paint(chip, Border.BorderBrushProperty, "Accent"); }
+            else { Paint(chip, Border.BackgroundProperty, "Selected"); Paint(chip, Border.BorderBrushProperty, "AccentLit"); }
             var under = new List<Control>();
             if (!onRuler)
                 foreach (var child in canvas.Children.OfType<Control>().ToList())

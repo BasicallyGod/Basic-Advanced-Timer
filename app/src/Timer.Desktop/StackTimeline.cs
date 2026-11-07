@@ -49,7 +49,7 @@ public sealed class StackTimeline : Panel
         line.Children.Add(length); line.Children.Add(times);
         if (bar.Live) line.Children.Add(new Avalonia.Controls.Shapes.Ellipse { Width = 6, Height = 6, Fill = Brush.Parse(model.CurrentTheme.Colour("Live")), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Name = "StackRecordingDot" });
         var box = new Border { Name = "Stack_" + bar.Key, Background = new SolidColorBrush(bar.Fill), CornerRadius = new CornerRadius(8), Child = new Border { ClipToBounds = true, CornerRadius = new CornerRadius(8), Child = line }, Focusable = !bar.Live, Cursor = new Cursor(bar.Live ? StandardCursorType.Arrow : StandardCursorType.Hand), Tag = bar };
-        if (bar.Picked) { box.Classes.Add("mergeSelected"); box.BoxShadow = new BoxShadows(new BoxShadow { Spread = 2, Color = Color.Parse(model.CurrentTheme.Colour("Accent")) }); box.ZIndex = 3; }
+        if (bar.Picked) { box.Classes.Add("mergeSelected"); box.BoxShadow = new BoxShadows(new BoxShadow { Spread = 2, Color = Color.Parse(ThemeEngine.LitOf(model.CurrentTheme)) }); box.ZIndex = 3; }
         else if (bar.Live) box.BoxShadow = new BoxShadows(new BoxShadow { Spread = 2, Color = Color.Parse(model.CurrentTheme.Colour("Live")) });
         ToolTip.SetTip(box, bar.Tip); Avalonia.Automation.AutomationProperties.SetName(box, bar.Tip + (bar.Live ? ", recording" : bar.Picked ? ", picked" : ""));
         Point? press = null;
@@ -68,7 +68,7 @@ public sealed class StackTimeline : Panel
     // A handle at one end of the picked bar. It is dragged to a new time, shown as it goes, and applied when it is let go.
     private void AddHandle(Bar bar, bool atStart)
     {
-        var handle = new Border { Name = atStart ? "StackHandleStart" : "StackHandleEnd", Width = HandleWidth, Height = RowHeight - 4, CornerRadius = new CornerRadius(3), BorderThickness = new Thickness(1), ZIndex = 5, Cursor = new Cursor(StandardCursorType.SizeWestEast), Background = Brush.Parse(model.CurrentTheme.Colour("Accent")), BorderBrush = Brush.Parse(model.CurrentTheme.Colour("Panel")) }; // The accent with a card-coloured edge: seen on both themes, where the text colour was near black on Light.
+        var handle = new Border { Name = atStart ? "StackHandleStart" : "StackHandleEnd", Width = HandleWidth, Height = RowHeight - 4, CornerRadius = new CornerRadius(3), BorderThickness = new Thickness(1), ZIndex = 5, Cursor = new Cursor(StandardCursorType.SizeWestEast), Background = Brush.Parse(ThemeEngine.LitOf(model.CurrentTheme)), BorderBrush = Brush.Parse(model.CurrentTheme.Colour("Panel")) }; // The accent with a card-coloured edge: seen on both themes, where the text colour was near black on Light.
         ToolTip.SetTip(handle, atStart ? "Drag the start" : "Drag the end");
         var dragging = false;
         handle.PointerPressed += (_, e) => { if (e.GetCurrentPoint(handle).Properties.IsLeftButtonPressed) { model.BeginTimelineGesture(); dragging = true; e.Pointer.Capture(handle); preview = (bar, bar.Start, bar.End); e.Handled = true; } };

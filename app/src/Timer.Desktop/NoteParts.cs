@@ -20,7 +20,7 @@ public static class NoteParts
     public static Border Chip(string text, string tone, IconKind? icon = null, Control? lead = null, IconKind? trailing = null)
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5 };
-        var token = tone switch { "accent" => "Accent", "late" => "Overtime", "quiet" => "Muted", _ => "Ink" };
+        var token = tone switch { "accent" => "AccentText", "late" => "Overtime", "quiet" => "Muted", _ => "Ink" };
         if (lead is not null) row.Children.Add(lead);
         if (icon is { } kind) row.Children.Add(new IconGlyph(kind) { TintKey = token == "Ink" ? null : token });
         row.Children.Add(Ink(text, token));

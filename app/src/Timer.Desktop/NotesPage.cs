@@ -194,7 +194,7 @@ public sealed class NotesPage : Grid
         if (editing == note.Id) return Editor(note);
         var isMeeting = NotesModel.IsMeeting(note); var plain = Notes.Text(note); var acct = Notes.AccountOf(note);
         var line = Ui.Grid("Auto,*,Auto,Auto"); line.ColumnSpacing = 10; line.VerticalAlignment = VerticalAlignment.Center;
-        Control lead = isMeeting ? new IconGlyph(IconKind.Today) { TintKey = "Accent", VerticalAlignment = VerticalAlignment.Center } : NoteParts.Tick(Notes, note);
+        Control lead = isMeeting ? new IconGlyph(IconKind.Today) { TintKey = "AccentLit", VerticalAlignment = VerticalAlignment.Center } : NoteParts.Tick(Notes, note);
         Ui.Put(line, lead);
         var text = new TextBlock { FontSize = 14, TextTrimming = TextTrimming.CharacterEllipsis, TextWrapping = TextWrapping.NoWrap, FontWeight = isMeeting ? FontWeight.SemiBold : FontWeight.Normal, Name = "PageNoteText_" + note.Id, VerticalAlignment = VerticalAlignment.Center }; NoteLinks.Fill(text, Notes.Shown(note));
         if (note.Done) { text.TextDecorations = TextDecorations.Strikethrough; text.Classes.Add("muted"); }
@@ -452,7 +452,7 @@ public sealed class NotesPage : Grid
     {
         var isMeeting = meeting; var column = new StackPanel { Spacing = 10 };
         var top = Ui.Grid("Auto,*"); top.ColumnSpacing = 12;
-        Control lead = isMeeting ? new IconGlyph(IconKind.Today) { TintKey = "Accent", VerticalAlignment = VerticalAlignment.Center } : NoteParts.Tick(Notes, note);
+        Control lead = isMeeting ? new IconGlyph(IconKind.Today) { TintKey = "AccentLit", VerticalAlignment = VerticalAlignment.Center } : NoteParts.Tick(Notes, note);
         Ui.Put(top, lead); var words = Words(isMeeting ? "Meeting name" : "Write a note", out var suggestions); Ui.Put(top, words, 1);
         column.Children.Add(top); column.Children.Add(suggestions);
         var options = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(32, 0, 0, 0) };

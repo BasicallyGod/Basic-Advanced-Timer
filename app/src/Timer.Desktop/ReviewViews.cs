@@ -284,7 +284,7 @@ public static partial class ReviewViews
         var liveOverStack = liveStacks.Count > 0;
         var loose = intervals.Where(i => !stacked.Contains(i) && !(liveOverStack && ReferenceEquals(i, recordingInterval))).ToList();
         var placement = PlaceLanes(loose.Select(i => (i, i.Start, i.End)));
-        var accent = Color.Parse(model.CurrentTheme.Colour("Accent"));
+        var accent = Color.Parse(ThemeEngine.LitOf(model.CurrentTheme));
         foreach (var interval in loose.Concat(liveOverStack ? new[] { recordingInterval! } : Array.Empty<Interval>()).OrderBy(i => i.Start))
         {
             var recordingNow = IsRecording(interval);
@@ -512,7 +512,7 @@ public static partial class ReviewViews
             {
                 var ghost = new Border { Name = "PastePreview" + index++, IsHitTestVisible = false, ZIndex = 11, CornerRadius = new CornerRadius(BlockRadius), BorderThickness = new Thickness(2),
                     Width = Math.Max(MinimumBlockWidth, length.TotalHours * pixelsPerHour - BlockGap), Height = Math.Max(24, bandHeight * .6) };
-                ghost.Bind(Border.BorderBrushProperty, ghost.GetResourceObservable("Accent")); ghost.Bind(Border.BackgroundProperty, ghost.GetResourceObservable("Selected")); ghost.Opacity = .8;
+                ghost.Bind(Border.BorderBrushProperty, ghost.GetResourceObservable("AccentLit")); ghost.Bind(Border.BackgroundProperty, ghost.GetResourceObservable("Selected")); ghost.Opacity = .8;
                 Canvas.SetLeft(ghost, X(first + offset) + BlockInset); Canvas.SetTop(ghost, bandTop + 6); canvas.Children.Add(ghost); ghosts.Add(ghost);
             }
         }

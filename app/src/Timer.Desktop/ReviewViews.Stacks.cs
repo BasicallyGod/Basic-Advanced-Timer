@@ -125,7 +125,7 @@ public static partial class ReviewViews
         ToolTip.SetTip(card, StackTip(heading, members.Take(8).Select(i => (model.Label(i.Account), $"{i.Start:HH:mm}–{i.End:HH:mm}", (string?)model.Format(DurationOf(i)))).ToList(), Math.Max(0, members.Count - 8)));
         Avalonia.Automation.AutomationProperties.SetName(card, $"{title}, {start:HH:mm} to {end:HH:mm}. Press to open them in Details");
         card.PointerEntered += (_, _) => card.Classes.Add("over"); card.PointerExited += (_, _) => card.Classes.Remove("over");
-        if (selectedIn) { card.Classes.Add("mergeSelected"); card.BoxShadow = new BoxShadows(new BoxShadow { Spread = 3, Color = Color.Parse(model.CurrentTheme.Colour("Accent")) }); card.ZIndex = 3; }
+        if (selectedIn) { card.Classes.Add("mergeSelected"); card.BoxShadow = new BoxShadows(new BoxShadow { Spread = 3, Color = Color.Parse(ThemeEngine.LitOf(model.CurrentTheme)) }); card.ZIndex = 3; }
         Point? press = null;
         card.PointerPressed += (_, e) => { if (e.GetCurrentPoint(card).Properties.IsLeftButtonPressed) { press = e.GetPosition(canvas); e.Handled = true; } };
         card.PointerReleased += (_, e) =>
@@ -157,7 +157,7 @@ public static partial class ReviewViews
         ToolTip.SetTip(card, StackTip($"{title} · {start:HH:mm}–{end:HH:mm}", stack.Take(8).Select(m => (model.Notes.Text(m), $"{Hm(m.At)}–{Hm(m.End)}", (string?)null)).ToList(), Math.Max(0, stack.Count - 8)));
         Avalonia.Automation.AutomationProperties.SetName(card, $"{title}, {start:HH:mm} to {end:HH:mm}. Press to open them in Details");
         card.PointerEntered += (_, _) => card.Classes.Add("over"); card.PointerExited += (_, _) => card.Classes.Remove("over");
-        if (selectedIn) { card.Classes.Add("mergeSelected"); card.BoxShadow = new BoxShadows(new BoxShadow { Spread = 3, Color = Color.Parse(model.CurrentTheme.Colour("Accent")) }); card.ZIndex = 3; }
+        if (selectedIn) { card.Classes.Add("mergeSelected"); card.BoxShadow = new BoxShadows(new BoxShadow { Spread = 3, Color = Color.Parse(ThemeEngine.LitOf(model.CurrentTheme)) }); card.ZIndex = 3; }
         Point? press = null;
         card.PointerPressed += (_, e) => { if (e.GetCurrentPoint(card).Properties.IsLeftButtonPressed) { press = e.GetPosition(canvas); e.Handled = true; } };
         card.PointerReleased += (_, e) =>

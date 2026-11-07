@@ -104,7 +104,7 @@ public sealed class NotesCard : Border
     {
         var meeting = NotesModel.IsMeeting(note); var words = Notes.Words(note); var account = Notes.AccountOf(note);
         var line = Ui.Grid("Auto,*,Auto,Auto"); line.ColumnSpacing = 10; line.VerticalAlignment = VerticalAlignment.Center;
-        Control lead = meeting ? new IconGlyph(IconKind.Today) { TintKey = "Accent", VerticalAlignment = VerticalAlignment.Center } : NoteParts.Tick(Notes, note);
+        Control lead = meeting ? new IconGlyph(IconKind.Today) { TintKey = "AccentLit", VerticalAlignment = VerticalAlignment.Center } : NoteParts.Tick(Notes, note);
         Ui.Put(line, lead);
         var text = new TextBlock { FontSize = 13.5, TextTrimming = TextTrimming.CharacterEllipsis, TextWrapping = TextWrapping.NoWrap, FontWeight = meeting ? FontWeight.SemiBold : FontWeight.Normal, Name = (meeting ? "MeetingText_" : "NoteText_") + note.Id, VerticalAlignment = VerticalAlignment.Center };
         NoteLinks.Fill(text, meeting ? words : Notes.Shown(note));

@@ -856,7 +856,7 @@ public sealed class PauseGlyph : Control
         var glow = Math.Clamp(Glow, 0, 1);
         using var grow = context.PushTransform(Matrix.CreateTranslation(-7, -7) * Matrix.CreateScale(1 + .08 * glow, 1 + .08 * glow) * Matrix.CreateTranslation(7, 7));
         var normal = this.TryFindResource("Ink", ActualThemeVariant, out var value) ? value as IBrush : Brushes.Gray;
-        var tint = this.TryFindResource("Accent", ActualThemeVariant, out var accentValue) ? accentValue as IBrush : normal;
+        var tint = this.TryFindResource("AccentLit", ActualThemeVariant, out var accentValue) ? accentValue as IBrush : normal;
         // The accent can be too faint on a theme's panel, so it is only mixed in as the pointer arrives and the shape itself is what grows.
         var brush = Fixed ?? (glow > .5 ? tint : normal);
         if (Playing)
@@ -1294,7 +1294,7 @@ public sealed class IconGlyph : Control
                 context.DrawRectangle(tint, pen, body, 4.5, 4.5);
                 var dotCentre = new Point(body.Left + 3.6, 9);
                 context.DrawEllipse(brush, null, dotCentre, .9, .9);
-                if (hover > 0.02 && this.TryFindResource(DotKey ?? "Accent", ActualThemeVariant, out var statusFound) && statusFound is IBrush status)
+                if (hover > 0.02 && this.TryFindResource(DotKey ?? "AccentLit", ActualThemeVariant, out var statusFound) && statusFound is IBrush status)
                     using (context.PushOpacity(hover)) context.DrawEllipse(status, null, dotCentre, 1.5, 1.5);
                 context.DrawLine(pen, new Point(body.Left + 6.5, 8), new Point(body.Right - 3.1, 8));
                 context.DrawLine(new Pen(brush, 1, lineCap: PenLineCap.Round), new Point(body.Left + 6.5, 10.5), new Point(body.Left + 9.5, 10.5));
