@@ -34,7 +34,7 @@ public static class SoftTint
 /// Every control is a soft tint of its colour with a stronger tint under the pointer. The owner calls <see cref="Refresh"/> when the model changes, and the
 /// names of the controls start with the prefix it is given (Pill, Setup or Sidebar).
 /// </summary>
-public sealed class StatusFace : StackPanel
+public sealed class StatusFace : Grid
 {
     private readonly TimerModel model;
     private readonly SegmentClock clock = new();
@@ -129,7 +129,6 @@ public sealed class StatusFace : StackPanel
     public StatusFace(TimerModel model, string prefix, string breakName, string clockTip, Action clockClick, Action circleClick, Action accountsClick, bool sidebar = false, Action? alertsClick = null)
     {
         this.model = model; this.clockTip = clockTip; Sidebar = sidebar;
-        Spacing = sidebar ? 8 : 0;
         // The state LED is a capsule set into the display, like a segment: an empty groove when idle, inlaid in the state's colour when not.
         stateLight = new Border { Name = prefix + "StateLight", Width = 6, Height = 14, CornerRadius = new CornerRadius(3.5), OpacityMask = Honeycomb.Brush };
         // The clock opens the dashboard (and collapses it again), as it always has; it is one width whatever the time.
@@ -158,7 +157,7 @@ public sealed class StatusFace : StackPanel
         inside.Children.Add(ledHost); inside.Children.Add(Spacer(LedGap)); inside.Children.Add(ClockButton); inside.Children.Add(Spacer(ClockCountGap)); inside.Children.Add(countHost);
         displayBox = new Border
         {
-            Name = prefix + "Display", Height = DisplayHeight, CornerRadius = new CornerRadius(DisplayRadius),
+            Name = prefix + "Display", CornerRadius = new CornerRadius(DisplayRadius),
             Padding = new Thickness(DisplayPadding, 0), Child = inside,
             HorizontalAlignment = sidebar ? HorizontalAlignment.Center : HorizontalAlignment.Stretch
         };
@@ -302,8 +301,11 @@ public sealed class StatusFace : StackPanel
         stateLight.BoxShadow = default;
         ledGlow.BoxShadow = !idle && dark ? new BoxShadows(new BoxShadow { Blur = 7, Spread = 1, Color = SoftTint.WithAlpha(stateColour, .4) }) : default;
         Avalonia.Automation.AutomationProperties.SetName(stateLight, stateName); ToolTip.SetTip(stateLight, stateName);
-        var well0 = ThemeColourOr("DisplayWell", "#101317"); var edge = ThemeColourOr("DisplayEdge", "#12FFFFFF");
-        displayBox.BoxShadow = new BoxShadows(new BoxShadow { IsInset = true, OffsetY = 2, Blur = 5, Color = shade }, new[] { new BoxShadow { OffsetY = 1, Color = edge } });
+        var edge = ThemeColourOr("DisplayEdge", "#12FFFFFF");
+        // The pill's recessed display has an even lip. A downward highlight made the bottom bezel look different.
+        var recess = new BoxShadow { IsInset = true, OffsetY = Sidebar ? 2 : 0, Blur = 5, Color = shade };
+        var lip = Sidebar ? new BoxShadow { OffsetY = 1, Color = edge } : new BoxShadow { Spread = 1, Color = edge };
+        displayBox.BoxShadow = new BoxShadows(recess, new[] { lip });
         // The count takes the colour of the most urgent thing waiting: blue a reminder, amber a budget at 80 per cent or a long break, red a spent budget. It is two digits
         // always (the leading one blank under ten, both blank with nothing waiting), so the display never changes width.
         var alerts = model.PillAlertsMode == "off" ? Array.Empty<AlertItem>() : model.Alerts; var waiting = alerts.Count > 0;
