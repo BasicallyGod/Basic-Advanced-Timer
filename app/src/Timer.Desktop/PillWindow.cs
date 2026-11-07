@@ -20,12 +20,13 @@ public sealed class PillWindow : Window
 {
     public Action? OpenDashboard { get; set; }
     private readonly TimerModel model;
-    /// <summary>The pill's own size before it is scaled for the screen: 336 wide and 72 tall, a card with the dashboard's 20 pixel corner. Its contents start 20 pixels from the left and end 14 from the right.</summary>
-    public const double PillHeight = 64, PillRadius = 20, InsetLeft = 6, InsetRight = 6;
-    /// <summary>The card is the display and a 6 pixel bezel all round.</summary>
-    public static double PillWidth => Math.Ceiling(InsetLeft + InsetRight + StatusFace.DisplayWidth);
-    /// <summary>The compact pill is only the display: 10 either side of it, so it is 230 wide and the same height.</summary>
-    public static double CompactWidth => Math.Ceiling(InsetLeft + InsetRight + StatusFace.ShortDisplayWidth);
+    public const double BezelWidth = 6;
+    public const double PillHeight = StatusFace.DisplayHeight + 2 * BezelWidth;
+    public const double PillRadius = StatusFace.DisplayRadius + BezelWidth;
+    internal static Thickness BezelPadding => new(BezelWidth - EdgeThickness);
+    /// <summary>The display and its bezel, before scaling for the screen.</summary>
+    public static double PillWidth => Math.Ceiling(StatusFace.DisplayWidth + 2 * BezelWidth);
+    public static double CompactWidth => Math.Ceiling(StatusFace.ShortDisplayWidth + 2 * BezelWidth);
     /// <summary>The card's width now: the full pill, or the compact one that is only its display.</summary>
     public double CardWidth => model.CompactPill ? CompactWidth : PillWidth;
     // The whole pill is drawn smaller than its design size on every screen, so it never takes a big share of a display. Two things shrink it further.
@@ -127,12 +128,15 @@ public sealed class PillWindow : Window
         // The top of the pill is shared with the dashboard's sidebar.
         face = new StatusFace(model, "Pill", "PillBreak", "Open dashboard", () => OpenDashboard?.Invoke(), OnCircle, ToggleAccounts, alertsClick: ToggleAlerts);
         var root = rootGrid = new Grid { Background = Brushes.Transparent };
-        // Along the card, centred on its height, with the room kept clear at each end (the card's edge is part of it).
-        face.Margin = new Thickness(InsetLeft - EdgeThickness, 0, InsetRight - EdgeThickness, 0); face.HorizontalAlignment = HorizontalAlignment.Left; face.VerticalAlignment = VerticalAlignment.Center;
         root.Children.Add(face);
         Ui.PillGestures(root, this);
-        ShapeApplied = model.CompactPill; face.SetCompact(ShapeApplied); face.Margin = new Thickness(InsetLeft - EdgeThickness, 0, (ShapeApplied ? InsetLeft : InsetRight) - EdgeThickness, 0);
-        surface = new Border { Name = "PillSurface", Child = root, ClipToBounds = true, Width = CardWidth, Height = PillHeight, BorderThickness = new Thickness(EdgeThickness) };
+        ShapeApplied = model.CompactPill;
+        face.SetCompact(ShapeApplied);
+        surface = new Border
+        {
+            Name = "PillSurface", Child = root, ClipToBounds = true, Width = CardWidth, Height = PillHeight,
+            BorderThickness = new Thickness(EdgeThickness), Padding = BezelPadding
+        };
         surface.Classes.Add("pillBody");
         shadowHost = Ui.Shadowed(surface, PillRadius);
         // The Christmas garland sits behind the card and the lights and bow over its edge, in the room the window keeps round the card.
@@ -368,7 +372,6 @@ public sealed class PillWindow : Window
     private void ApplyShape()
     {
         ShapeApplied = model.CompactPill; face.SetCompact(ShapeApplied);
-        face.Margin = new Thickness(InsetLeft - EdgeThickness, 0, (ShapeApplied ? InsetLeft : InsetRight) - EdgeThickness, 0);
         surface.Width = CardWidth; CloseFlyouts(); EnsureSize();
     }
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e)

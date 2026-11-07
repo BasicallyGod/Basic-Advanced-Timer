@@ -65,8 +65,11 @@ public sealed class DisplayOptionsTests
             Assert.Equal((PillWindow.CompactWidth + 2 * Ui.ShadowMargin) * pill.Scale, pill.WindowWidthNow, 0.5);
             Assert.False(Find<Button>(pill, "PillPause").IsVisible); Assert.False(Find<Button>(pill, "PillBreak").IsVisible);
             var display = Find<Border>(pill, "PillDisplay"); Assert.True(display.IsVisible);
-            var edge = surface.Bounds.Width - (display.TranslatePoint(default, surface)!.Value.X + display.Bounds.Width);
-            Assert.Equal(PillWindow.InsetLeft, edge, 3.0); // The display sits in the card with the same room each side.
+            var inset = display.TranslatePoint(default, surface)!.Value;
+            Assert.Equal(PillWindow.BezelWidth, inset.X, 0.5);
+            Assert.Equal(inset.X, surface.Bounds.Width - inset.X - display.Bounds.Width, 0.5);
+            Assert.Equal(inset.Y, surface.Bounds.Height - inset.Y - display.Bounds.Height, 0.5);
+            Assert.Equal(inset.X, inset.Y, 0.5);
             Assert.True(pill.AlertsButton.IsVisible); // The count still opens what is waiting.
             model.SetCompactPill(false); Settle(pill);
             Assert.Equal(PillWindow.PillWidth, surface.Width); Assert.True(Find<Button>(pill, "PillPause").IsVisible);

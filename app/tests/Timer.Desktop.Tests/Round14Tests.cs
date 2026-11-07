@@ -52,7 +52,7 @@ public sealed class Round14Tests
                 Assert.True(box.X >= 0 && box.X + c.Bounds.Width <= PillWindow.PillWidth, $"{name} {box.X}+{c.Bounds.Width}");
             }
             var brk = Find<Control>(pill, "PillBreak"); var edge = brk.TranslatePoint(new Point(brk.Bounds.Width, 0), surface)!.Value.X;
-            Assert.InRange(PillWindow.PillWidth - edge, PillWindow.InsetRight, PillWindow.InsetRight + 8); // The bezel and the display's own right padding.
+            Assert.InRange(PillWindow.PillWidth - edge, PillWindow.BezelWidth, PillWindow.BezelWidth + 8); // The bezel and the display's own right padding.
         }
         finally { pill.Close(); }
     }
