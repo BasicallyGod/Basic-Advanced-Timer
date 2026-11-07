@@ -315,7 +315,8 @@ public sealed class StatusFace : StackPanel
     private void RefreshTransport(bool onBreak, string? who, string? shown)
     {
         var recording = model.IsTracking && !onBreak;
-        Transport!.Colour = ThemeColourOr(SoftTint.IsDark(this) ? "Live" : "LiveText", "#34D399");
+        // The play tag stays the tracking colour, and turns the break colour on a break, when pressing it resumes.
+        Transport!.Colour = onBreak ? ThemeColourOr("Break", "#F5A524") : ThemeColourOr(SoftTint.IsDark(this) ? "Live" : "LiveText", "#34D399");
         Transport.Show(recording, instant: !Transport.IsAttachedToVisualTree());
         var index = shown is null ? -1 : model.Accounts.ToList().FindIndex(a => a.Name == shown);
         NameRun!.Colour = ThemeColourOr("Ink", "#18233A");
