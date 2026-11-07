@@ -65,6 +65,7 @@ public sealed class UiEfficiencyTests
             window.SelectTab(true); Press(window, "Settings"); Press(window, "SettingsExport");
             var page = window.GetVisualDescendants().OfType<SettingsView>().Single();
             Press(window, "ExportMonthChoice"); var pick = Find<ComboBox>(window, "ExportPeriodPick"); pick.SelectedIndex = 2;
+            Press(window, "ExportPeriodLater"); Assert.Equal(1, pick.SelectedIndex); Press(window, "ExportPeriodEarlier"); Assert.Equal(2, pick.SelectedIndex); // Earlier steps down the newest-first list.
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => b.Name == "SettingsBack");
             Press(window, "Settings"); Assert.True(Find<Button>(window, "WeekOverviewTab").Classes.Contains("selected"));
             Press(window, "Settings"); Assert.NotSame(page, window.GetVisualDescendants().OfType<SettingsView>().Single());
@@ -98,11 +99,11 @@ public sealed class UiEfficiencyTests
         try
         {
             Find<TextBox>(window, "PageNoteField").Text = "An unfinished draft";
-            Press(window, "NotesView_Important"); Press(window, "NotesAccountFilter"); Press(window, "NotesAccount_Accountone");
+            Press(window, "NotesView_Important"); Press(window, "NotesAccount_Accountone");
             Find<TextBox>(window, "NotesSearch").Text = "no match"; Settle(window);
             Assert.Equal("No match", Find<TextBlock>(window, "NotesPageEmpty").Text);
-            Assert.Equal("Clear", Find<Button>(window, "NotesAccountClear").Content);
-            Press(window, "NotesAccountClear");
+            Assert.DoesNotContain("chipOn", Find<Button>(window, "NotesAccountAll").Classes);
+            Press(window, "NotesAccountAll");
             Assert.Equal("no match", Find<TextBox>(window, "NotesSearch").Text);
             Assert.Equal("An unfinished draft", Find<TextBox>(window, "PageNoteField").Text);
             Assert.Equal(NoteView.Important, window.GetVisualDescendants().OfType<NotesPage>().Single().View);

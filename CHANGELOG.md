@@ -10,6 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 |---|---|---|
+| Phase 3 finished: the Notes kind is a two-way slider, the Notes account filter is an All chip plus a lit chip per account (any number at once, shown under the views), and the export period has Earlier and Later keys beside its list. | pending | `ChoiceStrip.LitChip`, `ExportPeriodEarlier`/`Later`. |
 | Pill list and alerts (phase 7): the pill list already shares the bare-glyph rows; a test now pins the alerts card keys to the small size with at most one accent-edge main key and no lamps. | pending | `PillAlertsTests`. |
 | Latches (phase 4): ticks light their mark and ring in the lit accent when checked; Merge lights its words only (no fill) when it can act. | pending | `accentText` class, `NeumorphicCheckBox`. |
 | Choice strips replace most drop-downs: account fields are chips led by the account colour, repeat is a row of segments, week start is day chips (Settings and setup), and the Details forms put Account on its own row. Budget periods, city, export period and season preview stay lists. The dashboard is 40 pixels taller (800). | pending | `ChoiceStrip` in `Choices.cs`, `ChoiceStripTests`. |

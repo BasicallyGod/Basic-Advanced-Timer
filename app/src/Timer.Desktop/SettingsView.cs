@@ -343,7 +343,11 @@ public sealed class SettingsView : Grid
         weekChoice = Ui.DialogButton("Week", () => ChoosePeriod(false), "ExportWeekChoice", true); monthChoice = Ui.DialogButton("Month", () => ChoosePeriod(true), "ExportMonthChoice", false);
         stack.Children.Add(Ui.Horizontal(weekChoice, monthChoice));
         periodLabel = Ui.Text("Week", 13, "muted"); periodPick = new ComboBox { Name = "ExportPeriodPick", HorizontalAlignment = HorizontalAlignment.Stretch, MaxWidth = 360 };
-        var pickRow = new StackPanel { Spacing = 4, HorizontalAlignment = HorizontalAlignment.Left }; pickRow.Children.Add(periodLabel); pickRow.Children.Add(periodPick); pickRow.Width = 360;
+        // The lists run newest first, so the earlier period is the next place down the list.
+        var earlier = Ui.IconButton(IconKind.Previous, "Earlier", "ExportPeriodEarlier", () => { if (periodPick.SelectedIndex + 1 < periodPick.ItemCount) periodPick.SelectedIndex++; });
+        var later = Ui.IconButton(IconKind.Next, "Later", "ExportPeriodLater", () => { if (periodPick.SelectedIndex > 0) periodPick.SelectedIndex--; });
+        var pickLine = Ui.Grid("Auto,*,Auto"); pickLine.ColumnSpacing = 6; Ui.Put(pickLine, earlier); Ui.Put(pickLine, periodPick, 1); Ui.Put(pickLine, later, 2); earlier.VerticalAlignment = later.VerticalAlignment = VerticalAlignment.Center;
+        var pickRow = new StackPanel { Spacing = 4, HorizontalAlignment = HorizontalAlignment.Left }; pickRow.Children.Add(periodLabel); pickRow.Children.Add(pickLine); pickRow.Width = 360;
         stack.Children.Add(pickRow);
         var note = Ui.Text("Two CSV files are written: the hours by account and day, and every entry. Hundredths of an hour are shared out so each total adds up exactly. The running entry is provisional until it is saved.", 12, "muted");
         note.TextWrapping = TextWrapping.Wrap; stack.Children.Add(note);

@@ -107,10 +107,10 @@ public sealed class FeedbackRound8Tests
         try
         {
             Click(window, "NotesTab");
-            var picker = Find<Button>(window, "PageKind"); Assert.Equal("Kind: Note", Avalonia.Automation.AutomationProperties.GetName(picker));
-            var menu = Assert.IsType<MenuFlyout>(picker.Flyout); Assert.Equal(new[] { "Note", "Meeting" }, menu.Items.OfType<MenuItem>().Select(i => i.Header?.ToString()).ToArray());
+            var picker = Find<Border>(window, "PageKind"); Assert.Equal("Kind: Note", Avalonia.Automation.AutomationProperties.GetName(picker));
+            Assert.Equal(2, picker.GetVisualDescendants().OfType<Button>().Count());
             window.GetVisualDescendants().OfType<NotesPage>().Single().SetKind(true); Settle(window);
-            Assert.Equal("Kind: Meeting", Avalonia.Automation.AutomationProperties.GetName(Find<Button>(window, "PageKind")));
+            Assert.Equal("Kind: Meeting", Avalonia.Automation.AutomationProperties.GetName(Find<Border>(window, "PageKind")));
             var add = Find<Button>(window, "PageSubmit"); Assert.Contains("primary", add.Classes);
             Assert.True(ThemeColours.Contrast(AppThemes.Light.Colour("AccentInk"), AppThemes.Light.Colour("Accent")) >= 4.5);
         }
