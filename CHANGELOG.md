@@ -10,7 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 |---|---|---|
-| Display polish: scrolling name, mug, etched dividers, glow; calmer alerts card | pending | A long account name always runs along (resting at each end) unless less motion is asked for. The break mug is a 9 by 9 mug with a handle and its steam is always drawn, dim at rest. Dividers are etched marks. Lit dots and segments glow on a dark theme. In the alerts card the rows touch (no dead strips between them) and a press opens the row after the event ends; with nothing waiting the card is one short line with Open Notes beside the words. |
+| Display polish: scrolling name, mug, etched dividers, glow; calmer alerts card | pending | A long account name always runs along (resting at each end) unless less motion is asked for. The break mug is a 9 by 9 mug with a handle and its steam is always drawn, dim at rest. Dividers are etched marks (a groove with a light lip), not dots. Lit dots and segments glow on a dark theme. In the alerts card the rows touch (no dead strips between them) and a press opens the row after the event ends; with nothing waiting the card is one short line with Open Notes beside the words. |
 
 ## 6 November 2026
 
