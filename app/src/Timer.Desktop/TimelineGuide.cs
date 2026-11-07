@@ -120,7 +120,7 @@ public static class TimelineGuide
         // What the line crosses among the blocks is ringed by the block's own shadow, the way a selected block is, so the ring is always the same width all round (a ring drawn as a
         // separate shape was sometimes a pixel or two off). A selected or recording block already has its own ring and is left alone.
         var ringed = new Dictionary<Control, (BoxShadows Shadow, int Z)>();
-        var accent = Color.Parse(ThemeEngine.LitOf(model.CurrentTheme)); var ringColour = Color.FromArgb(0x99, accent.R, accent.G, accent.B);
+        var accent = Color.Parse(ThemeEngine.LitOf(model.GlassTheme)); var ringColour = Color.FromArgb(0x99, accent.R, accent.G, accent.B);
         void Unring(Func<Control, bool>? keep = null)
         {
             foreach (var (card, before) in ringed.ToList())

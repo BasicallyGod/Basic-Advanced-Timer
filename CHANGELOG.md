@@ -10,6 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 |---|---|---|
+| Glass timeline (phase 5, PR B): the day lies in dark glass in both looks (a `ThemeVariantScope` asking for Dark; code-drawn colours read `TimerModel.GlassTheme`), selected and recording blocks, tiles, meetings and the now line carry a soft bloom, and Working time is a segment-digit headline (plain text for decimal hours). Outlined phosphor blocks and a drawn graticule are not done. | pending | `ReviewViews.Ring`, `TotalsWorkingSegments`. |
 | Phase 3 finished: the Notes kind is a two-way slider, the Notes account filter is an All chip plus a lit chip per account (any number at once, shown under the views), and the export period has Earlier and Later keys beside its list. | pending | `ChoiceStrip.LitChip`, `ExportPeriodEarlier`/`Later`. |
 | Pill list and alerts (phase 7): the pill list already shares the bare-glyph rows; a test now pins the alerts card keys to the small size with at most one accent-edge main key and no lamps. | pending | `PillAlertsTests`. |
 | Latches (phase 4): ticks light their mark and ring in the lit accent when checked; Merge lights its words only (no fill) when it can act. | pending | `accentText` class, `NeumorphicCheckBox`. |
