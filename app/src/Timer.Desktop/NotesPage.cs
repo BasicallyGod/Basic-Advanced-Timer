@@ -414,7 +414,7 @@ public sealed class NotesPage : Grid
         }
         start.LostFocus += (_, _) => CommitStart(); start.KeyDown += (_, e) => { if (e.Key == Key.Enter) { CommitStart(); e.Handled = true; } };
         var to = Ui.Text("to", 13, "muted"); to.VerticalAlignment = VerticalAlignment.Center; Add(start); Add(new Border { Child = to, Height = 36 }); Add(end); // The margin goes on the box round the word, which the layout audit would count as squeezing it.
-        var repeats = new ComboBox { Name = "PageRepeat", ItemsSource = NotesModel.Offered(repeat), Width = 150, Height = 36, MinHeight = 36, FontSize = 13.5, IsEnabled = !archived };
+        var repeats = new ChoiceStrip { Name = "PageRepeat", Look = ChoiceLook.Segments, ItemsSource = NotesModel.Offered(repeat), IsEnabled = !archived };
         repeats.SelectedItem = NotesModel.Label(repeat);
         repeats.SelectionChanged += (_, _) => { if (repeats.SelectedItem is string label) repeat = Enum.GetValues<RepeatChoice>().First(c => NotesModel.Label(c) == label); };
         Add(repeats);
@@ -422,16 +422,11 @@ public sealed class NotesPage : Grid
         return row;
     }
 
-    private ComboBox AccountBox()
+    private ChoiceStrip AccountBox()
     {
         var names = new List<string> { "No account" }; names.AddRange(model.Accounts.Where(a => !BreakAccount.Is(a.Name)).Select(a => a.Name));
-        var accounts = new ComboBox { Name = "PageAccount", ItemsSource = names, Width = 168, Height = 36, MinHeight = 36, IsEnabled = !archived, FontSize = 13.5,
-            ItemTemplate = new Avalonia.Controls.Templates.FuncDataTemplate<string>((name, _) =>
-            {
-                // The words' ink sits a little above the middle of their line, so the dot is lifted a pixel to read as level with them.
-                var dot = name == "No account" ? NoteParts.Dot(model, null) : NoteParts.Dot(model, name); dot.Margin = new Thickness(0, 0, 0, 2);
-                return Ui.Horizontal(dot, new TextBlock { Text = name, VerticalAlignment = VerticalAlignment.Center });
-            }) };
+        var accounts = new ChoiceStrip { Name = "PageAccount", Look = ChoiceLook.Chips, ItemsSource = names, IsEnabled = !archived,
+            DotFor = shown => shown == "No account" ? null : model.Accounts.FirstOrDefault(x => x.Name.Equals(shown, StringComparison.OrdinalIgnoreCase)) is { } found ? Ui.Visible(found.Colour) : null };
         accounts.SelectedItem = account is null ? "No account" : names.FirstOrDefault(n => n.Equals(account, StringComparison.OrdinalIgnoreCase)) ?? "No account";
         accounts.SelectionChanged += (_, _) => account = accounts.SelectedItem is string chosen && chosen != "No account" ? chosen : null;
         return accounts;

@@ -90,7 +90,7 @@ public sealed class SetupTests
             Assert.Equal(TimeSpan.FromHours(8.5), model.Engine.Schedule.Shifts[DayOfWeek.Monday].Start);
             // Step 3: decimal hours and a week that starts on Sunday.
             Settle(window);
-            Press(window, "SetupDecimal"); Find<ComboBox>(window, "SetupWeekStart").SelectedItem = "Sunday";
+            Press(window, "SetupDecimal"); Find<ChoiceStrip>(window, "SetupWeekStart").SelectedItem = "Sunday";
             Press(window, "SetupNext");
             Assert.True(model.DecimalHours); Assert.Equal(DayOfWeek.Sunday, model.WeekStartsOn);
             // Step 4 finishes it, with the pill drawn for show.

@@ -111,7 +111,7 @@ public sealed class NoteDetailsTests
         {
             model.SelectNote(id); Settle(window);
             Assert.Contains(Find<Button>(window, "DetailsNoteReminder").GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "No reminder");
-            Find<ComboBox>(window, "DetailsNoteAccount").SelectedItem = "Account two"; Settle(window); Assert.Equal("Account two", model.Notes.AccountOf(model.Notes.Find(id)!));
+            Find<ChoiceStrip>(window, "DetailsNoteAccount").SelectedItem = "Account two"; Settle(window); Assert.Equal("Account two", model.Notes.AccountOf(model.Notes.Find(id)!));
             Click(window, "DetailsNoteImportant"); Assert.True(NotesModel.IsImportant(model.Notes.Find(id)!)); Assert.Equal(id, model.SelectedNoteId); // Still selected, the box follows.
             Assert.Equal("Ring the bank", Find<TextBox>(window, "DetailsNoteWords").Text);
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => b.Name == "DetailsNoteDone");

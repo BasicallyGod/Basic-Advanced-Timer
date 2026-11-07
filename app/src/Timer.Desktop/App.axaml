@@ -432,6 +432,10 @@
     <Style Selector="Button.ctl:pressed /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Well}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /></Style>
     <Style Selector="Button.ctl:disabled"><Setter Property="Opacity" Value="0.5" /></Style>
     <Style Selector="Button.ctl:disabled /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="BoxShadow" Value="none" /><Setter Property="Background" Value="Transparent" /><Setter Property="Foreground" Value="{DynamicResource Muted}" /></Style>
+    <!-- Chips of a ChoiceStrip: raised keys whose lamp, not their fill, says which is chosen. -->
+    <Style Selector="Button.ctl.chip"><Setter Property="Height" Value="30" /><Setter Property="Padding" Value="11,0,12,0" /><Setter Property="CornerRadius" Value="11" /><Setter Property="Foreground" Value="{DynamicResource Muted}" /></Style>
+    <Style Selector="Button.ctl.chip.more"><Setter Property="Padding" Value="12,0" /></Style>
+    <Style Selector="Button.ctl.chip:pointerover TextBlock"><Setter Property="Foreground" Value="{DynamicResource Ink}" /></Style>
     <Style Selector="Button.ctl.small"><Setter Property="CornerRadius" Value="9" /><Setter Property="Padding" Value="11,0" /><Setter Property="FontSize" Value="12.5" /></Style>
     <Style Selector="Button.ctl.accentOutline"><Setter Property="BorderBrush" Value="{DynamicResource AccentLit}" /><Setter Property="Foreground" Value="{DynamicResource AccentText}" /><Setter Property="BorderThickness" Value="1.5" /></Style>
     <Style Selector="Button.ctl.accentOutline /template/ ContentPresenter#PART_ContentPresenter, Button.ctl.accentOutline:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="BorderBrush" Value="{DynamicResource AccentLit}" /><Setter Property="Foreground" Value="{DynamicResource AccentText}" /></Style>

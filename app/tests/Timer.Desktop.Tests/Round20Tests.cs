@@ -98,7 +98,7 @@ public sealed class Round20Tests
         try
         {
             Click(window, "NotesTab"); model.Notes.AddMeeting(model.Engine.Now.Date, TimeSpan.FromHours(9), TimeSpan.FromHours(10), "Stand-up", null, RepeatChoice.None); var page = window.GetVisualDescendants().OfType<NotesPage>().Single(); page.OpenNote(model.Notes.MeetingsOn(model.Engine.Now.Date).First().Id); Dispatcher.UIThread.RunJobs();
-            foreach (var name in new[] { "PageAccount", "PageRepeat" }) { var box = Find<ComboBox>(window, name); Assert.Equal(box.Padding.Top, box.Padding.Bottom); Assert.Equal(Avalonia.Layout.VerticalAlignment.Center, box.VerticalContentAlignment); }
+            foreach (var name in new[] { "PageAccount", "PageRepeat" }) Assert.NotNull(Find<ChoiceStrip>(window, name)); // chips and segments, no drop-down padding to match any more
         }
         finally { window.Close(); }
     }

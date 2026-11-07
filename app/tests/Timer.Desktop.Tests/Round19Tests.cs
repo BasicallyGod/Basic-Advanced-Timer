@@ -148,7 +148,7 @@ public sealed class Round19Tests
             Click(window, "NoteEdit_" + id); // Pressing the words selects the note, and Details edits it.
             Assert.Equal(id, model.SelectedNoteId); Assert.Equal("Note", Find<Border>(window, "DetailsKind").GetVisualDescendants().OfType<TextBlock>().Single().Text);
             var words = Find<TextBox>(window, "DetailsNoteWords"); Assert.Equal("Ring the bank", words.Text);
-            Assert.Equal("Account one", Find<ComboBox>(window, "DetailsNoteAccount").SelectedItem); Assert.Contains(Find<Button>(window, "DetailsNoteReminder").GetVisualDescendants().OfType<TextBlock>(), t => t.Text!.Contains("15:00"));
+            Assert.Equal("Account one", Find<ChoiceStrip>(window, "DetailsNoteAccount").SelectedItem); Assert.Contains(Find<Button>(window, "DetailsNoteReminder").GetVisualDescendants().OfType<TextBlock>(), t => t.Text!.Contains("15:00"));
             words.Text = "Ring the bank back"; words.RaiseEvent(new Avalonia.Input.KeyEventArgs { RoutedEvent = Avalonia.Input.InputElement.KeyDownEvent, Key = Avalonia.Input.Key.Enter }); Settle(window);
             var note = model.Notes.All.Single(); Assert.Equal(id, note.Id);
             Assert.Equal("Ring the bank back", model.Notes.Text(note)); Assert.Equal("Account one", model.Notes.AccountOf(note)); Assert.Equal(Day.AddHours(15), NotesModel.ReminderOf(note));

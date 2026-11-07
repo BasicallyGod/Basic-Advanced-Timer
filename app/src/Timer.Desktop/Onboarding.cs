@@ -33,7 +33,7 @@ public sealed class OnboardingView : Grid
     private TextBox startBox = new(), endBox = new(), breakBox = new();
     private readonly List<(DayOfWeek Day, CheckBox Box)> dayBoxes = new();
     private bool customHours, decimalChoice;
-    private ComboBox weekStartBox = new();
+    private ChoiceStrip weekStartBox = new();
     private Button hoursTile = null!, decimalTile = null!;
     public event Action? Finished;
 
@@ -239,7 +239,7 @@ public sealed class OnboardingView : Grid
         panel.Children.Add(tiles);
         Mark();
         panel.Children.Add(Ui.Text("Your week starts on", 12, "muted"));
-        weekStartBox = new ComboBox { Name = "SetupWeekStart", ItemsSource = new[] { "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday" }, SelectedItem = model.WeekStartsOn.ToString(), Width = 200, HorizontalAlignment = HorizontalAlignment.Left };
+        weekStartBox = new ChoiceStrip { Name = "SetupWeekStart", Look = ChoiceLook.Days, ItemsSource = new[] { "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday" }, SelectedItem = model.WeekStartsOn.ToString(), ShortLabel = d => d[..3], HorizontalAlignment = HorizontalAlignment.Left };
         panel.Children.Add(weekStartBox);
         return panel;
     }

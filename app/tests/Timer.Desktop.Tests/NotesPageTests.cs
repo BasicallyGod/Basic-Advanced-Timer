@@ -174,8 +174,9 @@ public sealed class NotesPageTests
         {
             Click(window, "NotesTab"); Click(window, "PageNoteOpen_" + IdOf(model, "Client call"));
             double Mid(Control c) => c.TranslatePoint(new Point(0, c.Bounds.Height / 2), window)!.Value.Y;
-            var day = Find<Button>(window, "PageWhen"); var start = Find<TextBox>(window, "PageStart"); var end = Find<TextBox>(window, "PageEnd"); var repeat = Find<ComboBox>(window, "PageRepeat"); var account = Find<ComboBox>(window, "PageAccount");
-            foreach (var c in new Control[] { start, end, repeat, account }) Assert.Equal(Mid(day), Mid(c), 4);
+            var day = Find<Button>(window, "PageWhen"); var start = Find<TextBox>(window, "PageStart"); var end = Find<TextBox>(window, "PageEnd"); var repeat = Find<ChoiceStrip>(window, "PageRepeat"); var account = Find<ChoiceStrip>(window, "PageAccount");
+            Assert.NotNull(repeat); Assert.NotNull(account); // chips and segments may wrap onto a second line
+            foreach (var c in new Control[] { start, end }) Assert.Equal(Mid(day), Mid(c), 4);
             Assert.Equal("14:00", start.Text); Assert.Equal("15:00", end.Text);
             Assert.Equal("Start, HH:mm", ToolTip.GetTip(start)?.ToString());
         }

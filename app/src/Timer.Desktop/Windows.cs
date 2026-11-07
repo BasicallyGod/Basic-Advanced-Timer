@@ -347,7 +347,7 @@ public sealed class WindowCoordinator
 public sealed class DashboardWindow : Window
 {
     /// <summary>The dashboard's fixed size, before the room kept around it for its shadow: the page keeps the 982 pixels it had, and the sidebar's width is added to it.</summary>
-    public const double DashboardWidth = 1100 - 76 + Sidebar.Width, DashboardHeight = 760;
+    public const double DashboardWidth = 1100 - 76 + Sidebar.Width, DashboardHeight = 800;
     public Action? OpenPill { get; set; }
     private readonly TimerModel model;
     private readonly WindowSizeGuard sizeGuard;
