@@ -71,7 +71,7 @@ public sealed class StatusFace : StackPanel
     /// <summary>The pill's account box (only a dot and a chevron: the name is its tooltip and the list) and the day clock's box are these widths, so the pill keeps one size whatever the time.</summary>
     public const double SelectorWidth = 50;
     /// <summary>The display window is as tall as the well beside it, with its digits 28 tall and the count's 15; the count's column is 24 wide.</summary>
-    public const double DisplayHeight = 52, CountDigitHeight = 15, CountColumn = 24, DisplayPadding = 10;
+    public const double DisplayHeight = 52, DisplayRadius = 14, CountDigitHeight = 15, CountColumn = 24, DisplayPadding = 10;
     /// <summary>There are no dividers: the parts of the display are set apart by these gaps (the LED to the clock, the clock to the count, the count to the name, the name to the play tag).</summary>
     public const double LedGap = 12, ClockCountGap = 14, CountNameGap = 12, NameTagGap = 8;
     /// <summary>The window of the sidebar and the compact pill, which stop at the count: padding, the LED, the clock and the count's column.</summary>
@@ -129,7 +129,7 @@ public sealed class StatusFace : StackPanel
     public StatusFace(TimerModel model, string prefix, string breakName, string clockTip, Action clockClick, Action circleClick, Action accountsClick, bool sidebar = false, Action? alertsClick = null)
     {
         this.model = model; this.clockTip = clockTip; Sidebar = sidebar;
-        Spacing = 0; HorizontalAlignment = HorizontalAlignment.Center; if (sidebar) { Spacing = 8; HorizontalAlignment = HorizontalAlignment.Stretch; } else { Orientation = Orientation.Horizontal; VerticalAlignment = VerticalAlignment.Center; }
+        Spacing = sidebar ? 8 : 0;
         // The state LED is a capsule set into the display, like a segment: an empty groove when idle, inlaid in the state's colour when not.
         stateLight = new Border { Name = prefix + "StateLight", Width = 6, Height = 14, CornerRadius = new CornerRadius(3.5), OpacityMask = Honeycomb.Brush };
         // The clock opens the dashboard (and collapses it again), as it always has; it is one width whatever the time.
@@ -156,7 +156,12 @@ public sealed class StatusFace : StackPanel
         var inside = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center, Spacing = 0 };
         nameSpacer = Spacer(CountNameGap); tagSpacer = Spacer(NameTagGap);
         inside.Children.Add(ledHost); inside.Children.Add(Spacer(LedGap)); inside.Children.Add(ClockButton); inside.Children.Add(Spacer(ClockCountGap)); inside.Children.Add(countHost);
-        displayBox = new Border { Name = prefix + "Display", Height = DisplayHeight, CornerRadius = new CornerRadius(14), Padding = new Thickness(DisplayPadding, 0), Child = inside, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        displayBox = new Border
+        {
+            Name = prefix + "Display", Height = DisplayHeight, CornerRadius = new CornerRadius(DisplayRadius),
+            Padding = new Thickness(DisplayPadding, 0), Child = inside,
+            HorizontalAlignment = sidebar ? HorizontalAlignment.Center : HorizontalAlignment.Stretch
+        };
         displayBox.Bind(Border.BackgroundProperty, displayBox.GetResourceObservable("DisplayWell"));
         // The primary control carries the running account's initials, and pauses or resumes. The initials give way to the symbol under the pointer.
         glyphBox.Child = glyph; glyph.Fixed = Brushes.Black;

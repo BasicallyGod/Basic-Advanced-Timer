@@ -296,8 +296,11 @@ public sealed class OnboardingView : Grid
     {
         var face = new StatusFace(model, "Setup", "SetupBreak", "", () => { }, () => { }, () => { });
         face.Refresh();
-        face.Margin = new Thickness(PillWindow.InsetLeft - PillWindow.EdgeThickness, 0, PillWindow.InsetRight - PillWindow.EdgeThickness, 0); face.HorizontalAlignment = HorizontalAlignment.Left;
-        var card = new Border { Name = "SetupPill", Width = PillWindow.PillWidth, Height = PillWindow.PillHeight, CornerRadius = new CornerRadius(PillWindow.PillRadius), BorderThickness = new Thickness(PillWindow.EdgeThickness), Child = face, IsHitTestVisible = false, Focusable = false };
+        var card = new Border
+        {
+            Name = "SetupPill", Width = PillWindow.PillWidth, Height = PillWindow.PillHeight, CornerRadius = new CornerRadius(PillWindow.PillRadius),
+            BorderThickness = new Thickness(PillWindow.EdgeThickness), Padding = PillWindow.BezelPadding, Child = face, IsHitTestVisible = false, Focusable = false
+        };
         card.Classes.Add("surface");
         Avalonia.Automation.AutomationProperties.SetAccessibilityView(card, Avalonia.Automation.AccessibilityView.Raw);
         card.AttachedToVisualTree += (_, _) => { foreach (var button in face.GetVisualDescendants().OfType<Button>()) { button.IsTabStop = false; button.Focusable = false; } };

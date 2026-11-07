@@ -44,10 +44,11 @@ public sealed class HorizontalPillTests
             Assert.Equal(X(primary), X(brk), 0.5);
             var display = Find<Border>(pill, "PillDisplay");
             foreach (var zone in new Control[] { primary, accounts, brk }) Assert.True(zone.GetVisualAncestors().Contains(display));
-            // Everything is centred on the card's height, and the bezel is the same all round.
-            Assert.True(Math.Abs(Y(display) + display.Bounds.Height / 2 - surface.Bounds.Height / 2) <= 1);
-            Assert.InRange(X(display), PillWindow.InsetLeft - 3, PillWindow.InsetLeft + 1);
-            Assert.InRange(surface.Bounds.Width - (X(display) + display.Bounds.Width), PillWindow.InsetRight - 3, PillWindow.InsetRight + 1);
+            Assert.Equal(PillWindow.BezelWidth, X(display), 0.5);
+            Assert.Equal(X(display), surface.Bounds.Width - X(display) - display.Bounds.Width, 0.5);
+            Assert.Equal(Y(display), surface.Bounds.Height - Y(display) - display.Bounds.Height, 0.5);
+            Assert.Equal(X(display), Y(display), 0.5);
+            Assert.Equal(PillWindow.BezelWidth, surface.CornerRadius.TopLeft - display.CornerRadius.TopLeft);
         }
         finally { pill.Close(); }
     }
