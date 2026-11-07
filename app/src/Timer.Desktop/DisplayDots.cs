@@ -305,15 +305,30 @@ public sealed class SegmentName : SteppedControl
     public static string ForAccount(string name, int number) => Normalise(name) ?? "ACCT " + (number + 1).ToString("00");
 
     private string text = "";
-    private int offset, hold; private double stepClock; private bool atEnd;
-    /// <summary>How many steps a long name rests at each end of its run: about a second at the start and at the end.</summary>
-    public const int RestSteps = 3;
-    public string Text { get => text; set { if (value == text) return; text = value; Restart(); InvalidateVisual(); Wake(); } }
-    /// <summary>How many characters the text is scrolled along.</summary>
-    public int Offset => offset;
+    private const string ScrollGap = "   ";
+    private string ribbon;
+    private int offset;
+    private double stepClock;
+    public string Text
+    {
+        get => text;
+        set
+        {
+            if (value == text) return;
+            text = value;
+            // Append just enough of the next repeat to read a full window across the join.
+            ribbon = Overflows ? text + ScrollGap + text[..(VisibleCells - 1)] : text.PadRight(VisibleCells);
+            offset = 0;
+            stepClock = 0;
+            InvalidateVisual();
+            Wake();
+        }
+    }
     public int VisibleCells { get; }
     public bool Overflows => text.Length > VisibleCells;
-    /// <summary>Whether the name is on the move: a name too long for its cells always runs along (rests at each end, then goes round again) unless less motion is asked for.</summary>
+    /// <summary>The cells currently visible, including the gap between repeats.</summary>
+    public string VisibleText => ribbon.Substring(Scrolling ? offset : 0, VisibleCells);
+    /// <summary>Long names loop continuously unless reduced motion is enabled.</summary>
     public bool Scrolling => Animating;
     public Color Colour { get; set; } = Colors.Gray;
     public SegmentName() : this(Cells) { }
@@ -321,25 +336,20 @@ public sealed class SegmentName : SteppedControl
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(cells);
         VisibleCells = cells;
+        ribbon = new string(' ', cells);
         Width = cells * CellWidth + CellHeight * Slant;
         Height = CellHeight;
         IsHitTestVisible = false;
     }
-    private void Restart() { offset = 0; hold = RestSteps; stepClock = 0; atEnd = false; }
-    /// <summary>Starts the run again from the first characters.</summary>
-    public void Scroll() { Restart(); InvalidateVisual(); Wake(); }
     protected override bool Animating => Overflows && !Motion.Reduced;
     protected override void Advance(double milliseconds)
     {
         if (!Animating) { offset = 0; return; }
         stepClock += milliseconds;
-        while (stepClock >= StepMilliseconds)
-        {
-            stepClock -= StepMilliseconds;
-            if (hold > 0) { hold--; continue; }
-            if (atEnd) { offset = 0; atEnd = false; hold = RestSteps; }
-            else if (offset < text.Length - VisibleCells) { offset++; if (offset == text.Length - VisibleCells) { atEnd = true; hold = RestSteps; } }
-        }
+        if (stepClock < StepMilliseconds) return;
+        var steps = Math.Floor(stepClock / StepMilliseconds);
+        stepClock %= StepMilliseconds;
+        offset = (int)((offset + steps) % (text.Length + ScrollGap.Length));
     }
     public override void Render(DrawingContext context)
     {
@@ -348,7 +358,7 @@ public sealed class SegmentName : SteppedControl
         var lit = new Pen(new SolidColorBrush(Colour), Thickness, lineCap: PenLineCap.Round);
         // On a dark theme each lit bar gives off a soft glow, as the mock draws it: the same bar again, wider and faint, under it.
         var glow = SoftTint.IsDark(this) ? new Pen(new SolidColorBrush(SoftTint.WithAlpha(Colour, .2)), Thickness * 3.2, lineCap: PenLineCap.Round) : null;
-        var shown = text.Length <= VisibleCells ? text.PadRight(VisibleCells) : text.Substring(Math.Min(offset, text.Length - VisibleCells), VisibleCells);
+        var shown = VisibleText;
         // The glow is drawn first and outside the honeycomb, so it fills the gaps of the mesh with a soft light; the bars themselves are drawn through the mesh.
         if (glow is not null)
             for (var i = 0; i < VisibleCells; i++) DrawCell(context, i * CellWidth + 1, Font.TryGetValue(shown[i], out var on0) ? on0 : "", unlit, lit, glow, glowPass: true);

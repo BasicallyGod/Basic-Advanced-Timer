@@ -270,17 +270,26 @@ public sealed class PillTests
     }
 
     [AvaloniaFact]
-    public void ALongNameAlwaysRunsAlongAndRestsAtEachEndAndAShortOneNever()
+    public void ALongNameScrollsThroughTheGapIntoItsNextRepeat()
     {
         using var motion = new EnabledMotionScope();
         var run = new SegmentName { Text = "ABCDEFGHIJ" };
-        Assert.True(run.Scrolling); // No pointer or recording needed: a name that doesn't fit is always on the move.
-        run.Step(SegmentName.StepMilliseconds * SegmentName.RestSteps + 1); Assert.Equal(0, run.Offset); // It rests at the start first,
-        run.Step(SegmentName.StepMilliseconds * 4); Assert.Equal(4, run.Offset); // runs along to the last characters,
-        run.Step(SegmentName.StepMilliseconds * SegmentName.RestSteps); Assert.Equal(4, run.Offset); // rests there,
-        run.Step(SegmentName.StepMilliseconds); Assert.Equal(0, run.Offset); Assert.True(run.Scrolling); // and goes round again.
+        Assert.True(run.Scrolling);
+        Assert.Equal("ABCDEF", run.VisibleText);
+        run.Step(SegmentName.StepMilliseconds * 7);
+        Assert.Equal("HIJ   ", run.VisibleText);
+        run.Step(SegmentName.StepMilliseconds);
+        Assert.Equal("IJ   A", run.VisibleText);
+        run.Step(SegmentName.StepMilliseconds * 4);
+        Assert.Equal(" ABCDE", run.VisibleText);
+        run.Step(SegmentName.StepMilliseconds);
+        Assert.Equal("ABCDEF", run.VisibleText);
+        run.Step(SegmentName.StepMilliseconds);
+        Assert.Equal("BCDEFG", run.VisibleText);
         var shortRun = new SegmentName { Text = "ABC" }; Assert.False(shortRun.Scrolling);
-        Motion.Override = true; try { Assert.False(run.Scrolling); } finally { Motion.Override = false; } // Less motion asked for: it stands still on its first characters.
+        Motion.Override = true;
+        try { Assert.False(run.Scrolling); Assert.Equal("ABCDEF", run.VisibleText); }
+        finally { Motion.Override = false; }
     }
 
     [AvaloniaFact]
@@ -291,8 +300,10 @@ public sealed class PillTests
         Assert.False(run.Scrolling);
         run.Text = "ABCDEFGHIJKL";
         Assert.True(run.Scrolling);
-        run.Step(SegmentName.StepMilliseconds * (SegmentName.RestSteps + 2));
-        Assert.Equal(2, run.Offset);
+        run.Step(SegmentName.StepMilliseconds * 2);
+        Assert.Equal("CDEFGHIJKL", run.VisibleText);
+        run.Text = "NEW NAME";
+        Assert.Equal("NEW NAME  ", run.VisibleText);
     }
 
     [AvaloniaFact]
