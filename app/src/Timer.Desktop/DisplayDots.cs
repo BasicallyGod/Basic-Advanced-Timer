@@ -63,118 +63,169 @@ public abstract class SteppedControl : Control
     }
 }
 
-/// <summary>A grid of round dots, each with its own brightness: unlit ones faint, lit ones in the glyph's colour with, on a dark theme, a soft glow round them.</summary>
-public abstract class DotMatrix : SteppedControl
+/// <summary>
+/// The play, pause and break symbols as a vacuum-fluorescent display draws them: solid phosphor strokes seen through the fine honeycomb of the grid anode, with a soft bloom.
+/// Every glyph is drawn in a 28 by 28 box from true curves (the same drawing as option H on the Design canvas), so it stays crisp at any scale.
+/// </summary>
+public abstract class VfdGlyph : SteppedControl
 {
-    /// <summary>The distance between dot centres; the dots are a third of it in radius.</summary>
-    public const double Pitch = 3.5;
-    public int Columns { get; }
-    public int Rows { get; }
+    public const double Size = 28, GhostAlpha = 0.17;
     public Color Colour { get; set; } = Colors.Green;
-    protected DotMatrix(int columns, int rows) { Columns = columns; Rows = rows; Width = columns * Pitch; Height = rows * Pitch; IsHitTestVisible = false; }
-    /// <summary>How lit the dot at this row and column is, 0 to 1.</summary>
-    public abstract double Level(int row, int col);
-    public override void Render(DrawingContext context)
+    protected VfdGlyph() { Width = Height = Size; IsHitTestVisible = false; }
+
+    // The mesh: hexagonal cells a little smaller than their lattice, so the gaps between them are the dark lines of the grid. Used as an opacity mask on the strokes.
+    private static readonly Lazy<IBrush> Mesh = new(() =>
     {
-        var ink = Ui.ThemeColour(this, "Ink", Colors.Gray); var dark = SoftTint.IsDark(this);
-        var unlit = new SolidColorBrush(SoftTint.WithAlpha(ink, .1));
-        var r = Pitch * .33;
-        for (var row = 0; row < Rows; row++)
-            for (var col = 0; col < Columns; col++)
-            {
-                var level = Math.Clamp(Level(row, col), 0, 1);
-                var centre = new Point((col + .5) * Pitch, (row + .5) * Pitch);
-                context.DrawEllipse(unlit, null, centre, r, r);
-                // The glow the lit dots give off, as the mock draws it: a wider, fainter disc under the dot, on a dark theme only.
-                if (level > 0 && dark) context.DrawEllipse(new SolidColorBrush(SoftTint.WithAlpha(Colour, .22 * level)), null, centre, r * 2.1, r * 2.1);
-                if (level > 0) context.DrawEllipse(new SolidColorBrush(SoftTint.WithAlpha(Colour, level)), null, centre, r, r);
-            }
+        const double s = 0.74, inset = 0.93; var w = Math.Sqrt(3) * s; var g = new StreamGeometry();
+        using (var c = g.Open())
+            for (var row = 0; row * 1.5 * s < Size + 2 * s; row++)
+                for (var col = -1; col * w < Size + w; col++)
+                {
+                    double cx = col * w + (row % 2 == 1 ? w / 2 : 0), cy = s + row * 1.5 * s, r = s * inset;
+                    for (var i = 0; i < 6; i++)
+                    {
+                        var a = Math.PI / 2 + i * Math.PI / 3; var pt = new Point(cx + r * Math.Cos(a), cy - r * Math.Sin(a));
+                        if (i == 0) c.BeginFigure(pt, true); else c.LineTo(pt);
+                    }
+                    c.EndFigure(true);
+                }
+        var group = new DrawingGroup();
+        group.Children.Add(new GeometryDrawing { Brush = Brushes.Transparent, Geometry = new RectangleGeometry(new Rect(0, 0, Size, Size)) });
+        group.Children.Add(new GeometryDrawing { Brush = Brushes.White, Geometry = g });
+        return new DrawingBrush(group) { Stretch = Stretch.None, AlignmentX = AlignmentX.Left, AlignmentY = AlignmentY.Top, TileMode = TileMode.None };
+    });
+
+    protected static StreamGeometry Build(Action<StreamGeometryContext> draw) { var g = new StreamGeometry(); using (var c = g.Open()) draw(c); return g; }
+    protected static StreamGeometry Poly(bool closed, params (double X, double Y)[] pts) => Build(c => { c.BeginFigure(new Point(pts[0].X, pts[0].Y), false); for (var i = 1; i < pts.Length; i++) c.LineTo(new Point(pts[i].X, pts[i].Y)); c.EndFigure(closed); });
+    protected static StreamGeometry Fill(params (double X, double Y)[] pts) => Build(c => { c.BeginFigure(new Point(pts[0].X, pts[0].Y), true); for (var i = 1; i < pts.Length; i++) c.LineTo(new Point(pts[i].X, pts[i].Y)); c.EndFigure(true); });
+
+    /// <summary>The same drawing under a scale about the box's middle (the tag and the tile are drawn at 85 per cent so every glyph has room round it).</summary>
+    protected static Matrix About(double cx, double cy, double scale) => Matrix.CreateTranslation(-cx, -cy) * Matrix.CreateScale(scale, scale) * Matrix.CreateTranslation(Size / 2, Size / 2);
+
+    private double Glow => SoftTint.IsDark(this) ? 1 : .45;
+    /// <summary>Draws strokes (or a fill) with the bloom under them; the honeycomb is cut through the strokes themselves by the mask the caller pushed.</summary>
+    protected void Ink(DrawingContext context, Geometry geometry, double width, double alpha, bool filled = false)
+    {
+        if (alpha <= .01) return;
+        var brush = new SolidColorBrush(SoftTint.WithAlpha(Colour, alpha));
+        if (!filled) context.DrawGeometry(null, new Pen(brush, width, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), geometry);
+        else context.DrawGeometry(brush, new Pen(brush, .5, lineJoin: PenLineJoin.Round), geometry);
     }
+    protected void Bloom(DrawingContext context, Geometry geometry, double width, double alpha, bool filled = false)
+    {
+        if (alpha < .4 || Glow <= 0) return;
+        foreach (var (extra, strength) in new[] { (3.6, .14), (1.6, .26) })
+            context.DrawGeometry(filled ? new SolidColorBrush(SoftTint.WithAlpha(Colour, strength * Glow * alpha)) : null,
+                new Pen(new SolidColorBrush(SoftTint.WithAlpha(Colour, strength * Glow * alpha)), width + extra, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), geometry);
+    }
+    protected IDisposable Meshed(DrawingContext context) => context.PushOpacityMask(Mesh.Value, new Rect(0, 0, Size, Size));
 }
 
-/// <summary>The play or pause symbol. A change wipes across column by column (40 ms a column, then a 140 ms fade), or swaps at once with less motion asked for.</summary>
-public sealed class TransportGlyph : DotMatrix
+/// <summary>The play or pause symbol: a pentagon tag with a triangle or two bars inside it. A change cross-fades between the two, or swaps at once with less motion asked for.</summary>
+public sealed class TransportGlyph : VfdGlyph
 {
-    public const int Cells = 7;
-    public TransportGlyph() : base(Cells, Cells) { }
-    private static readonly string[] Play = { "1000000", "1110000", "1111100", "1111111", "1111100", "1110000", "1000000" };
-    private static readonly string[] Pause = { "0110110", "0110110", "0110110", "0110110", "0110110", "0110110", "0110110" };
-    public const double ColumnMilliseconds = 40, FadeMilliseconds = 140;
-    private bool pause; private string[] from = Play; private double elapsed = double.PositiveInfinity;
+    public const double WipeMilliseconds = 180;
+    private static readonly StreamGeometry Tag = Poly(true, (2.6, 8.2), (17, 8.2), (25.4, 14), (17, 19.8), (2.6, 19.8));
+    private static readonly StreamGeometry Triangle = Fill((7.2, 10.8), (13.2, 14), (7.2, 17.2));
+    private static readonly StreamGeometry Bars = Build(c => { foreach (var x in new[] { 6.1, 10.5 }) { c.BeginFigure(new Point(x, 11), true); c.LineTo(new Point(x + 2.4, 11)); c.LineTo(new Point(x + 2.4, 17)); c.LineTo(new Point(x, 17)); c.EndFigure(true); } });
+    private bool pause; private double progress;
     /// <summary>Whether the pause bars are showing (or on their way); otherwise the play triangle.</summary>
     public bool Paused => pause;
-    public static double WipeMilliseconds => (Cells - 1) * ColumnMilliseconds + FadeMilliseconds;
-    /// <summary>Shows the pause bars (true) or the play triangle (false), wiping between them unless <paramref name="instant"/>.</summary>
+    /// <summary>0 with the triangle showing, 1 with the bars, and between while one fades into the other.</summary>
+    public double Progress => progress;
+    /// <summary>Shows the pause bars (true) or the play triangle (false), fading between them unless <paramref name="instant"/>.</summary>
     public void Show(bool pauseBars, bool instant)
     {
         if (pauseBars == pause) return;
-        from = pause ? Pause : Play; pause = pauseBars;
-        elapsed = instant || Motion.Reduced || !this.IsAttachedToVisualTree() ? double.PositiveInfinity : 0;
+        pause = pauseBars;
+        if (instant || Motion.Reduced || !this.IsAttachedToVisualTree()) progress = pause ? 1 : 0;
         InvalidateVisual(); Wake();
     }
-    protected override bool Animating => elapsed < WipeMilliseconds;
-    protected override void Advance(double milliseconds) { if (elapsed < WipeMilliseconds) elapsed += milliseconds; }
-    public override double Level(int row, int col)
+    protected override bool Animating => progress != (pause ? 1 : 0);
+    protected override void Advance(double milliseconds) { var step = milliseconds / WipeMilliseconds; progress = pause ? Math.Min(1, progress + step) : Math.Max(0, progress - step); }
+    public override void Render(DrawingContext context)
     {
-        var to = pause ? Pause : Play;
-        var now = to[row][col] == '1' ? 1.0 : 0.0;
-        if (!Animating) return now;
-        var was = from[row][col] == '1' ? 1.0 : 0.0;
-        var p = Math.Clamp((elapsed - col * ColumnMilliseconds) / FadeMilliseconds, 0, 1);
-        return was + (now - was) * p;
+        using (context.PushTransform(About(Size / 2, Size / 2, .85)))
+        {
+            Bloom(context, Tag, 2.3, 1); Bloom(context, Triangle, 0, 1 - progress, true); Bloom(context, Bars, 0, progress, true);
+        }
+        using (Meshed(context))
+        using (context.PushTransform(About(Size / 2, Size / 2, .85)))
+        {
+            Ink(context, Tag, 2.3, 1); Ink(context, Triangle, 0, 1 - progress, true); Ink(context, Bars, 0, progress, true);
+        }
     }
 }
 
 /// <summary>
-/// The break mug, nine dots across and nine down: three wisps of steam, a blank row, then the mug with its handle. Its outline fills from the bottom up (70 ms a row) when a
-/// break starts and empties from the top down when it ends. The steam is always drawn, dim and still at rest and bright and tilting together (left, upright, right,
-/// upright, 330 ms a frame) while a break is on or the pointer is over the mug.
+/// The break mug: a tile broken at the top holding a cup with a ring handle, and three wisps of steam. The strokes are a faint ghost at rest and light up on a break; the steam is
+/// always drawn, and while a break is on (or the pointer is over the mug) its wisps take turns lighting, each fading as the next comes up.
 /// </summary>
-public sealed class CupGlyph : DotMatrix
+public sealed class CupGlyph : VfdGlyph
 {
-    public const int Size = 9, BodyTop = 4, BodyRows = 5;
-    // The mug as the mock draws it: a rim of seven dots, a wall down the left, a handle of three at the right and a base of five; three wisps of steam above it.
-    private static readonly string[] Cup = { "000000000", "000000000", "000000000", "000000000", "111111100", "100000111", "100000101", "100000110", "011111000" };
-    // Three wisps at columns 1, 3 and 5, the middle one tallest; they lean together left, upright, right, upright.
-    private static readonly string[][] Steam = { new[] { "001000000", "101010000", "010101000" }, new[] { "000100000", "010101000", "010101000" }, new[] { "000010000", "001010100", "010101000" }, new[] { "000100000", "010101000", "010101000" } };
-    public const double RowMilliseconds = 70, SteamMilliseconds = 330;
-    public CupGlyph() : base(Size, Size) { }
-    private bool on, steaming; private double fill; private double steamClock;
-    /// <summary>How many body rows are lit (0 to <see cref="BodyRows"/>), as of now.</summary>
-    public double FilledRows => fill;
-    /// <summary>The steam frame showing, 0 to 3 (1 while it stands still).</summary>
-    public int SteamFrame => Animated ? (int)(steamClock / SteamMilliseconds) % Steam.Length : 1;
+    public const double FadeMilliseconds = 260, TurnMilliseconds = 360;
+    public const int Wisps = 3;
+    private static readonly StreamGeometry Tile = Build(c =>
+    {
+        c.BeginFigure(new Point(6.2, 10.4), false); c.LineTo(new Point(4.8, 10.4)); c.QuadraticBezierTo(new Point(1.9, 10.4), new Point(1.9, 13.3)); c.LineTo(new Point(1.9, 23.5));
+        c.QuadraticBezierTo(new Point(1.9, 26.4), new Point(4.8, 26.4)); c.LineTo(new Point(23.2, 26.4)); c.QuadraticBezierTo(new Point(26.1, 26.4), new Point(26.1, 23.5));
+        c.LineTo(new Point(26.1, 13.3)); c.QuadraticBezierTo(new Point(26.1, 10.4), new Point(23.2, 10.4)); c.LineTo(new Point(21.8, 10.4)); c.EndFigure(false);
+    });
+    private static readonly StreamGeometry Cup = Build(c =>
+    {
+        c.BeginFigure(new Point(7.2, 15.2), false); c.LineTo(new Point(19.2, 15.2)); c.LineTo(new Point(19.2, 19.4)); c.CubicBezierTo(new Point(19.2, 21.9), new Point(17.7, 23.4), new Point(15.3, 23.4));
+        c.LineTo(new Point(11.1, 23.4)); c.CubicBezierTo(new Point(8.7, 23.4), new Point(7.2, 21.9), new Point(7.2, 19.4)); c.EndFigure(true);
+    });
+    private static readonly StreamGeometry Handle = Build(c => { c.BeginFigure(new Point(19.2, 16.4), false); c.CubicBezierTo(new Point(22.9, 15.8), new Point(22.9, 20.6), new Point(19.2, 20)); c.EndFigure(false); });
+    // Each wisp is two bows of an S: a quadratic and its smooth continuation, the middle one a little taller.
+    private static readonly StreamGeometry[] Steam = { Wisp(9.8, 1.8), Wisp(14, 2.5), Wisp(18.2, 1.8) };
+    private static StreamGeometry Wisp(double x, double step) => Build(c =>
+    {
+        c.BeginFigure(new Point(x, 9.4), false); c.QuadraticBezierTo(new Point(x - 1.5, 8), new Point(x, 6.6));
+        c.QuadraticBezierTo(new Point(x + 1.5, 6.6 - step * 0.5), new Point(x, 6.6 - step)); c.EndFigure(false);
+    });
+    private bool on, steaming; private double lit, clock;
     public bool On => on;
     /// <summary>Whether the steam is moving (on a break or under the pointer, with motion allowed).</summary>
     public bool Steaming => steaming;
     private bool Animated => steaming && !Motion.Reduced;
-    /// <summary>Sets whether a break is on (the mug full) and whether the steam rises (on a break, or under the pointer).</summary>
+    /// <summary>How lit the mug is, 0 (a faint ghost) to 1 (a break is on).</summary>
+    public double Lit => lit;
+    /// <summary>Sets whether a break is on and whether the steam rises (on a break, or under the pointer).</summary>
     public void Show(bool breakOn, bool steam, bool instant)
     {
         on = breakOn; steaming = steam;
-        if (instant || Motion.Reduced || !this.IsAttachedToVisualTree()) fill = on ? BodyRows : 0;
+        if (instant || Motion.Reduced || !this.IsAttachedToVisualTree()) lit = on ? 1 : 0;
         InvalidateVisual(); Wake();
     }
-    protected override bool Animating => (on && fill < BodyRows) || (!on && fill > 0) || Animated;
+    protected override bool Animating => lit != (on ? 1 : 0) || Animated;
     protected override void Advance(double milliseconds)
     {
-        var rows = milliseconds / RowMilliseconds;
-        if (on) fill = Math.Min(BodyRows, fill + rows); else fill = Math.Max(0, fill - rows);
-        if (Animated) steamClock += milliseconds;
+        var step = milliseconds / FadeMilliseconds; lit = on ? Math.Min(1, lit + step) : Math.Max(0, lit - step);
+        if (Animated) clock += milliseconds;
     }
-    public override double Level(int row, int col)
+    private double Body => GhostAlpha + (1 - GhostAlpha) * lit;
+    /// <summary>How bright wisp <paramref name="i"/> is now: a ghost at rest, and while steaming the one whose turn it is brightest and the others fading.</summary>
+    public double WispBrightness(int i)
     {
-        if (row >= BodyTop)
+        if (!Animated) return Body;
+        var dist = (((clock / TurnMilliseconds - i) % Wisps) + Wisps) % Wisps;
+        return GhostAlpha + (1 - GhostAlpha) * (.35 + .65 * lit) * Math.Max(.15, 1 - dist * .5);
+    }
+    public override void Render(DrawingContext context)
+    {
+        var shift = About(Size / 2, 18.4, .85);
+        using (context.PushTransform(shift))
         {
-            if (Cup[row][col] != '1') return 0;
-            // Rows fill from the base up, and empty from the rim down; an empty mug is its outline in a dimmer tone.
-            var rowsFromBottom = Size - 1 - row;
-            var lit = Math.Clamp(fill - rowsFromBottom, 0, 1);
-            return .5 + .5 * lit;
+            Bloom(context, Tile, 2.2, Body); Bloom(context, Cup, 2, Body); Bloom(context, Handle, 1.8, Body);
+            for (var i = 0; i < Wisps; i++) Bloom(context, Steam[i], 1.9, WispBrightness(i));
         }
-        if (row > 2) return 0;
-        // The steam is always there: dim and still at rest, bright and moving while it steams.
-        return Steam[SteamFrame][row][col] == '1' ? (Animated ? .9 : on ? .9 : .5) : 0;
+        using (Meshed(context))
+        using (context.PushTransform(shift))
+        {
+            Ink(context, Tile, 2.2, Body); Ink(context, Cup, 2, Body); Ink(context, Handle, 1.8, Body);
+            for (var i = 0; i < Wisps; i++) Ink(context, Steam[i], 1.9, WispBrightness(i));
+        }
     }
 }
 

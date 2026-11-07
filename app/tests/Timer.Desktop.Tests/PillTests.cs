@@ -219,12 +219,12 @@ public sealed class PillTests
         try
         {
             var cup = pill.GetVisualDescendants().OfType<CupGlyph>().Single(); var transport = pill.GetVisualDescendants().OfType<TransportGlyph>().Single();
-            Assert.False(cup.On); Assert.Equal(0, cup.FilledRows); Assert.False(transport.Paused);
+            Assert.False(cup.On); Assert.Equal(0, cup.Lit); Assert.False(transport.Paused);
             model.ToggleAccount("Account one"); Dispatcher.UIThread.RunJobs(); Assert.True(transport.Paused);
-            transport.Step(TransportGlyph.WipeMilliseconds + 1); Assert.Equal(1, transport.Level(0, 1)); Assert.Equal(0, transport.Level(0, 0)); // Bars at columns 1, 2, 4 and 5.
-            model.ToggleBreak(); Dispatcher.UIThread.RunJobs(); Assert.True(cup.On); cup.Step(CupGlyph.RowMilliseconds * CupGlyph.BodyRows + 1);
-            Assert.Equal(CupGlyph.BodyRows, cup.FilledRows); Assert.True(cup.Steaming); Assert.Equal(1, cup.Level(8, 2)); // The base of the mug is lit.
-            model.ToggleBreak(); Dispatcher.UIThread.RunJobs(); cup.Step(CupGlyph.RowMilliseconds * CupGlyph.BodyRows + 1); Assert.Equal(0, cup.FilledRows);
+            transport.Step(TransportGlyph.WipeMilliseconds + 1); Assert.Equal(1, transport.Progress); // The triangle has faded into the bars.
+            model.ToggleBreak(); Dispatcher.UIThread.RunJobs(); Assert.True(cup.On); cup.Step(CupGlyph.FadeMilliseconds + 1);
+            Assert.Equal(1, cup.Lit); Assert.True(cup.Steaming); // The mug is lit.
+            model.ToggleBreak(); Dispatcher.UIThread.RunJobs(); cup.Step(CupGlyph.FadeMilliseconds + 1); Assert.Equal(0, cup.Lit);
         }
         finally { pill.Close(); }
     }
@@ -260,9 +260,13 @@ public sealed class PillTests
         using var motion = new EnabledMotionScope();
         var cup = new CupGlyph(); cup.Show(false, false, true);
         Assert.False(cup.On); Assert.False(cup.Steaming);
-        Assert.True(cup.Level(0, 3) > 0 && cup.Level(1, 1) > 0 && cup.Level(1, 5) > 0); // Three wisps, dim and still above the mug,
-        Assert.True(cup.Level(4, 0) > 0 && cup.Level(5, 8) > 0); // as its rim and handle are.
-        cup.Show(true, true, true); Assert.True(cup.Level(2, 3) > .8); // Bright while a break is on.
+        Assert.All(Enumerable.Range(0, CupGlyph.Wisps), i => Assert.True(cup.WispBrightness(i) > 0)); // Three wisps, faint and still above the mug.
+        cup.Show(true, true, true); Assert.Equal(1, cup.Lit);
+        // Lit and steaming, the wisps take turns: one is brightest and they are not all the same.
+        Assert.True(Enumerable.Range(0, CupGlyph.Wisps).Select(cup.WispBrightness).Distinct().Count() > 1);
+        var first = Enumerable.Range(0, CupGlyph.Wisps).Select(i => cup.WispBrightness(i)).ToList(); cup.Step(CupGlyph.TurnMilliseconds);
+        var next = Enumerable.Range(0, CupGlyph.Wisps).Select(i => cup.WispBrightness(i)).ToList();
+        Assert.Equal(first.IndexOf(first.Max()) + 1, next.IndexOf(next.Max()) == 0 ? 3 : next.IndexOf(next.Max())); // The turn moves on to the next wisp.
     }
 
     [AvaloniaFact]
