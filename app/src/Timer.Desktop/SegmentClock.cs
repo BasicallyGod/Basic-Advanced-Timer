@@ -80,7 +80,8 @@ public sealed class SegmentRun : Control
     public bool Plain { get => GetValue(PlainProperty); set => SetValue(PlainProperty, value); }
     /// <summary>How large plain numerals are against the biggest that fit the run's height and cells (the seconds are drawn smaller and quiet).</summary>
     public double PlainScale { get => GetValue(PlainScaleProperty); set => SetValue(PlainScaleProperty, value); }
-    public SegmentRun() { IsHitTestVisible = false; ActualThemeVariantChanged += (_, _) => InvalidateVisual(); }
+    public SegmentRun() { IsHitTestVisible = false; OpacityMask = Honeycomb.Brush; ActualThemeVariantChanged += (_, _) => InvalidateVisual(); }
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change) { base.OnPropertyChanged(change); if (change.Property == PlainProperty) OpacityMask = Plain ? null : Honeycomb.Brush; }
     public string Text { get => GetValue(TextProperty); set => SetValue(TextProperty, value); }
     public double DigitHeight { get => GetValue(DigitHeightProperty); set => SetValue(DigitHeightProperty, value); }
     /// <summary>The theme colour the lit segments are drawn in, unless <see cref="Colour"/> is set.</summary>

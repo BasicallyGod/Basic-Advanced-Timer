@@ -75,9 +75,16 @@ public sealed class PillTests
             var zones = new[] { Find<Button>(pill, "PillDashboard"), Find<Button>(pill, "PillAlertsButton"), Find<Button>(pill, "PillPause"), pill.AccountsButton, Find<Button>(pill, "PillBreak") };
             Assert.All(zones, z => Assert.Contains("zone", z.Classes)); // One style gives the hover and pressed wash to all five.
             Assert.True(pill.TryFindResource("ZoneHover", pill.ActualThemeVariant, out _)); Assert.True(pill.TryFindResource("ZonePressed", pill.ActualThemeVariant, out _));
-            var display = Find<Border>(pill, "PillDisplay"); // And every divider in it is the same dotted column.
-            var dividers = display.GetVisualDescendants().OfType<EtchedDivider>().ToList(); Assert.Equal(3, dividers.Count);
-            Assert.All(dividers, d => { Assert.Equal(EtchedDivider.ColumnWidth, d.Bounds.Width, 0.5); Assert.Equal(EtchedDivider.ColumnHeight, d.Bounds.Height, 0.5); });
+            // There are no dividers: the display runs LED, clock, count, name, then the play tag and the mug, and the mug is as far from the right edge as the LED is from the left.
+            var display = Find<Border>(pill, "PillDisplay");
+            double X(Control c) => c.TranslatePoint(new Point(0, 0), display)!.Value.X;
+            var cupG = zones[4].GetVisualDescendants().OfType<CupGlyph>().Single(); var tagG = zones[2].GetVisualDescendants().OfType<TransportGlyph>().Single();
+            var led = Find<Border>(pill, "PillStateLight"); var clockZone = zones[0]; var count = zones[1]; var name = pill.AccountsButton; var play = zones[2]; var brk = zones[4];
+            Assert.True(X(led) < X(clockZone) && X(clockZone) < X(count) && X(count) < X(name) && X(name) < X(play) && X(play) < X(brk));
+            Assert.Equal(X(led), display.Bounds.Width - (X(cupG) + cupG.Bounds.Width), 1.5);
+            Assert.Equal(20, tagG.Bounds.Height, 0.5); Assert.Equal(SegmentName.CellHeight, tagG.Bounds.Height, 0.5); // The tag is as tall as the name.
+            var tileMiddle = cupG.TranslatePoint(new Point(0, cupG.Bounds.Height / 2), display)!.Value.Y; var tagMiddle = tagG.TranslatePoint(new Point(0, 10), display)!.Value.Y;
+            Assert.Equal(tagMiddle, tileMiddle, 0.5); // The mug's tile is level with the tag; only the steam rises above it.
         }
         finally { pill.Close(); }
     }
@@ -197,14 +204,14 @@ public sealed class PillTests
     }
 
     [AvaloniaFact]
-    public void ThePlayZoneTheNameAndTheCupRunOnAlongTheDisplayInThatOrder()
+    public void TheNameThenThePlayZoneAndTheCupRunOnAlongTheDisplayInThatOrder()
     {
         var model = Model(); var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs(); using var frame = pill.CaptureRenderedFrame();
         try
         {
             double X(Control c) => c.TranslatePoint(default, pill)!.Value.X;
             var primary = Find<Button>(pill, "PillPause"); var brk = Find<Button>(pill, "PillBreak"); var clock = Find<Button>(pill, "PillDashboard");
-            Assert.True(X(clock) < X(primary)); Assert.True(X(primary) < X(pill.AccountsButton)); Assert.True(X(pill.AccountsButton) < X(brk));
+            Assert.True(X(clock) < X(pill.AccountsButton)); Assert.True(X(pill.AccountsButton) < X(primary)); Assert.True(X(primary) < X(brk)); // The name, then the play tag and the mug.
             Assert.Equal(StatusFace.TransportZone, primary.Bounds.Width, 0.5); Assert.Equal(StatusFace.BreakZone, brk.Bounds.Width, 0.5);
             Assert.Equal(PillWindow.PillHeight, Find<Border>(pill, "PillSurface").Bounds.Height, 0.5);
         }
