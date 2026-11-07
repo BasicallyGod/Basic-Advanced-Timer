@@ -337,4 +337,42 @@ public sealed class PillAlertsTests
         }
         finally { window.Close(); }
     }
+
+    [AvaloniaFact]
+    public void EveryPointOfTheListBelongsToARow_SoNoPressLandsInADeadStrip()
+    {
+        var model = Demo(); var (window, card) = Host(model);
+        try
+        {
+            card.Open(); Settle(window);
+            var rows = window.GetVisualDescendants().OfType<Border>().Where(b => b.Name?.StartsWith("AlertListRow_") == true || b.Name == "AlertOpenRow").OrderBy(b => b.TranslatePoint(default, window)!.Value.Y).ToList();
+            for (var i = 1; i < rows.Count; i++)
+            {
+                var above = rows[i - 1]; var below = rows[i];
+                var gap = below.TranslatePoint(default, window)!.Value.Y - (above.TranslatePoint(default, window)!.Value.Y + above.Bounds.Height);
+                Assert.True(gap <= 4, $"{above.Name} to {below.Name}: {gap}"); // The open row's own margin is the most between two.
+            }
+            // A press at the very foot of a closed row opens it.
+            var closed = rows.First(r => r.Name == "AlertListRow_1"); var spot = closed.TranslatePoint(new Point(closed.Bounds.Width - 6, closed.Bounds.Height - 2), window)!.Value;
+            window.MouseDown(spot, MouseButton.Left); window.MouseUp(spot, MouseButton.Left); Settle(window);
+            Assert.Equal(1, card.Index);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void WithNothingWaitingTheCardIsOneShortLineWithOpenNotesBeside()
+    {
+        var model = TimerModel.CreateDemo(() => DemoNow); model.CompleteSetup(); model.Notes.All.ToList().ForEach(n => { });
+        var empty = new TimerModel(new TrackingEngine(clock: () => DemoNow), new StoreSettings(new List<AccountSettings> { new("Account one") }, false, "Light", DayOfWeek.Monday)); empty.CompleteSetup();
+        var (window, card) = Host(empty);
+        try
+        {
+            card.Open(); Settle(window);
+            Assert.Equal(0, card.Items.Count); Assert.True(card.Bounds.Height < 70, $"card is {card.Bounds.Height} tall");
+            var title = window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Name == "AlertTitle"); var link = Find(window, "AlertOpenDashboard");
+            Assert.Equal(title.TranslatePoint(default, window)!.Value.Y + title.Bounds.Height / 2, link.TranslatePoint(default, window)!.Value.Y + link.Bounds.Height / 2, 4); // On one line.
+        }
+        finally { window.Close(); }
+    }
 }
