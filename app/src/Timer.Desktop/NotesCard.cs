@@ -24,8 +24,8 @@ public sealed class NotesCard : Border
     private readonly TimerModel model;
     private NotesModel Notes => model.Notes;
     // The card's title is a switch between the day's notes and its meetings, rebuilt when the choice changes.
-    private readonly ContentControl title = new() { Name = "NotesTitle", VerticalAlignment = VerticalAlignment.Center };
-    private readonly ContentControl formHost = new() { Name = "NotesForm" };
+    private readonly ContentControl title = new() { Name = "NotesTitle", VerticalAlignment = VerticalAlignment.Center, ClipToBounds = false }; // A content control clips by default, which cut the switch's shadow square.
+    private readonly ContentControl formHost = new() { Name = "NotesForm", ClipToBounds = false }; // The form's raised keys (Add, the day, the bell) shadow outside it.
     private readonly StackPanel list = new() { Spacing = 8, Name = "NotesList" };
     private readonly Grid overlay = new();
     private readonly ScrollViewer scroll;

@@ -84,7 +84,10 @@ public sealed class ReminderPopup : Border
         if (!dayOnly) Ui.Put(footer, Ui.Ctl("ReminderRemove", "Remove", null, "Remove", () => answer(null), small: true), 0); // Room either side of the word.
         if (!dayOnly) { var remove = footer.Children.OfType<Button>().First(b => b.Name == "ReminderRemove"); remove.Padding = new Thickness(20, 0); remove.HorizontalAlignment = HorizontalAlignment.Left; }
         var set = Ui.Ctl("ReminderSet", "Set", null, "Set", () => answer(Chosen), small: true); set.Classes.Add("primary"); Ui.Put(footer, set, 2); footer.ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto");
-        var rule = Ui.Rule(); rule.Margin = new Thickness(0, 2, 0, 0); column.Children.Add(rule); column.Children.Add(summary); column.Children.Add(footer);
+        var rule = Ui.Rule(); rule.Margin = new Thickness(0, 2, 0, 0); column.Children.Add(rule);
+        // The day-only card has no Remove, so its summary and Set share one line; the full card gives the summary a line of its own above Remove and Set.
+        if (dayOnly) Ui.Put(footer, summary, 0); else column.Children.Add(summary);
+        column.Children.Add(footer);
         Child = column;
 
         hourBox.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty && !syncing && int.TryParse(hourBox.Text, out var h) && h is >= 0 and <= 23) { hour = h; Redraw(false); } };
