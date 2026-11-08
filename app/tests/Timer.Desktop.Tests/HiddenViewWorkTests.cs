@@ -41,15 +41,17 @@ public sealed class HiddenViewWorkTests
         window.Show(); Dispatcher.UIThread.RunJobs();
         try
         {
-            var list = (StackPanel)Find<ScrollViewer>(page, "NotesPageScroll").Content!;
-            var before = list.Children[0];
+            var list = Assert.IsType<ItemsControl>(Find<ScrollViewer>(page, "NotesPageScroll").Content);
+            var count = list.ItemCount;
             window.Hide(); model.Notes.AddNote("Hidden page addition", null, null);
-            Assert.Same(before, list.Children[0]);
-            window.Show(); Assert.NotSame(before, list.Children[0]);
-            before = list.Children[0]; window.WindowState = WindowState.Minimized;
+            Assert.Equal(count, list.ItemCount);
+            window.Show(); Assert.Equal(count + 1, list.ItemCount);
+            window.WindowState = WindowState.Minimized;
             model.Notes.AddNote("Minimised page addition", null, null);
-            Assert.Same(before, list.Children[0]);
-            window.WindowState = WindowState.Normal; Assert.NotSame(before, list.Children[0]);
+            Assert.Equal(count + 1, list.ItemCount);
+            window.WindowState = WindowState.Normal; Assert.Equal(count + 2, list.ItemCount);
+            page.Query = "Minimised page addition";
+            Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
             var id = model.Notes.All.Single(n => model.Notes.Text(n) == "Minimised page addition").Id;
             Assert.Contains(page.GetVisualDescendants().OfType<Control>(), c => c.Name == "PageRow_" + id);
         }

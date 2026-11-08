@@ -1,10 +1,13 @@
 using System.Globalization;
 using Avalonia;
+using Avalonia.Collections;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Timer.Core;
 
@@ -21,7 +24,13 @@ public sealed class NotesPage : Grid
 {
     private readonly TimerModel model;
     private NotesModel Notes => model.Notes;
-    private readonly StackPanel listColumn = new() { Spacing = 8, Margin = new Thickness(14, 4, 14, 14) };
+    private abstract record ListRow;
+    private sealed record HeadingRow(string Label, bool Bad, int Count) : ListRow;
+    private sealed record NoteRow(DayNote Note, int DraftVersion, bool Removing, DateTime LabelDay, bool Late, string Accounts, long SeriesRevision) : ListRow;
+    private sealed record EmptyRow(NoteView View, string Query) : ListRow;
+    private readonly ItemsControl list = new() { Margin = new Thickness(14, 4, 14, 6) };
+    private AvaloniaList<ListRow> rows = new();
+    private int draftVersion;
     private readonly ContentControl formHost = new() { Name = "PageForm", ClipToBounds = false };
     private readonly Border viewsTrack = new() { Name = "NotesViews", HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
     private readonly Button accountButton = new() { Name = "NotesAccountFilter" };
@@ -45,7 +54,10 @@ public sealed class NotesPage : Grid
         Avalonia.Automation.AutomationProperties.SetName(accountButton, "Filter by account");
         var filterRow = Ui.Grid("*,Auto"); filterRow.Margin = new Thickness(14, 0, 14, 8); Ui.Put(filterRow, viewsTrack); Ui.Put(filterRow, accountButton, 1);
         Ui.Put(inner, formBox); Ui.Put(inner, filterRow, 0, 1);
-        var pageScroll = new ScrollViewer { Content = listColumn, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Name = "NotesPageScroll" }; Ui.LeaveRoomForTrack(pageScroll, listColumn);
+        list.ItemsPanel = new FuncTemplate<Panel?>(() => new VirtualizingStackPanel());
+        list.ItemTemplate = new FuncDataTemplate<ListRow>((item, _) => BuildListRow(item));
+        list.ItemsSource = rows;
+        var pageScroll = new ScrollViewer { Content = list, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Name = "NotesPageScroll" }; Ui.LeaveRoomForTrack(pageScroll, list);
         Ui.Put(inner, pageScroll, 0, 2);
         inner.Children.Add(whenHost); inner.Children.Add(filterHost); card.Child = inner; Children.Add(card);
         AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Notes.NoteIdChanged += NoteIdChanged; };
@@ -69,17 +81,22 @@ public sealed class NotesPage : Grid
         if (e.PropertyName == nameof(TimerModel.Elapsed) && syncedMinute == MinuteNow()) return;
         Sync();
     }
-    private void Redraw() { shown = null; Sync(); DrawForm(); }
+    private void Redraw() { draftVersion++; shown = null; Sync(); DrawForm(); }
 
     /// <summary>The words in the header's search box. The list and the counts follow them.</summary>
-    public string Query { get => query; set { query = value ?? ""; shown = null; Sync(); } }
+    public string Query
+    {
+        get => query;
+        set
+        {
+            var next = value ?? "";
+            if (query == next) return;
+            query = next; shown = null; Sync();
+        }
+    }
     public NoteView View => view;
 
     // ---- The views, the account filter and the list ----
-
-    private string Signature() => Notes.Revision.ToString(CultureInfo.InvariantCulture)
-        + $"#{view}#{string.Join(",", accountFilters)}#{query}#{editing}#{removing}#{model.Engine.Now:yyyyMMddHHmm}#"
-        + string.Join(";", model.ReviewAccounts.Select(a => $"{a.Name}/{a.Display}/{a.Colour}"));
 
     public void Sync()
     {
@@ -87,8 +104,11 @@ public sealed class NotesPage : Grid
         if (editing is { } id && Notes.Find(id) is { } edited) editing = edited.Id;
         if (removing is { } pending && Notes.Find(pending) is { } scoped) removing = scoped.Id;
         syncedMinute = MinuteNow();
-        accountFilters.RemoveAll(name => !model.ReviewAccounts.Any(a => a.Name.Equals(name, StringComparison.OrdinalIgnoreCase)));
-        var signature = Signature(); if (signature == shown) return; shown = signature;
+        var catalogue = model.ReviewAccounts;
+        accountFilters.RemoveAll(name => !catalogue.Any(a => a.Name.Equals(name, StringComparison.OrdinalIgnoreCase)));
+        var accounts = string.Join(";", catalogue.Select(a => $"{a.Name}/{a.Display}/{a.Colour}"));
+        var signature = $"{Notes.Revision}#{view}#{string.Join(",", accountFilters)}#{query}#{editing}#{removing}#{syncedMinute:yyyyMMddHHmm}#{accounts}";
+        if (signature == shown) return; shown = signature;
         var matches = Notes.MatchingAny(query, accountFilters);
         // One row of views with their counts, the chosen one raised on a sunk track.
         var tabs = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
@@ -102,20 +122,58 @@ public sealed class NotesPage : Grid
         }
         viewsTrack.Child = tabs; viewsTrack.Classes.Add("viewTabs");
         DrawAccountButton();
-        // The list.
         var inView = matches.Where(n => Notes.InView(n, view)).ToList();
-        listColumn.Children.Clear();
         var groups = Notes.Groups(inView);
+        var next = new List<ListRow>(inView.Count + groups.Count);
         foreach (var group in groups)
         {
-            var head = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(2, 8, 0, 0) };
-            var label = new TextBlock { Text = group.Label.ToUpperInvariant(), FontSize = 11.5, FontWeight = FontWeight.SemiBold, LetterSpacing = .5 };
-            if (group.Bad) label.Bind(TextBlock.ForegroundProperty, label.GetResourceObservable("Overtime")); else label.Classes.Add("muted");
-            head.Children.Add(label); head.Children.Add(NoteParts.Ink(group.Notes.Count.ToString(CultureInfo.InvariantCulture), "Muted", 11.5));
-            listColumn.Children.Add(head);
-            foreach (var note in group.Notes) listColumn.Children.Add(Row(note));
+            next.Add(new HeadingRow(group.Label, group.Bad, group.Notes.Count));
+            foreach (var note in group.Notes)
+                next.Add(new NoteRow(note, editing == note.Id ? draftVersion : 0, removing == note.Id,
+                    note.At is null ? default : syncedMinute.Date, Notes.IsLate(note), accounts, note.SeriesId is null ? 0 : Notes.Revision));
         }
-        if (groups.Count == 0) listColumn.Children.Add(EmptyPanel());
+        if (groups.Count == 0) next.Add(new EmptyRow(view, query));
+        UpdateRows(next);
+    }
+
+    private void UpdateRows(List<ListRow> next)
+    {
+        // Replacing just the edited row keeps the scroll anchor and the other realized controls.
+        if (rows.Count == next.Count)
+        {
+            var changed = new List<int>();
+            for (var i = 0; i < next.Count && changed.Count <= 16; i++)
+                if (rows[i] != next[i]) changed.Add(i);
+            if (changed.Count <= 16)
+            {
+                foreach (var i in changed) rows[i] = next[i];
+                return;
+            }
+        }
+        rows = new AvaloniaList<ListRow>(next);
+        list.ItemsSource = rows;
+    }
+
+    private Control BuildListRow(ListRow item)
+    {
+        var control = item switch
+        {
+            HeadingRow heading => Heading(heading),
+            NoteRow note => Row(note.Note),
+            _ => EmptyPanel()
+        };
+        var margin = control.Margin;
+        control.Margin = new Thickness(margin.Left, margin.Top, margin.Right, margin.Bottom + 8);
+        return control;
+    }
+
+    private static Control Heading(HeadingRow group)
+    {
+        var head = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(2, 8, 0, 0) };
+        var label = new TextBlock { Text = group.Label.ToUpperInvariant(), FontSize = 11.5, FontWeight = FontWeight.SemiBold, LetterSpacing = .5 };
+        if (group.Bad) label.Bind(TextBlock.ForegroundProperty, label.GetResourceObservable("Overtime")); else label.Classes.Add("muted");
+        head.Children.Add(label); head.Children.Add(NoteParts.Ink(group.Count.ToString(CultureInfo.InvariantCulture), "Muted", 11.5));
+        return head;
     }
 
     // A quiet sunk panel with one line of why and what to do, never a blank page.
@@ -156,10 +214,10 @@ public sealed class NotesPage : Grid
     internal Control BuildAccountFilterCard()
     {
         var rows = new StackPanel { Spacing = 2, Margin = new Thickness(4) };
-        var listed = Notes.Listed();
+        var counts = Notes.AccountCounts();
         foreach (var a in model.Accounts.Where(x => !BreakAccount.Is(x.Name)))
         {
-            var count = listed.Count(n => string.Equals(Notes.AccountOf(n), a.Name, StringComparison.OrdinalIgnoreCase));
+            var count = counts.GetValueOrDefault(a.Name);
             var on = accountFilters.Any(f => string.Equals(f, a.Name, StringComparison.OrdinalIgnoreCase));
             var tick = new Border { Width = 18, Height = 18, CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(1.4), VerticalAlignment = VerticalAlignment.Center }; tick.Classes.Add("tick"); tick.Classes.Set("tickDone", on);
             if (on) tick.Child = new Avalonia.Controls.Shapes.Path { Data = Geometry.Parse("M 3.2,8.2 L 6.6,11.4 L 12.2,4.6"), StrokeThickness = 1.8, StrokeLineCap = PenLineCap.Round, StrokeJoin = PenLineJoin.Round };
@@ -212,7 +270,7 @@ public sealed class NotesPage : Grid
         if (isMeeting) chips.Children.Add(NoteParts.Chip(NoteDates.Day(note.Day, model.Engine.Now) + ", " + NoteParts.Span(note), "plain"));
         else if (NotesModel.ReminderOf(note) is { } due)
         {
-            var reminder = Ui.Button("", () => { Edit(note); OpenWhen(); }, "PageNoteReminder_" + note.Id);
+            var reminder = Ui.Button("", () => { Edit(note); RevealEditor(note.Id, openReminder: true); }, "PageNoteReminder_" + note.Id);
             reminder.Classes.Add("pillBare"); reminder.Padding = new Thickness(0); reminder.Content = NoteParts.Chip(NoteDates.When(due, model.Engine.Now), Notes.IsLate(note) ? "late" : "accent", IconKind.Bell);
             ToolTip.SetTip(reminder, "Change reminder"); Avalonia.Automation.AutomationProperties.SetName(reminder, "Change reminder for " + plain); chips.Children.Add(reminder);
         }
@@ -282,7 +340,24 @@ public sealed class NotesPage : Grid
     }
 
     /// <summary>Opens a note (or meeting) for editing, as a press on its row does. A pin on the timeline asks for this.</summary>
-    public void OpenNote(long id) { if (Notes.Find(id) is { } note) Edit(note); }
+    public void OpenNote(long id)
+    {
+        if (Notes.Find(id) is not { } note) return;
+        Edit(note);
+        RevealEditor(note.Id);
+    }
+
+    private void RevealEditor(long id, bool openReminder = false)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (editing != id || !activity.Active) return;
+            var row = rows.OfType<NoteRow>().FirstOrDefault(item => item.Note.Id == id);
+            if (row is null) return;
+            list.ScrollIntoView(row);
+            if (openReminder) OpenWhen();
+        }, DispatcherPriority.Loaded);
+    }
 
     private void Edit(DayNote note)
     {
@@ -367,6 +442,7 @@ public sealed class NotesPage : Grid
         var button = Ui.Button("", () => OpenWhen(), "PageWhen"); button.Classes.Add("ctl"); button.Height = 36; button.Padding = new Thickness(top && when is null ? 10 : 12, 0); button.IsEnabled = !archived;
         ToolTip.SetTip(button, "Choose a reminder"); Avalonia.Automation.AutomationProperties.SetName(button, "Reminder: " + text);
         button.Content = top && when is null ? new IconGlyph(IconKind.Bell) : Ui.Horizontal(new IconGlyph(IconKind.Bell), new TextBlock { Text = text, FontSize = 13.5, VerticalAlignment = VerticalAlignment.Center });
+        ClosePickerOnDetach(button);
         return button;
     }
 
@@ -391,6 +467,7 @@ public sealed class NotesPage : Grid
         void Add(Control c) { c.Margin = new Thickness(0, 0, 8, 6); row.Children.Add(c); }
         var day = Ui.Button("", () => OpenDay(), "PageWhen"); day.Classes.Add("ctl"); day.Height = 36; day.Padding = new Thickness(12, 0); day.IsEnabled = !archived;
         ToolTip.SetTip(day, "Choose the meeting's day"); Avalonia.Automation.AutomationProperties.SetName(day, "Meeting day: " + NoteDates.Day(meetingDay, model.Engine.Now));
+        ClosePickerOnDetach(day);
         day.Content = Ui.Horizontal(new IconGlyph(IconKind.Today), new TextBlock { Text = NoteDates.Day(meetingDay, model.Engine.Now), FontSize = 13.5, VerticalAlignment = VerticalAlignment.Center }); Add(day);
         TextBox Time(string name, string text, string tip, Action<string> set)
         {
@@ -488,6 +565,17 @@ public sealed class NotesPage : Grid
     }
 
     // ---- The cards the line hangs: a reminder, or a meeting's day ----
+
+    private void ClosePickerOnDetach(Control target)
+    {
+        target.DetachedFromVisualTree += (_, _) =>
+        {
+            if (whenHost.PlacementTarget != target) return;
+            whenHost.IsOpen = false;
+            whenHost.Child = null;
+            whenHost.PlacementTarget = null;
+        };
+    }
 
     private void OpenWhen()
     {

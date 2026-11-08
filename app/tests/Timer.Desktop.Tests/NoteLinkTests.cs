@@ -72,6 +72,8 @@ public sealed class NoteLinkTests
             Assert.Equal("Nothing to link", Find<TextBlock>(window, "NoteText_" + plain.Id).Text);
             // Opening the note to edit it shows the words as written, so the link can be changed or taken out.
             window.ShowNotes(); Settle(window);
+            Find<TextBox>(window, "NotesSearch").Text = "the budget";
+            Settle(window);
             Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Name == "PageNoteText_" + note.Id && t.Inlines is { Count: > 1 });
             Find<Button>(window, "PageNoteOpen_" + note.Id).RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Settle(window);
             Assert.Equal("Check [the budget](https://example.com/budget) before Friday", Find<TextBox>(window, "PageNoteField").Text);
