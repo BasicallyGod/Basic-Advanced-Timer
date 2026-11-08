@@ -52,7 +52,7 @@ public sealed partial class SelectedBlockCard
         f.Account = AccountStrip("DetailsMeetingAccount", accounts);
         f.Account.SelectedItem = accounts.FirstOrDefault(a => chosen is not null && a.Equals(chosen, StringComparison.OrdinalIgnoreCase)) ?? NoAccount;
         f.Start = Box("DetailsMeetingStart", Hm(meeting.At), true); f.End = Box("DetailsMeetingEnd", Hm(meeting.End), true);
-        f.Repeat = new ChoiceStrip { Name = "DetailsMeetingRepeat", Look = ChoiceLook.Segments, ItemsSource = NotesModel.Offered(notes.RepeatOf(meeting)) };
+        f.Repeat = new ChoiceStrip { Name = "DetailsMeetingRepeat", Look = ChoiceLook.Dropdown, ItemsSource = NotesModel.Offered(notes.RepeatOf(meeting)) };
         f.Repeat.SelectedItem = NotesModel.Label(notes.RepeatOf(meeting));
 
         // The day is chosen on the same small calendar as a reminder's, in its day-only form, hung under the button.
@@ -92,7 +92,11 @@ public sealed partial class SelectedBlockCard
             if (e.Property == TextBox.TextProperty && !f.Settling) { f.Dirty = true; f.Saved = false; ShowState(f); }
         };
         f.Account.SelectionChanged += (_, _) => Apply(f, "account"); f.Repeat.SelectionChanged += (_, _) => Apply(f, "repeat");
-        return Page(header, body);
+        // A repeating meeting's card is taller than the room: the body scrolls under the header, with room round it for the keys' shadows, so Save and Discard are never cut off.
+        var page = Ui.Grid("*", "Auto,*"); Ui.Put(page, header);
+        var scroller = new ScrollViewer { Content = new Border { Padding = new Thickness(2, 12, 2, 8), Child = body }, Name = "DetailsScroll", HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
+        Ui.LeaveRoomForTrack(scroller, body); Ui.Put(page, scroller, 0, 1);
+        return page;
     }
 
     // The switch for what a change applies to, drawn again when it is pressed so the chosen half is filled.
