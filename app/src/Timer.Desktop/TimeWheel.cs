@@ -31,6 +31,8 @@ public sealed class TimeWheel : Border
         row.Children.Add(hourColumn); row.Children.Add(colon); row.Children.Add(minuteColumn); Child = row;
         hourColumn.PointerWheelChanged += (_, e) => { Step(true, e.Delta.Y > 0 ? -1 : 1); e.Handled = true; };
         minuteColumn.PointerWheelChanged += (_, e) => { Step(false, e.Delta.Y > 0 ? -1 : 1); e.Handled = true; };
+        BuildColumn(hourColumn, true, "Hour");
+        BuildColumn(minuteColumn, false, "Minute");
         Draw();
     }
 
@@ -38,7 +40,11 @@ public sealed class TimeWheel : Border
     public int Minute => minute;
 
     /// <summary>Puts the wheel at a time without raising <see cref="Moved"/>.</summary>
-    public void Set(int newHour, int newMinute) { hour = newHour; minute = newMinute; Draw(); }
+    public void Set(int newHour, int newMinute)
+    {
+        if (hour == newHour && minute == newMinute) return;
+        hour = newHour; minute = newMinute; Draw();
+    }
 
     /// <summary>The value one step in a direction from a given one: an hour wraps round 24, a minute lands on the next or previous multiple of five and wraps round 60.</summary>
     public static int Next(bool isHour, int value, int direction)
@@ -59,6 +65,8 @@ public sealed class TimeWheel : Border
         var inMinutes = minuteColumn.IsKeyboardFocusWithin;
         switch (e.Key)
         {
+            case Key.Left: hourColumn.Children[1].Focus(NavigationMethod.Directional); e.Handled = true; break;
+            case Key.Right: minuteColumn.Children[1].Focus(NavigationMethod.Directional); e.Handled = true; break;
             case Key.Up or Key.PageUp: Step(!inMinutes, -1); e.Handled = true; break;
             case Key.Down or Key.PageDown: Step(!inMinutes, 1); e.Handled = true; break;
             default: base.OnKeyDown(e); break;
@@ -67,23 +75,33 @@ public sealed class TimeWheel : Border
 
     private void Draw()
     {
-        Fill(hourColumn, true, hour); Fill(minuteColumn, false, minute);
+        UpdateColumn(hourColumn, true, "Hour", hour);
+        UpdateColumn(minuteColumn, false, "Minute", minute);
     }
 
-    private void Fill(StackPanel column, bool isHour, int value)
+    private void BuildColumn(StackPanel column, bool isHour, string prefix)
     {
-        column.Children.Clear();
-        var prefix = isHour ? "Hour" : "Minute";
         for (var offset = -1; offset <= 1; offset++)
         {
-            var shown = offset == 0 ? value : Next(isHour, value, offset);
             var captured = offset;
-            var button = Ui.Button(shown.ToString("00", CultureInfo.InvariantCulture), () => { if (captured != 0) Step(isHour, captured); }, "Wheel" + prefix + (offset < 0 ? "Before" : offset > 0 ? "After" : "Chosen"));
+            var button = Ui.Button("", () => { if (captured != 0) Step(isHour, captured); }, "Wheel" + prefix + (offset < 0 ? "Before" : offset > 0 ? "After" : "Chosen"));
             button.Classes.Add("pillBare"); button.Classes.Add("wheelRow"); button.Classes.Set("wheelChosen", offset == 0);
             button.Width = 54; button.Height = offset == 0 ? 32 : 26; button.FontSize = offset == 0 ? 16 : 13; button.FontWeight = offset == 0 ? FontWeight.Bold : FontWeight.Normal; button.Opacity = offset == 0 ? 1 : .55;
             button.HorizontalContentAlignment = HorizontalAlignment.Center; button.VerticalContentAlignment = VerticalAlignment.Center; button.Padding = new Thickness(0);
-            AutomationProperties.SetName(button, offset == 0 ? prefix + " " + shown.ToString("00", CultureInfo.InvariantCulture) : (offset < 0 ? "Earlier " : "Later ") + prefix.ToLowerInvariant() + " " + shown.ToString("00", CultureInfo.InvariantCulture));
             column.Children.Add(button);
+        }
+    }
+
+    private static void UpdateColumn(StackPanel column, bool isHour, string prefix, int value)
+    {
+        // Keep the focused row attached when its value changes.
+        for (var offset = -1; offset <= 1; offset++)
+        {
+            var button = (Button)column.Children[offset + 1];
+            var shown = (offset == 0 ? value : Next(isHour, value, offset)).ToString("00", CultureInfo.InvariantCulture);
+            button.Content = shown;
+            var label = offset == 0 ? prefix : (offset < 0 ? "Earlier " : "Later ") + prefix.ToLowerInvariant();
+            AutomationProperties.SetName(button, label + " " + shown);
         }
     }
 }
