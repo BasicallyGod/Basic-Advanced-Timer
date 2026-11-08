@@ -44,12 +44,12 @@ public sealed class SettingsView : Grid
         var rail = new StackPanel { Margin = new Thickness(0, 2, 0, 0) }; rail.Children.Add(list); Children.Add(rail);
 
         // The chosen section sits on a card, under its name and a short line about it.
-        title.Name = "SettingsTitle"; intro.Name = "SettingsIntro"; intro.TextWrapping = TextWrapping.Wrap; intro.Margin = new Thickness(0, 2, 0, 12);
-        var scroll = new ScrollViewer { Content = new Border { Child = body, Margin = new Thickness(0, 0, 14, 0) }, AllowAutoHide = false,
+        title.Name = "SettingsTitle"; intro.Name = "SettingsIntro"; intro.TextWrapping = TextWrapping.Wrap; intro.Margin = new Thickness(0, 2, 0, 4);
+        var scroll = new ScrollViewer { Content = new Border { Child = body, Margin = new Thickness(8, 8, 14, 10) } /* room round the keys so the scroll view does not cut their shadows */, AllowAutoHide = false,
             HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto };
         var inside = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto,*") };
         Ui.Put(inside, title); Ui.Put(inside, intro, 0, 1); Ui.Put(inside, scroll, 0, 2);
-        var card = new Border { Name = "SettingsCard", CornerRadius = new CornerRadius(18), BorderThickness = new Thickness(1), Padding = new Thickness(24, 20, 10, 16), Child = inside };
+        var card = new Border { Name = "SettingsCard", CornerRadius = new CornerRadius(18), BorderThickness = new Thickness(1), Padding = new Thickness(16, 20, 10, 6), Child = inside };
         card.Classes.Add("dayCard"); SetColumn(card, 1); Children.Add(card);
         ShowSection("look");
 

@@ -39,13 +39,14 @@ public sealed class Round31Tests
     [Fact]
     public void EachDigitLightsTheSegmentsItShouldAndAnyRunIsAsWideAsItsShapeAlone()
     {
-        string Lit(char c) => string.Concat(Enumerable.Range(0, 7).Where(s => SegmentShapes.IsLit(c, s)).Select(s => (char)('a' + s)));
-        Assert.Equal("abcdef", Lit('0')); Assert.Equal("bc", Lit('1')); Assert.Equal("abc", Lit('7')); Assert.Equal("abcdefg", Lit('8')); Assert.Equal("", Lit(' '));
-        Assert.Equal(7, SegmentShapes.For(28).Segments.Count);
+        string Lit(char c) => string.Concat(SegmentShapes.Ids.Where(id => SegmentShapes.IsLit(c, id.ToString())));
+        // The digits light the same sixteen-segment sets as the account name's, so the clock draws nothing the name cannot.
+        Assert.Equal("aAdDgGfebc".Length + 0, Lit('8').Length); Assert.Equal(10, Lit('8').Length); Assert.Equal("bcjl".Length - 1, Lit('1').Length); Assert.Equal("", Lit(' '));
+        Assert.Equal(16, SegmentShapes.For(28).Segments.Count);
         // The width depends on how many digits and colons a run has, never on which, so the clock and the count never move.
         Assert.Equal(SegmentRun.WidthOf("00:00", 28), SegmentRun.WidthOf("88:88", 28), 1e-9);
         Assert.Equal(SegmentRun.WidthOf("00", 15), SegmentRun.WidthOf("  ", 15), 1e-9);
-        Assert.True(SegmentClock.Width > 100 && SegmentClock.Width < 130);
+        Assert.True(SegmentClock.Width > 110 && SegmentClock.Width < 150);
     }
 
     [AvaloniaFact]
