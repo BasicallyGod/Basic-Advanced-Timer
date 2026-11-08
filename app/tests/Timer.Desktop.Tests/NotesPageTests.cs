@@ -38,6 +38,47 @@ public sealed class NotesPageTests
     private static void Type(Window window, string name, string text) { Find<TextBox>(window, name).Text = text; Dispatcher.UIThread.RunJobs(); }
     private static long IdOf(TimerModel model, string text) => model.Notes.All.Single(n => model.Notes.Text(n) == text).Id;
 
+    [AvaloniaFact]
+    public void LargeListsOnlyRealizeNearbyRowsAndKeepTheDraftWhenTheEditorScrollsOut()
+    {
+        var model = Model(notes =>
+        {
+            for (var i = 0; i < 300; i++) notes.AddNote($"Note {i:000}", null, null);
+        });
+        var page = new NotesPage(model);
+        var window = new Window { Width = 950, Height = 480, Content = page };
+        window.Show();
+        try
+        {
+            Settle(window);
+            var scroll = Find<ScrollViewer>(window, "NotesPageScroll");
+            var first = model.Notes.All[0].Id;
+            var last = model.Notes.All[^1].Id;
+            Border[] RealizedRows() => page.GetVisualDescendants().OfType<Border>()
+                .Where(row => row.Name?.StartsWith("PageRow_") == true).ToArray();
+            Assert.InRange(RealizedRows().Length, 1, 30);
+            Assert.DoesNotContain(RealizedRows(), row => row.Name == "PageRow_" + last);
+
+            page.OpenNote(last);
+            Settle(window);
+            var editor = Find<TextBox>(Find<Border>(window, "PageRow_" + last), "PageNoteField");
+            editor.Text = "A draft to keep";
+            Assert.True(scroll.Offset.Y > 0);
+
+            scroll.Offset = default;
+            Settle(window);
+            Assert.Contains(RealizedRows(), row => row.Name == "PageRow_" + first);
+            Assert.DoesNotContain(RealizedRows(), row => row.Name == "PageRow_" + last);
+            scroll.Offset = new Vector(0, scroll.Extent.Height);
+            Settle(window);
+            Assert.Equal("A draft to keep", Find<TextBox>(Find<Border>(window, "PageRow_" + last), "PageNoteField").Text);
+            Assert.InRange(RealizedRows().Length, 1, 30);
+            Click(window, "PageSubmit");
+            Assert.Equal("A draft to keep", model.Notes.Words(model.Notes.Find(last)!));
+        }
+        finally { window.Close(); }
+    }
+
     // ---- The model's views ----
 
     [Fact]

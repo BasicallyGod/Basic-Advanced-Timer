@@ -243,10 +243,11 @@ public sealed class NotesModel
         var overdue = shown.Where(IsLate).OrderBy(n => ReminderOf(n)).ToList();
         if (overdue.Count > 0) groups.Add(new("Overdue", true, overdue));
         var open = shown.Where(n => !IsLate(n) && !n.Done).ToList();
-        foreach (var day in open.Where(n => n.HasDate).Select(n => DayOf(MomentOf(n))).Distinct().OrderBy(d => d))
+        foreach (var group in open.Where(n => n.HasDate).GroupBy(n => DayOf(MomentOf(n))).OrderBy(g => g.Key))
         {
+            var day = group.Key;
             var label = NoteDates.Day(day, today) + (day == today || day == today.AddDays(1) ? " · " + day.ToString("d MMM", CultureInfo.GetCultureInfo("en-GB")) : "");
-            groups.Add(new(label, false, open.Where(n => n.HasDate && DayOf(MomentOf(n)) == day).OrderByDescending(IsImportant).ThenBy(n => n.At ?? TimeSpan.FromDays(1)).ThenBy(n => n.Id).ToList()));
+            groups.Add(new(label, false, group.OrderByDescending(IsImportant).ThenBy(n => n.At ?? TimeSpan.FromDays(1)).ThenBy(n => n.Id).ToList()));
         }
         var undated = open.Where(n => !n.HasDate).OrderByDescending(IsImportant).ThenBy(n => n.Id).ToList();
         if (undated.Count > 0) groups.Add(new("No date", false, undated));
