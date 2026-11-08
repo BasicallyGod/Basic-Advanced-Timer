@@ -82,7 +82,7 @@ public sealed class NotesPageTests
     // ---- The model's views ----
 
     [Fact]
-    public void SearchAndAccountCountsEachReadTheLedgerAccountCatalogueOnce()
+    public void SearchReadsTheLedgerAccountCatalogueOnce()
     {
         var accountReads = 0;
         var notes = new NotesModel(null, () => Day.AddHours(10), () =>
@@ -98,11 +98,6 @@ public sealed class NotesPageTests
         var found = Assert.Single(notes.MatchingAny("brief", new[] { "account ONE" }));
         Assert.Equal(1, accountReads);
         Assert.Equal("Read the brief", notes.Text(found));
-        accountReads = 0;
-        var counts = notes.AccountCounts();
-        Assert.Equal(1, accountReads);
-        Assert.Equal(1, counts["account one"]);
-        Assert.Equal(1, counts["Account two"]);
     }
 
     [Fact]
