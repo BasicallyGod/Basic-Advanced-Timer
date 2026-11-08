@@ -267,12 +267,12 @@ public static partial class ReviewViews
                 var half = new Border { Width = 1, Height = TimelineHeight - LabelRow - 12, Opacity = .22, Tag = "HalfGuide", IsHitTestVisible = false }; half.Classes.Add("rule");
                 Canvas.SetLeft(half, TimelineGutter + (hour + .5) * pixelsPerHour - .5); Canvas.SetTop(half, LabelRow + 8); canvas.Children.Add(half);
             }
-        // The graticule: faint rules across the band at even steps, crossing the hour lines like an instrument's grid, so a block's height and place read against it.
-        // They stay behind everything (added first) and never take a press.
-        for (var row = 1; row < 4; row++)
+        // The graticule: faint rules across the day that line up with the blocks, one on the band's top edge, one through its middle and one on its foot, so blocks sit between them
+        // like an instrument's grid. They stay behind everything (added first) and never take a press.
+        foreach (var (name, y) in new[] { ("Top", bandTop), ("Middle", bandTop + Math.Round(bandHeight / 2.0)), ("Foot", (double)BandBottom) })
         {
-            var rule = new Border { Name = "TimelineGraticule" + row, Width = 2 * TimelineGutter + 24 * pixelsPerHour, Height = 1, Opacity = .28, Tag = "Graticule", IsHitTestVisible = false }; rule.Classes.Add("rule");
-            Canvas.SetLeft(rule, 0); Canvas.SetTop(rule, bandTop + Math.Round(bandHeight * row / 4.0)); canvas.Children.Add(rule);
+            var rule = new Border { Name = "TimelineGraticule" + name, Width = 2 * TimelineGutter + 24 * pixelsPerHour, Height = 1, Opacity = .3, Tag = "Graticule", IsHitTestVisible = false }; rule.Classes.Add("rule");
+            Canvas.SetLeft(rule, 0); Canvas.SetTop(rule, y); canvas.Children.Add(rule);
         }
         // When days begin in the evening, midnight is a quiet dashed marker with the new date, not a wall.
         if (model.DayStart > TimeSpan.Zero)

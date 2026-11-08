@@ -10,6 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 |---|---|---|
+| Windows feedback: Working time is plain type again (no segment headline), the Notes account filter is the one button with its multi-select list again (chips gone), and the graticule is three rules on the band's top, middle and foot so blocks sit between them. | pending | `TimelineGraticule<Top/Middle/Foot>`, `NotesAccountFilter`. |
 | Windows feedback: the reminder card is narrower (222 wide, the same as the day card) with its summary above Remove and Set, and the account choice in Details, Add time and the Notes page is a drop-down again (`ChoiceLook.Dropdown`, with the colour dots), back in its old compact places in the forms. Repeat, week start and the Notes account filter stay as chips and segments. | pending | `ChoiceLook.Dropdown`. |
 | Windows feedback: a graticule of three faint rules across the timeline band, the Working time digits centred under their label, no lamp under the chosen day in the calendars, and the whole account row starting or stopping tracking recorded as the decision. | pending | `TimelineGraticule<n>`, `DayContent`. |
 | Calendar polish (phase 8, PR B): weekends are drawn quieter, a day that holds time carries a small dot (the header calendar), the chosen day has a lamp under its number, and the reminder month uses the same day content (`SoftDatePicker.DayContent`). | pending | `SoftCalendarTests`. |

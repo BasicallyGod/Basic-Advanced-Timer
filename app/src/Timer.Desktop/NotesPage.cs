@@ -24,8 +24,10 @@ public sealed class NotesPage : Grid
     private readonly StackPanel listColumn = new() { Spacing = 8, Margin = new Thickness(14, 4, 14, 14) };
     private readonly ContentControl formHost = new() { Name = "PageForm", ClipToBounds = false };
     private readonly Border viewsTrack = new() { Name = "NotesViews", HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-    private readonly WrapPanel accountChips = new() { Name = "NotesAccountChips", Orientation = Orientation.Horizontal, Margin = new Thickness(14, 0, 14, 8), ItemSpacing = 7, LineSpacing = 7 };
+    private readonly Button accountButton = new() { Name = "NotesAccountFilter" };
     private readonly Popup whenHost = new() { Placement = PlacementMode.Bottom, IsLightDismissEnabled = true, Name = "PageWhenHost" };
+    private Border? filterCard;
+    private readonly Popup filterHost = new() { Placement = PlacementMode.Bottom, IsLightDismissEnabled = true, Name = "NotesAccountHost" };
     private NoteView view = NoteView.All; private readonly List<string> accountFilters = new(); private string query = "";
     private string? shown;
     // The form: one state, drawn in the add line at the top, or in the row that is open for editing.
@@ -37,18 +39,20 @@ public sealed class NotesPage : Grid
     {
         this.model = model; Name = "NotesPage"; ClipToBounds = false;
         var card = new Border { Name = "NotesListCard", CornerRadius = new CornerRadius(18), BorderThickness = new Thickness(1), ClipToBounds = true }; card.Classes.Add("dayCard");
-        var inner = Ui.Grid("*", "Auto,Auto,Auto,*");
+        var inner = Ui.Grid("*", "Auto,Auto,*");
         var formBox = new Border { Child = formHost, Padding = new Thickness(14, 14, 14, 8) };
-        var filterRow = Ui.Grid("*"); filterRow.Margin = new Thickness(14, 0, 14, 8); Ui.Put(filterRow, viewsTrack);
-        Ui.Put(inner, formBox); Ui.Put(inner, filterRow, 0, 1); Ui.Put(inner, accountChips, 0, 2);
+        accountButton.Classes.Add("ctl"); accountButton.Classes.Add("small"); accountButton.Height = 34; accountButton.Padding = new Thickness(11, 0); accountButton.Click += (_, _) => OpenAccountFilter();
+        Avalonia.Automation.AutomationProperties.SetName(accountButton, "Filter by account");
+        var filterRow = Ui.Grid("*,Auto"); filterRow.Margin = new Thickness(14, 0, 14, 8); Ui.Put(filterRow, viewsTrack); Ui.Put(filterRow, accountButton, 1);
+        Ui.Put(inner, formBox); Ui.Put(inner, filterRow, 0, 1);
         var pageScroll = new ScrollViewer { Content = listColumn, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Name = "NotesPageScroll" }; Ui.LeaveRoomForTrack(pageScroll, listColumn);
-        Ui.Put(inner, pageScroll, 0, 3);
-        inner.Children.Add(whenHost); card.Child = inner; Children.Add(card);
+        Ui.Put(inner, pageScroll, 0, 2);
+        inner.Children.Add(whenHost); inner.Children.Add(filterHost); card.Child = inner; Children.Add(card);
         AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Notes.NoteIdChanged += NoteIdChanged; };
         DetachedFromVisualTree += (_, _) => { model.PropertyChanged -= Changed; Notes.NoteIdChanged -= NoteIdChanged; };
         activity = new ViewActivity(this, active => { if (active) Sync(); });
         // Escape puts a row being edited back as it was.
-        AddHandler(KeyDownEvent, (_, e) => { if (e.Key == Key.Escape && !whenHost.IsOpen && (editing is not null || removing is not null)) { EndEdit(); Redraw(); e.Handled = true; } }, Avalonia.Interactivity.RoutingStrategies.Bubble);
+        AddHandler(KeyDownEvent, (_, e) => { if (e.Key == Key.Escape && !whenHost.IsOpen && !filterHost.IsOpen && (editing is not null || removing is not null)) { EndEdit(); Redraw(); e.Handled = true; } }, Avalonia.Interactivity.RoutingStrategies.Bubble);
         Blank(); DrawForm(); Sync();
     }
     private readonly ViewActivity activity;
@@ -133,23 +137,48 @@ public sealed class NotesPage : Grid
         stack.Children.Add(title); stack.Children.Add(sub); return stack;
     }
 
-    // ---- The account filter: an All chip and a lit chip per account, any number at once ----
+    // ---- The account filter: one button, with a list of ticks under it ----
 
     private void DrawAccountButton()
     {
-        accountChips.Children.Clear();
+        var text = accountFilters.Count == 0 ? "All accounts" : accountFilters.Count == 1 ? accountFilters[0] : accountFilters.Count + " accounts";
+        accountButton.Content = Ui.Horizontal(new IconGlyph(IconKind.Accounts), Ui.Text(text, 13), new Chevron());
+        accountButton.Classes.Set("on", accountFilters.Count > 0);
+    }
+
+    internal void OpenAccountFilter()
+    {
+        filterHost.PlacementTarget = accountButton; filterHost.Placement = PlacementMode.BottomEdgeAlignedRight; filterHost.VerticalOffset = -HangingCard.Room.Top + 6; filterHost.HorizontalOffset = HangingCard.Room.Right;
+        filterHost.Child = BuildAccountFilterCard(); filterHost.IsOpen = !filterHost.IsOpen;
+    }
+
+    /// <summary>The list of accounts with a tick each and the number of notes it carries; any number can be ticked. Clear drops them all.</summary>
+    internal Control BuildAccountFilterCard()
+    {
+        var rows = new StackPanel { Spacing = 2, Margin = new Thickness(4) };
         var listed = Notes.Listed();
-        accountChips.Children.Add(ChoiceStrip.LitChip(this, "NotesAccountAll", "All accounts", null, accountFilters.Count == 0, () => { accountFilters.Clear(); shown = null; Sync(); }));
         foreach (var a in model.Accounts.Where(x => !BreakAccount.Is(x.Name)))
         {
             var count = listed.Count(n => string.Equals(Notes.AccountOf(n), a.Name, StringComparison.OrdinalIgnoreCase));
             var on = accountFilters.Any(f => string.Equals(f, a.Name, StringComparison.OrdinalIgnoreCase));
-            var chip = ChoiceStrip.LitChip(this, "NotesAccount_" + a.Name.Replace(" ", ""), a.Display + "  " + count, Ui.Visible(a.Colour), on, () => ToggleAccount(a.Name));
-            Avalonia.Automation.AutomationProperties.SetName(chip, (on ? "Stop filtering by " : "Filter by ") + a.Display + ", " + count + (count == 1 ? " note" : " notes"));
-            accountChips.Children.Add(chip);
+            var tick = new Border { Width = 18, Height = 18, CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(1.4), VerticalAlignment = VerticalAlignment.Center }; tick.Classes.Add("tick"); tick.Classes.Set("tickDone", on);
+            if (on) tick.Child = new Avalonia.Controls.Shapes.Path { Data = Geometry.Parse("M 3.2,8.2 L 6.6,11.4 L 12.2,4.6"), StrokeThickness = 1.8, StrokeLineCap = PenLineCap.Round, StrokeJoin = PenLineJoin.Round };
+            var line = Ui.Grid("Auto,Auto,*,Auto"); line.ColumnSpacing = 9;
+            Ui.Put(line, tick); Ui.Put(line, NoteParts.Dot(model, a.Name), 1);
+            Ui.Put(line, new TextBlock { Text = "#" + a.Display.Replace(" ", ""), FontSize = 13, VerticalAlignment = VerticalAlignment.Center }, 2); Ui.Put(line, NoteParts.Ink(count.ToString(CultureInfo.InvariantCulture), "Muted", 12), 3);
+            var row = Ui.Button("", () => { ToggleAccount(a.Name); BuildAccountFilterCard(); }, "NotesAccount_" + a.Name.Replace(" ", "")); row.Classes.Add("pillBare"); row.Content = line; row.HorizontalAlignment = HorizontalAlignment.Stretch; row.HorizontalContentAlignment = HorizontalAlignment.Stretch; row.Padding = new Thickness(8, 6);
+            Avalonia.Automation.AutomationProperties.SetName(row, (on ? "Stop filtering by " : "Filter by ") + a.Display + ", " + count + (count == 1 ? " note" : " notes"));
+            rows.Children.Add(row);
         }
+        var foot = Ui.Grid("*,Auto"); foot.Margin = new Thickness(10, 8, 10, 6);
+        Ui.Put(foot, Ui.Text(accountFilters.Count == 0 ? "Every account" : accountFilters.Count + (accountFilters.Count == 1 ? " account chosen" : " accounts chosen"), 12, "muted"));
+        if (accountFilters.Count > 0) { var clear = Ui.Button("Clear", () => { accountFilters.Clear(); shown = null; Sync(); BuildAccountFilterCard(); }, "NotesAccountClear"); clear.Classes.Add("flat"); clear.FontSize = 12.5; clear.FontWeight = FontWeight.SemiBold; Ui.Put(foot, clear, 1); }
+        var column = new StackPanel { Width = 250 }; column.Children.Add(rows); column.Children.Add(Ui.Rule()); column.Children.Add(foot);
+        // One card for the page's life, whose contents are drawn again as ticks change: a popup keeps showing the child it was opened with.
+        if (filterCard is null) { filterCard = new Border { CornerRadius = new CornerRadius(16), BorderThickness = new Thickness(1), Margin = HangingCard.Room, BoxShadow = HangingCard.Shadow, Name = "NotesAccountCard" }; filterCard.Classes.Add("surface"); filterCard.Classes.Add("flyoutCard"); }
+        filterCard.Child = column;
+        return filterCard;
     }
-
     private void ToggleAccount(string name)
     {
         var at = accountFilters.FindIndex(f => string.Equals(f, name, StringComparison.OrdinalIgnoreCase));

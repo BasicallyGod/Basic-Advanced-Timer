@@ -361,7 +361,6 @@ public sealed class DashboardWindow : Window
     private Button todayButton = null!; private TextBlock todayWords = null!;
     private Control? totalsStrip; private Button zoomOut = null!, zoomIn = null!;
     private Sidebar sidebar = null!; private StatusFace face = null!;
-    private SegmentRun? workingSegments;
     private readonly TextBlock workingValue = Value(), allocatedValue = Value(), unallocatedValue = Value();
     private static TextBlock Value() => new() { FontSize = 14, FontWeight = Avalonia.Media.FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock date = Ui.Text("", 14); private Button datePick = null!;
@@ -782,11 +781,7 @@ public sealed class DashboardWindow : Window
         }
         var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 0, Name = "DayTotals", HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         workingValue.Name = "TotalsWorkingValue";
-        // The one headline figure is drawn in segment digits, as a clock is; the plain text stays for decimal hours, which segments cannot draw, and for screen readers.
-        var headline = new SegmentRun { Name = "TotalsWorkingSegments", DigitHeight = 20, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 2, 0, 0) };
-        workingSegments = headline;
-        var workingStat = Stat("Working time", workingValue, "TotalsWorking"); ((StackPanel)workingStat).Children.Add(headline);
-        strip.Children.Add(workingStat);
+        strip.Children.Add(Stat("Working time", workingValue, "TotalsWorking"));
         dayBar.Margin = new Thickness(16, 0, 0, 0);
         strip.Children.Add(dayBar);
         var allocated = Stat("Allocated", allocatedValue, "TotalsAllocated"); allocated.Margin = new Thickness(16, 0, 0, 0); strip.Children.Add(allocated);
@@ -805,11 +800,6 @@ public sealed class DashboardWindow : Window
         var allocatedToday = model.AllocatedOn(shown); var plan = model.Engine.Plan(shown);
         var working = model.WorkingOn(shown);
         workingValue.Text = model.Format(working);
-        if (workingSegments is not null)
-        {
-            var segmentsFit = !model.DecimalHours; workingSegments.IsVisible = segmentsFit; workingValue.IsVisible = !segmentsFit;
-            if (segmentsFit) { workingSegments.Text = workingValue.Text; Avalonia.Automation.AutomationProperties.SetName(workingSegments, "Working time " + workingValue.Text); }
-        }
         allocatedValue.Text = model.Format(allocatedToday); unallocatedValue.Text = model.Format(model.UnallocatedOn(shown));
         breaksValue.Text = model.Format(model.BreakTimeOn(shown));
         var scheduled = model.ScheduledOn(shown);
