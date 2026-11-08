@@ -65,6 +65,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     public int SelectedBlockCount => selectedRows.Count == 0 ? 0 : Editor.Entries(WeekStart(SelectedDate), WeekStart(SelectedDate).AddDays(7))
         .Count(e => e.Sources.Count > 0 && e.Sources.All(selectedRows.Contains));
     public bool CanMergeSelection => SelectedBlockCount >= 2 && selectedRows.Select(s => s.Day).Distinct().Count() == 1
+        && selectedRows.Select(Engine.WorkDayOf).Distinct().Count() == 1
         && selectedRows.Select(s => s.Account).Distinct(StringComparer.Ordinal).Count() == 1 && Editor.CanCombine(selectedRows.ToArray());
     /// <summary>Why a merge can or cannot work, in a few words: the Merge menu item's tooltip, and the toast when Merge is pressed and refused.</summary>
     public string MergeHint
@@ -76,7 +77,7 @@ public sealed class TimerModel : INotifyPropertyChanged
             if (CanMergeSelection)
                 return Editor.MergeGapMinutes(selectedRows.ToArray()) is var gapMinutes and > 0 ? $"Joins them · adds {Format(TimeSpan.FromMinutes((double)gapMinutes))} gap" : "Joins them";
             if (selectedRows.Select(s => s.Account).Distinct(StringComparer.Ordinal).Count() > 1) return "Same account only";
-            if (selectedRows.Select(s => s.Day).Distinct().Count() > 1) return "Same day only";
+            if (selectedRows.Select(s => s.Day).Distinct().Count() > 1 || selectedRows.Select(Engine.WorkDayOf).Distinct().Count() > 1) return "Same day only";
             return "Time in between: can’t merge";
         }
     }
@@ -169,7 +170,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     // After a quick slip from one account to another and back, the earlier block can be picked up again. Blocks in a group are left alone, since
     // taking one out of a group would break the group.
-    private bool InGroup(SessionRow row) => Editor.Entries(row.Day, row.Day.AddDays(1)).Any(e => e.GroupId is not null && e.Sources.Contains(row));
+    private bool InGroup(SessionRow row) => Editor.IsGrouped(row);
     private (SessionRow Earlier, SessionRow Between)? ContinuableNow()
     {
         if (Engine.ContinuableBlocks() is not { } blocks) return null;
