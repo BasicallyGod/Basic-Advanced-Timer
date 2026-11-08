@@ -54,7 +54,7 @@ public sealed class NotesPage : Grid
         Avalonia.Automation.AutomationProperties.SetName(accountButton, "Filter by account");
         var filterRow = Ui.Grid("*,Auto"); filterRow.Margin = new Thickness(14, 0, 14, 8); Ui.Put(filterRow, viewsTrack); Ui.Put(filterRow, accountButton, 1);
         Ui.Put(inner, formBox); Ui.Put(inner, filterRow, 0, 1);
-        list.ItemsPanel = new FuncTemplate<Panel>(() => new VirtualizingStackPanel());
+        list.ItemsPanel = new FuncTemplate<Panel?>(() => new VirtualizingStackPanel());
         list.ItemTemplate = new FuncDataTemplate<ListRow>((item, _) => BuildListRow(item));
         list.ItemsSource = rows;
         var pageScroll = new ScrollViewer { Content = list, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Name = "NotesPageScroll" }; Ui.LeaveRoomForTrack(pageScroll, list);
