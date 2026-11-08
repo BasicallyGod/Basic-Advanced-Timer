@@ -1,4 +1,6 @@
+using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.VisualTree;
@@ -27,6 +29,43 @@ public class TimeWheelTests
             wheel.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "WheelHourBefore").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
             Assert.Equal((13, 35, 2), (wheel.Hour, wheel.Minute, moved));
             wheel.Set(9, 0); Assert.Equal(2, moved); // Setting it from outside raises nothing.
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void ReminderWheelKeepsFocusWhileSteppingAndSwitchingColumns()
+    {
+        var now = new DateTime(2026, 10, 14, 14, 15, 0);
+        var card = new ReminderPopup(() => now, "Call the client back", now.AddMinutes(16), _ => { }, () => { });
+        var window = new Window { Width = 420, Height = 620, Content = card };
+        window.Show();
+        try
+        {
+            Button Find(string name) => card.GetVisualDescendants().OfType<Button>().Single(button => button.Name == name);
+            void Press(PhysicalKey key)
+            {
+                HeadlessWindowExtensions.KeyPressQwerty(window, key, RawInputModifiers.None);
+                HeadlessWindowExtensions.KeyReleaseQwerty(window, key, RawInputModifiers.None);
+            }
+
+            Find("ReminderWheelToggle").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            using var frame = window.CaptureRenderedFrame();
+            var minute = Find("WheelMinuteChosen");
+            Assert.True(minute.Focus());
+            Press(PhysicalKey.ArrowDown);
+            Press(PhysicalKey.ArrowDown);
+            Assert.Same(minute, window.FocusManager!.GetFocusedElement());
+            Assert.Equal("Minute 40", AutomationProperties.GetName(minute));
+            Assert.Equal(now.Date.AddHours(14).AddMinutes(40), card.Chosen);
+
+            Press(PhysicalKey.ArrowLeft);
+            Assert.Same(Find("WheelHourChosen"), window.FocusManager.GetFocusedElement());
+            Press(PhysicalKey.ArrowUp);
+            Assert.Equal(now.Date.AddHours(13).AddMinutes(40), card.Chosen);
+            Press(PhysicalKey.ArrowRight);
+            Assert.Same(minute, window.FocusManager.GetFocusedElement());
         }
         finally { window.Close(); }
     }

@@ -21,20 +21,13 @@ public sealed class SoftDatePicker : Border
     private DateTime? selected;
 
     public event Action<DateTime>? DayPicked;
-    /// <summary>Says whether a day holds recorded time, so its number carries a small dot; left empty, no day does.</summary>
-    public Func<DateTime, bool>? DayHasTime { get; set; }
 
-    /// <summary>
-    /// The inside of a day button, shared with the reminder's month so both calendars read the same: the number, and a small dot in the corner
-    /// when the day holds time. The chosen day is shown by its wash alone, with no lamp. Weekends are drawn quieter through their class.
-    /// </summary>
-    public static Control DayContent(string number, double size, bool chosen, bool hasTime, bool bold)
+    /// <summary>The day number shared by the dashboard and reminder calendars.</summary>
+    public static TextBlock DayContent(string number, double size, bool bold = false) => new()
     {
-        var grid = new Grid { HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch };
-        grid.Children.Add(new TextBlock { Text = number, FontSize = size, FontWeight = bold ? FontWeight.SemiBold : FontWeight.Normal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Name = "DayNumber" });
-        if (hasTime) { var dot = new Avalonia.Controls.Shapes.Ellipse { Width = 4, Height = 4, Name = "DayTimeDot", HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 4, 5, 0), IsHitTestVisible = false }; dot.Bind(Avalonia.Controls.Shapes.Shape.FillProperty, dot.GetResourceObservable("Muted")); grid.Children.Add(dot); }
-        return grid;
-    }
+        Text = number, FontSize = size, FontWeight = bold ? FontWeight.SemiBold : FontWeight.Normal,
+        HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Name = "DayNumber"
+    };
 
     public DateTime? SelectedDate
     {
@@ -110,7 +103,7 @@ public sealed class SoftDatePicker : Border
             button.Classes.Set("chosenDay", selected?.Date == day);
             button.Classes.Set("todayDay", DateTime.Today == day);
             button.Classes.Set("weekendDay", day.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday);
-            button.Content = DayContent(day.Day.ToString(CultureInfo.InvariantCulture), 13, selected?.Date == day, DayHasTime?.Invoke(day) == true, selected?.Date == day);
+            button.Content = DayContent(day.Day.ToString(CultureInfo.InvariantCulture), 13, selected?.Date == day);
             AutomationProperties.SetName(button, day.ToString("dddd d MMMM yyyy", British));
             Ui.Put(days, button, i % 7, i / 7);
         }
