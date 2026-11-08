@@ -29,6 +29,10 @@ public sealed class NotesModel
     private long localNote = 1, localSeries = 1, unsaved;
     private readonly HashSet<long> pendingDeletes = new();
     private readonly HashSet<long> pendingUpdates = new();
+    private readonly HashSet<long> pendingSeriesUpdates = new();
+    private readonly HashSet<long> pendingSeriesDeletes = new();
+    private long unsavedSeries;
+    private readonly Dictionary<long, long> savedNoteIds = new();
 
     public NotesModel(TimerStore? store, Func<DateTime> now, Func<IReadOnlyList<string>> accountNames)
     {
@@ -39,6 +43,9 @@ public sealed class NotesModel
 
     /// <summary>Raised after anything changes, so the views redraw.</summary>
     public event Action? Changed;
+    public event Action<long, long>? NoteIdChanged;
+    public long Revision { get; private set; }
+    private void NotifyChanged() { Revision++; Changed?.Invoke(); }
     /// <summary>A meeting form is wanted at a time (a click in the timeline's meeting row), or for an existing meeting (a click on its card).</summary>
     public event Action<DateTime>? NewMeetingRequested;
     public event Action<long>? EditMeetingRequested;
@@ -56,15 +63,34 @@ public sealed class NotesModel
     public string? Fault { get; private set; }
 
     public IReadOnlyList<DayNote> All => notes;
-    public DayNote? Find(long id) => notes.FirstOrDefault(n => n.Id == id);
+    public DayNote? Find(long id) => notes.FirstOrDefault(n => n.Id == savedNoteIds.GetValueOrDefault(id, id));
+    /// <summary>Whether this item and its recurrence template have reached storage, rather than only the retry queue.</summary>
+    public bool IsSaved(long id) => Find(id) is { Id: >= 0 } note && !pendingUpdates.Contains(note.Id)
+        && (note.SeriesId is not { } seriesId || seriesId >= 0 && !pendingSeriesUpdates.Contains(seriesId));
     public static bool IsMeeting(DayNote note) => DayNotes.IsMeeting(note);
     private IReadOnlyList<string> Names => accountNames();
 
-    /// <summary>The meetings on a day, in time order. A ticked meeting is one that was taken off the timeline.</summary>
-    public IReadOnlyList<DayNote> MeetingsOn(DateTime day) => notes.Where(n => n.HasDate && n.Day.Date == day.Date && !n.Done && IsMeeting(n)).OrderBy(n => n.At).ThenBy(n => n.Id).ToList();
+    /// <summary>
+    /// Where a day begins, set by the model (midnight unless someone works through it). A "day" in this class is the 24 hours from its date at this time, so a note or a meeting
+    /// belongs to the day that holds its moment: with days beginning at 18:00 a reminder at 02:00 is the evening before's.
+    /// </summary>
+    public TimeSpan DayStart { get; set; }
+    /// <summary>The moment a dated note is at: its date and time, and for one with no time 09:00 of its date.</summary>
+    public static DateTime MomentOf(DayNote note) => note.Day.Date + (note.At ?? TimeSpan.FromHours(9));
+    /// <summary>The day, as the date it starts on, that a moment belongs to.</summary>
+    public DateTime DayOf(DateTime moment) => (moment - DayStart).Date;
+    private bool InDay(DateTime moment, DateTime day) => DayOf(moment) == day.Date;
+
+    /// <summary>The meetings on a day, in time order: those that start in it, and one that began before and runs on into it. A ticked meeting is one that was taken off the timeline.</summary>
+    public IReadOnlyList<DayNote> MeetingsOn(DateTime day)
+    {
+        var begin = day.Date + DayStart; var finish = begin.AddDays(1);
+        return notes.Where(n => n.HasDate && !n.Done && IsMeeting(n) && n.At is not null && n.End is not null && n.Day.Date + n.End.Value > begin && n.Day.Date + n.At.Value < finish)
+            .OrderBy(n => n.Day.Date + n.At!.Value).ThenBy(n => n.Id).ToList();
+    }
 
     /// <summary>The notes with a reminder on a day that are not ticked off, in time order: the ones the timeline hangs a pin for.</summary>
-    public IReadOnlyList<DayNote> PinnedOn(DateTime day) => notes.Where(n => !n.Done && ReminderOf(n) is { } due && due.Date == day.Date).OrderBy(n => ReminderOf(n)).ThenBy(n => n.Id).ToList();
+    public IReadOnlyList<DayNote> PinnedOn(DateTime day) => notes.Where(n => !n.Done && ReminderOf(n) is { } due && InDay(due, day)).OrderBy(n => ReminderOf(n)).ThenBy(n => n.Id).ToList();
 
     /// <summary>
     /// What the Notes card lists for a day: the day's meetings, then notes with a reminder that day, then notes with no date, and whatever is done last of all (kept in
@@ -72,8 +98,9 @@ public sealed class NotesModel
     /// </summary>
     public IReadOnlyList<DayNote> ForDay(DateTime day)
     {
-        var meetings = notes.Where(n => n.HasDate && n.Day.Date == day.Date && IsMeeting(n)).OrderBy(n => n.At).ThenBy(n => n.Id);
-        var dated = notes.Where(n => n.HasDate && n.Day.Date == day.Date && !IsMeeting(n)).OrderBy(n => n.At ?? TimeSpan.FromDays(1)).ThenBy(n => n.Id);
+        var begin = day.Date + DayStart; var finish = begin.AddDays(1);
+        var meetings = notes.Where(n => n.HasDate && IsMeeting(n) && DayNotes.EndsAt(n) > begin && MomentOf(n) < finish).OrderBy(n => MomentOf(n)).ThenBy(n => n.Id);
+        var dated = notes.Where(n => n.HasDate && InDay(MomentOf(n), day) && !IsMeeting(n)).OrderBy(n => n.At is null ? DateTime.MaxValue : MomentOf(n)).ThenBy(n => n.Id);
         var undated = notes.Where(n => !n.HasDate).OrderBy(n => n.Id);
         // What matters comes first among the notes (the sort keeps time order within each kind), and what is done goes last.
         return meetings.Concat(dated.Concat(undated).OrderByDescending(IsImportant)).OrderBy(n => n.Done).ToList();
@@ -81,17 +108,31 @@ public sealed class NotesModel
 
     /// <summary>The words shown for a note: without a deadline marker, without the important mark and without the #Tag that has its own chip.</summary>
     public string Text(DayNote note) => NoteLinks.Flatten(Shown(note));
-    /// <summary>The same words as they are written, with any links still in their <c>[words](address)</c> form and the important mark if it has one: what the form is given to edit.</summary>
-    public string Words(DayNote note) => NoteShorthand.Display(note, Names);
+    /// <summary>The editable words, including link markup, without the stored importance flag.</summary>
+    public string Words(DayNote note) => Words(note, note.Text.Contains('#') ? Names : Array.Empty<string>());
+    private static string Words(DayNote note, IReadOnlyList<string> names)
+    {
+        var words = NoteShorthand.Display(note, names);
+        if (IsMeeting(note)) return words;
+        words = WithoutMark(words);
+        return words.StartsWith(LiteralPrefix, StringComparison.Ordinal) ? words[LiteralPrefix.Length..] : words;
+    }
     /// <summary>The words as a row draws them: as written, but without the important mark, which a row shows as its star.</summary>
-    public string Shown(DayNote note) => IsMeeting(note) ? Words(note) : WithoutMark(Words(note));
+    public string Shown(DayNote note) => Words(note);
 
-    // An important note starts with !!, which is how it is kept (the shared package has no field for it, and a note written with !! at the start is important the same way as
-    // one starred in a row). Meetings are plans, not tasks, so they are never important.
-    /// <summary>Whether some words (as typed in a form, or as stored) start with the important mark.</summary>
+    // Keep the existing storage flag for compatibility. New text beginning with that flag is escaped with an invisible separator,
+    // so typing punctuation never changes importance. Escape the separator itself too, so arbitrary text round-trips unchanged.
+    private const string LiteralPrefix = "\u2063";
+    private static string StoredWords(string words, bool important)
+    {
+        words = words.Trim();
+        if (IsMarked(words) || words.StartsWith(LiteralPrefix, StringComparison.Ordinal)) words = LiteralPrefix + words;
+        return WithMark(words, important);
+    }
+    /// <summary>Whether stored text carries the legacy importance flag.</summary>
     public static bool IsMarked(string text) => text.StartsWith("!!", StringComparison.Ordinal) && (text.Length == 2 || char.IsWhiteSpace(text[2]));
     private static string WithoutMark(string text) => IsMarked(text) ? text[2..].TrimStart() : text;
-    /// <summary>The words with the important mark put at the start, or taken off: what a form's star does to the box.</summary>
+    /// <summary>Adds or removes the stored flag without changing the editable words.</summary>
     public static string WithMark(string text, bool important) => important ? (IsMarked(text) ? text : ("!! " + text).TrimEnd()) : WithoutMark(text);
     /// <summary>Whether a note is marked important.</summary>
     public static bool IsImportant(DayNote note) => !IsMeeting(note) && IsMarked(note.Text);
@@ -99,10 +140,10 @@ public sealed class NotesModel
     public void SetImportant(long id, bool important)
     {
         if (Find(id) is not { } note || IsMeeting(note) || IsImportant(note) == important) return;
-        Change(id, n => n with { Text = WithMark(n.Text, important) }); Changed?.Invoke();
+        Change(id, n => n with { Text = WithMark(n.Text, important) }); NotifyChanged();
     }
     /// <summary>The account a note is tagged with, or null.</summary>
-    public string? AccountOf(DayNote note) => NoteShorthand.AccountOf(note.Text, Names);
+    public string? AccountOf(DayNote note) => note.Text.Contains('#') ? NoteShorthand.AccountOf(note.Text, Names) : null;
     /// <summary>When a note's reminder is, or null for a note with none.</summary>
     public static DateTime? ReminderOf(DayNote note) => note.HasDate && note.At is { } at && !IsMeeting(note) ? note.Day.Date + at : null;
     public bool IsLate(DayNote note) => !note.Done && ReminderOf(note) is { } due && due < now();
@@ -154,15 +195,16 @@ public sealed class NotesModel
     /// </summary>
     public IReadOnlyList<DayNote> Listed()
     {
-        var today = now().Date; var firstOf = new HashSet<long>();
+        var today = DayOf(now()); var firstOf = new HashSet<long>();
         var list = new List<DayNote>();
         foreach (var n in notes.OrderBy(n => n.Day).ThenBy(n => n.At).ThenBy(n => n.Id))
         {
             if (IsMeeting(n) && !n.Done)
             {
-                if (n.Day.Date < today) continue;
-                if (n.SeriesId is { } id && n.Day.Date > today && !firstOf.Add(id)) continue; // One occurrence of a series is enough in a list.
-                if (n.SeriesId is { } today1 && n.Day.Date == today) firstOf.Add(today1);
+                var day = DayOf(MomentOf(n));
+                if (day < today && DayNotes.EndsAt(n) <= today + DayStart) continue;
+                if (n.SeriesId is { } id && day > today && !firstOf.Add(id)) continue;
+                if (n.SeriesId is { } today1 && day <= today) firstOf.Add(today1);
             }
             list.Add(n);
         }
@@ -176,19 +218,39 @@ public sealed class NotesModel
     public IReadOnlyList<DayNote> MatchingAny(string search, IReadOnlyCollection<string>? accounts)
     {
         var words = search.Trim();
-        return Listed().Where(n => (accounts is not { Count: > 0 } || accounts.Any(a => string.Equals(AccountOf(n), a, StringComparison.OrdinalIgnoreCase)))
-            && (words.Length == 0 || Text(n).Contains(words, StringComparison.OrdinalIgnoreCase) || (AccountOf(n)?.Contains(words, StringComparison.OrdinalIgnoreCase) ?? false))).ToList();
+        var listed = Listed();
+        var filteringAccounts = accounts is { Count: > 0 };
+        if (words.Length == 0 && !filteringAccounts) return listed;
+        // The account catalogue includes names from the ledger. Read it once for the entire search.
+        var names = Names;
+        return listed.Where(note =>
+        {
+            var account = note.Text.Contains('#') ? NoteShorthand.AccountOf(note.Text, names) : null;
+            if (filteringAccounts && (account is null || !accounts!.Contains(account, StringComparer.OrdinalIgnoreCase))) return false;
+            return words.Length == 0 || NoteLinks.Flatten(Words(note, names)).Contains(words, StringComparison.OrdinalIgnoreCase)
+                || account?.Contains(words, StringComparison.OrdinalIgnoreCase) == true;
+        }).ToList();
+    }
+
+    internal IReadOnlyDictionary<string, int> AccountCounts()
+    {
+        var names = Names;
+        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var note in Listed())
+            if (note.Text.Contains('#') && NoteShorthand.AccountOf(note.Text, names) is { } account)
+                counts[account] = counts.GetValueOrDefault(account) + 1;
+        return counts;
     }
 
     public bool InView(DayNote n, NoteView view)
     {
-        var today = now().Date;
+        var today = DayOf(now());
         return view switch
         {
             NoteView.Important => IsImportant(n) && !n.Done,
-            NoteView.Today => n.HasDate && n.Day.Date == today,
+            NoteView.Today => n.HasDate && DayOf(MomentOf(n)) == today,
             NoteView.Overdue => IsLate(n),
-            NoteView.Upcoming => n.HasDate && n.Day.Date > today && !n.Done,
+            NoteView.Upcoming => n.HasDate && DayOf(MomentOf(n)) > today && !n.Done,
             NoteView.Meetings => IsMeeting(n),
             NoteView.Done => n.Done,
             _ => true
@@ -198,14 +260,15 @@ public sealed class NotesModel
     /// <summary>The Notes page's list in groups: Overdue, then each day from today, then notes with no date, then Done. Each group is in time order.</summary>
     public IReadOnlyList<NoteGroup> Groups(IReadOnlyList<DayNote> shown)
     {
-        var today = now().Date; var groups = new List<NoteGroup>();
+        var today = DayOf(now()); var groups = new List<NoteGroup>();
         var overdue = shown.Where(IsLate).OrderBy(n => ReminderOf(n)).ToList();
         if (overdue.Count > 0) groups.Add(new("Overdue", true, overdue));
         var open = shown.Where(n => !IsLate(n) && !n.Done).ToList();
-        foreach (var day in open.Where(n => n.HasDate).Select(n => n.Day.Date).Distinct().OrderBy(d => d))
+        foreach (var group in open.Where(n => n.HasDate).GroupBy(n => DayOf(MomentOf(n))).OrderBy(g => g.Key))
         {
+            var day = group.Key;
             var label = NoteDates.Day(day, today) + (day == today || day == today.AddDays(1) ? " · " + day.ToString("d MMM", CultureInfo.GetCultureInfo("en-GB")) : "");
-            groups.Add(new(label, false, open.Where(n => n.HasDate && n.Day.Date == day).OrderByDescending(IsImportant).ThenBy(n => n.At ?? TimeSpan.FromDays(1)).ThenBy(n => n.Id).ToList()));
+            groups.Add(new(label, false, group.OrderByDescending(IsImportant).ThenBy(n => n.At ?? TimeSpan.FromDays(1)).ThenBy(n => n.Id).ToList()));
         }
         var undated = open.Where(n => !n.HasDate).OrderByDescending(IsImportant).ThenBy(n => n.Id).ToList();
         if (undated.Count > 0) groups.Add(new("No date", false, undated));
@@ -223,13 +286,13 @@ public sealed class NotesModel
     }
 
     /// <summary>Adds a note. With a reminder it is dated and timed; without, it is an undated task. Returns what is wrong, or null.</summary>
-    public string? AddNote(string words, string? account, DateTime? reminder)
+    public string? AddNote(string words, string? account, DateTime? reminder, bool important = false)
     {
         if (string.IsNullOrWhiteSpace(words)) return "Write a note first";
-        var text = Compose(words, account);
+        var text = Compose(StoredWords(words, important), account);
         if (reminder is { } when) AddRow(when.Date, when.TimeOfDay.Truncate(), text, null, null, DayNoteKind.Task, true);
         else AddRow(now().Date, null, text, null, null, DayNoteKind.Task, false);
-        Changed?.Invoke(); return null;
+        NotifyChanged(); return null;
     }
 
     /// <summary>Adds a meeting on a day, with a repeat if one is chosen. Returns what is wrong, or null.</summary>
@@ -239,11 +302,12 @@ public sealed class NotesModel
         if (MeetingTimeProblem(start, end) is { } problem) return problem;
         var row = AddRow(day.Date, start, Compose(words, account), end, null, DayNoteKind.Meeting, true);
         if (RuleOf(repeat) is { } rule) StartSeriesFrom(row, rule);
-        Changed?.Invoke(); return null;
+        NotifyChanged(); return null;
     }
 
     private static string? MeetingTimeProblem(TimeSpan start, TimeSpan end)
-        => start < TimeSpan.Zero || end >= TimeSpan.FromDays(1) ? "A meeting has to fall within one day." : end <= start ? "The end has to be after the start." : null;
+        => start < TimeSpan.Zero || start >= TimeSpan.FromDays(1) ? "The start must be a clock time."
+            : end <= start ? "The end has to be after the start." : end - start > TimeSpan.FromDays(1) ? "A meeting can last at most 24 hours." : null;
 
     /// <summary>
     /// Gives a meeting new times on its own day, as when it is dragged or resized on the timeline. A meeting in a series changes for this day only. Returns what is
@@ -252,27 +316,32 @@ public sealed class NotesModel
     public string? MoveMeeting(long id, TimeSpan start, TimeSpan end)
     {
         if (Find(id) is not { } meeting || !IsMeeting(meeting)) return "That meeting is no longer there.";
-        if (MeetingTimeProblem(start, end) is { } problem) return problem;
-        Change(id, n => n with { At = start, End = end });
-        MeetingMoved?.Invoke(id); Changed?.Invoke(); return null;
+        return MoveMeeting(id, meeting.Day.Date + start, meeting.Day.Date + end);
+    }
+    public string? MoveMeeting(long id, DateTime start, DateTime end)
+    {
+        if (Find(id) is not { } meeting || !IsMeeting(meeting)) return "That meeting is no longer there.";
+        if (MeetingTimeProblem(start.TimeOfDay, end - start.Date) is { } problem) return problem;
+        Change(id, n => n with { Day = start.Date, At = start.TimeOfDay, End = end - start.Date });
+        MeetingMoved?.Invoke(id); NotifyChanged(); return null;
     }
 
     /// <summary>Changes a note's words, account and reminder (a null reminder makes it undated again).</summary>
-    public string? EditNote(long id, string words, string? account, DateTime? reminder)
+    public string? EditNote(long id, string words, string? account, DateTime? reminder, bool? important = null)
     {
         if (Find(id) is not { } note) return "That note is no longer there.";
         if (string.IsNullOrWhiteSpace(words)) return "Write a note first";
-        var text = Compose(words, account);
+        var text = Compose(StoredWords(words, important ?? IsImportant(note)), account);
         Change(id, n => reminder is { } when ? n with { Text = text, Day = when.Date, At = when.TimeOfDay.Truncate(), HasDate = true, Done = n.Done && ReminderOf(n) == when }
             : n with { Text = text, Day = now().Date, At = null, HasDate = false });
-        Changed?.Invoke(); return null;
+        NotifyChanged(); return null;
     }
 
     /// <summary>Sets or removes a note's reminder, keeping its words.</summary>
     public void SetReminder(long id, DateTime? reminder)
     {
         if (Find(id) is not { } note) return;
-        EditNote(id, note.Text, null, reminder);
+        EditNote(id, Words(note), AccountOf(note), reminder);
     }
 
     /// <summary>
@@ -282,6 +351,7 @@ public sealed class NotesModel
     public string? EditMeeting(long id, string words, string? account, DateTime day, TimeSpan start, TimeSpan end, RepeatChoice repeat, bool allLater)
     {
         if (Find(id) is not { } meeting) return "That meeting is no longer there.";
+        id = meeting.Id;
         if (string.IsNullOrWhiteSpace(words)) return "Name the meeting";
         if (MeetingTimeProblem(start, end) is { } problem) return problem;
         var text = Compose(words, account); var current = SeriesOf(meeting);
@@ -289,14 +359,17 @@ public sealed class NotesModel
         if (current is null) { if (RuleOf(repeat) is { } rule) StartSeriesFrom(Find(id)!, rule); }
         else if (allLater && !IsArchivedRepeat(meeting))
         {
-            var later = notes.Where(n => n.SeriesId == current.Id && n.Day.Date > day.Date && n.Id != id).ToList();
+            var later = notes.Where(n => n.SeriesId == current.Id && n.Day.Date > meeting.Day.Date && n.Id != id).ToList();
             var wanted = RuleOf(repeat);
             if (wanted is null) { foreach (var gone in later) RemoveRow(gone); EndSeries(current); }
-            else if (wanted != current.Rule)
+            else if (wanted != current.Rule || day.Date != meeting.Day.Date)
             {
                 foreach (var gone in later) RemoveRow(gone);
-                var remade = current with { Rule = wanted, Start = day.Date, GeneratedTo = day.Date, Text = text, At = start, End = end, Kind = DayNoteKind.Meeting };
-                series[series.FindIndex(s => s.Id == current.Id)] = remade; PersistSeries(remade); MakeSeriesNotes();
+                // Keep the earlier occurrences on their original schedule. The moved occurrence anchors a new series.
+                var ended = current with { Rule = current.Rule with { Until = meeting.Day.Date.AddDays(-1) } };
+                series[series.FindIndex(s => s.Id == current.Id)] = ended;
+                PersistSeries(ended);
+                StartSeriesFrom(Find(id)!, wanted);
             }
             else
             {
@@ -305,13 +378,13 @@ public sealed class NotesModel
                 series[series.FindIndex(s => s.Id == current.Id)] = updated; PersistSeries(updated);
             }
         }
-        Changed?.Invoke(); return null;
+        NotifyChanged(); return null;
     }
 
     public void Toggle(long id)
     {
         if (Find(id) is null) return;
-        Change(id, n => n with { Done = !n.Done }); Changed?.Invoke();
+        Change(id, n => n with { Done = !n.Done }); NotifyChanged();
     }
 
     /// <summary>Removes a note or meeting. For one in a series, <paramref name="allLater"/> removes this one and every later one and ends the series there; otherwise only this day goes and the series carries on.</summary>
@@ -325,7 +398,7 @@ public sealed class NotesModel
             else EndSeries(s);
         }
         else RemoveRow(note);
-        Changed?.Invoke();
+        NotifyChanged();
     }
 
     /// <summary>Restores an ordinary removed item, retaining all its fields. Series removals use their explicit scope flow instead.</summary>
@@ -342,7 +415,7 @@ public sealed class NotesModel
             var restored = AddRow(note.Day, note.At, note.Text, note.End, null, note.Kind, note.HasDate);
             if (note.Done) Change(restored.Id, n => n with { Done = true });
         }
-        Changed?.Invoke();
+        NotifyChanged();
     }
 
     /// <summary>Notes tagged with an account follow its rename, and the tag becomes an ordinary word if the account is deleted.</summary>
@@ -360,7 +433,7 @@ public sealed class NotesModel
             var text = NoteShorthand.Relink(series[i].Text, names, renamed, deleted);
             if (text != series[i].Text) { series[i] = series[i] with { Text = text }; PersistSeries(series[i]); }
         }
-        if (any) Changed?.Invoke();
+        if (any) NotifyChanged();
     }
 
     // ---- Repeats ----
@@ -373,10 +446,31 @@ public sealed class NotesModel
         {
             var s = series[i]; var reach = today.AddDays(NoteSeries.HorizonDays);
             if (s.GeneratedTo.Date >= reach) continue;
-            foreach (var day in s.Pending(today)) { AddRow(day, s.At, s.Text, s.End, s.Id, s.Kind ?? DayNoteKind.Meeting, true); made++; }
-            series[i] = s with { GeneratedTo = reach }; PersistSeries(series[i]);
+            var days = s.Pending(today);
+            var updated = s with { GeneratedTo = reach };
+            var generated = new List<DayNote>();
+            var kind = s.Kind ?? DayNoteKind.Meeting;
+            // A generation cursor must never be committed separately from its occurrences.
+            var written = store is not null && s.Id >= 0 && Try(() => store.Database.InTransaction(() =>
+            {
+                foreach (var day in days)
+                {
+                    var id = store.AddDayNote(day, s.At, s.Text, s.End, s.Id, kind, true);
+                    generated.Add(new DayNote(id, day, s.At, s.Text, false, s.End, s.Id, kind, true));
+                }
+                store.UpdateSeries(updated);
+            }), "that repeat");
+            if (written) { notes.AddRange(generated); pendingSeriesUpdates.Remove(s.Id); }
+            else
+            {
+                foreach (var day in days)
+                    notes.Add(new DayNote(store is null ? localNote++ : --unsaved, day, s.At, s.Text, false, s.End, s.Id, kind, true));
+                if (store is not null && s.Id >= 0) pendingSeriesUpdates.Add(s.Id);
+            }
+            series[i] = updated;
+            made += days.Count;
         }
-        if (made > 0) Changed?.Invoke();
+        if (made > 0) NotifyChanged();
         return made;
     }
 
@@ -387,8 +481,7 @@ public sealed class NotesModel
         if (store is not null)
         {
             long stored = 0;
-            if (!Try(() => stored = store.AddSeries(template), "that repeat")) return;
-            id = stored;
+            id = Try(() => stored = store.AddSeries(template), "that repeat") ? stored : --unsavedSeries;
         }
         series.Add(template with { Id = id });
         Change(first.Id, n => n with { SeriesId = id });
@@ -398,11 +491,17 @@ public sealed class NotesModel
     private void EndSeries(NoteSeries s)
     {
         series.RemoveAll(x => x.Id == s.Id);
-        if (store is not null && s.Id >= 0) Try(() => store.DeleteSeries(s.Id), "that repeat");
+        pendingSeriesUpdates.Remove(s.Id);
+        if (store is not null && s.Id >= 0 && !Try(() => store.Database.InTransaction(() => store.DeleteSeries(s.Id)), "that repeat")) pendingSeriesDeletes.Add(s.Id);
         for (var i = 0; i < notes.Count; i++) if (notes[i].SeriesId == s.Id) notes[i] = notes[i] with { SeriesId = null };
     }
 
-    private void PersistSeries(NoteSeries s) { if (store is not null && s.Id >= 0) Try(() => store.UpdateSeries(s), "that repeat"); }
+    private void PersistSeries(NoteSeries s)
+    {
+        if (store is null || s.Id < 0) return;
+        if (Try(() => store.UpdateSeries(s), "that repeat")) pendingSeriesUpdates.Remove(s.Id);
+        else pendingSeriesUpdates.Add(s.Id);
+    }
 
     // ---- Storage: a write that fails never loses the words ----
 
@@ -410,6 +509,7 @@ public sealed class NotesModel
     {
         long id;
         if (store is null) id = localNote++;
+        else if (seriesId < 0) id = --unsaved;
         else { long stored = 0; id = Try(() => stored = store.AddDayNote(day, at, text, end, seriesId, kind, hasDate), "that note") ? stored : --unsaved; }
         var note = new DayNote(id, day, at, text, false, end, seriesId, kind, hasDate);
         notes.Add(note); return note;
@@ -417,6 +517,7 @@ public sealed class NotesModel
 
     private void Change(long id, Func<DayNote, DayNote> change)
     {
+        id = savedNoteIds.GetValueOrDefault(id, id);
         var index = notes.FindIndex(n => n.Id == id); if (index < 0) return;
         notes[index] = change(notes[index]); Persist(notes[index]);
     }
@@ -424,6 +525,7 @@ public sealed class NotesModel
     private void Persist(DayNote note)
     {
         if (store is null || note.Id < 0) return; // An unsaved note is written whole when it is retried.
+        if (note.SeriesId < 0) { pendingUpdates.Add(note.Id); return; }
         if (Try(() => store.UpdateDayNote(note), "that change")) pendingUpdates.Remove(note.Id);
         else pendingUpdates.Add(note.Id);
     }
@@ -444,27 +546,58 @@ public sealed class NotesModel
     }
 
     /// <summary>True while any note is on screen but not yet in the database.</summary>
-    public bool Unsaved => pendingDeletes.Count > 0 || pendingUpdates.Count > 0 || notes.Any(n => n.Id < 0);
+    public bool Unsaved => pendingDeletes.Count > 0 || pendingUpdates.Count > 0 || notes.Any(n => n.Id < 0)
+        || pendingSeriesUpdates.Count > 0 || pendingSeriesDeletes.Count > 0 || series.Any(s => s.Id < 0);
 
     /// <summary>Writes again whatever the database refused: notes never stored, and removals. Called now and then.</summary>
     public void RetryUnsaved()
     {
         if (store is null || !Unsaved) return;
-        bool Quiet(Action write) { try { write(); return true; } catch (Exception) { return false; } }
+        var seriesIds = new Dictionary<long, long>();
+        var noteIds = new Dictionary<long, long>();
+        DayNote StoredNote(DayNote note) => note with
+        {
+            SeriesId = note.SeriesId is { } id && seriesIds.TryGetValue(id, out var stored) ? stored : note.SeriesId
+        };
+        // Resolve IDs inside the transaction, but publish them to the views only after every write commits.
+        // A refused write rolls back the whole retry, so repeating it cannot duplicate successful inserts.
+        if (!Try(() => store.Database.InTransaction(() =>
+        {
+            foreach (var item in series.Where(s => s.Id < 0)) seriesIds[item.Id] = store.AddSeries(item);
+            foreach (var note in notes.Where(n => n.Id < 0))
+            {
+                var row = StoredNote(note);
+                var id = store.AddDayNote(row.Day, row.At, row.Text, row.End, row.SeriesId, row.Kind, row.HasDate);
+                noteIds[note.Id] = id;
+                if (row.Done) store.UpdateDayNote(row with { Id = id });
+            }
+            foreach (var id in pendingUpdates)
+                if (Find(id) is { } note) store.UpdateDayNote(StoredNote(note));
+            foreach (var id in pendingDeletes) store.DeleteDayNote(id);
+            foreach (var id in pendingSeriesDeletes) store.DeleteSeries(id);
+            foreach (var id in pendingSeriesUpdates)
+                if (series.FirstOrDefault(s => s.Id == id) is { } item) store.UpdateSeries(item);
+        }), "notes and repeats")) return;
+
+        for (var i = 0; i < series.Count; i++)
+            if (seriesIds.TryGetValue(series[i].Id, out var id)) series[i] = series[i] with { Id = id };
         for (var i = 0; i < notes.Count; i++)
         {
-            var note = notes[i]; if (note.Id >= 0) continue;
-            long stored = 0;
-            if (!Quiet(() => stored = store.AddDayNote(note.Day, note.At, note.Text, note.End, note.SeriesId, note.Kind, note.HasDate))) continue;
-            notes[i] = note with { Id = stored };
-            if (note.Done && !Quiet(() => store.UpdateDayNote(notes[i]))) pendingUpdates.Add(stored);
+            var row = StoredNote(notes[i]);
+            if (noteIds.TryGetValue(row.Id, out var id))
+            {
+                var previous = row.Id;
+                row = row with { Id = id };
+                notes[i] = row;
+                savedNoteIds[previous] = id;
+                NoteIdChanged?.Invoke(previous, id);
+            }
+            else notes[i] = row;
         }
-        foreach (var id in pendingUpdates.ToList())
-            if (Find(id) is not { } note || Quiet(() => store.UpdateDayNote(note))) pendingUpdates.Remove(id);
-        foreach (var id in pendingDeletes.ToList()) if (Quiet(() => store.DeleteDayNote(id))) pendingDeletes.Remove(id);
-        if (!Unsaved) { Fault = null; Changed?.Invoke(); }
+        pendingUpdates.Clear(); pendingDeletes.Clear(); pendingSeriesUpdates.Clear(); pendingSeriesDeletes.Clear();
+        Fault = null;
+        NotifyChanged();
     }
-
     /// <summary>
     /// Notes and meetings for the sample-data demo, enough to try every part of them: meetings that repeat (daily, weekly, every other week, monthly) and overlap on one day and
     /// run long on another, notes that are late (one by days), coming up, at the same minute (a cluster on the timeline), important with and without a reminder, with links,
@@ -499,21 +632,21 @@ public sealed class NotesModel
         AddMeeting(today.AddDays(7), TimeSpan.FromHours(9), TimeSpan.FromHours(10.5), "Planning", Account(1), RepeatChoice.None);
 
         // Notes that are late: one a few minutes ago, one a day old, one days old, and important ones.
-        AddNote("!! Call the client back about the contract", Account(1), today.AddHours(13.75));
+        AddNote("Call the client back about the contract", Account(1), today.AddHours(13.75), important: true);
         AddNote("Chase the invoice", Account(4), today.AddDays(-1).AddHours(16));
         AddNote("Renew the software licence", null, today.AddDays(-3).AddHours(10));
-        AddNote("!! Reply to the auditor", Account(3), today.AddDays(-2).AddHours(9.5));
+        AddNote("Reply to the auditor", Account(3), today.AddDays(-2).AddHours(9.5), important: true);
         // Notes coming up: three at nearly the same minute (one pin on the timeline), then later today, tomorrow and further on.
         AddNote("Book the meeting room", null, today.AddHours(15.5));
-        AddNote("!! Print the agenda", Account(2), today.AddHours(15.5).AddMinutes(5));
+        AddNote("Print the agenda", Account(2), today.AddHours(15.5).AddMinutes(5), important: true);
         AddNote("Submit the timesheet", Account(6), today.AddHours(16.75));
-        AddNote("!! Send the invoice batch", Account(3), today.AddHours(17));
-        AddNote("!! Confirm the catering", null, today.AddDays(1).AddHours(8.5));
+        AddNote("Send the invoice batch", Account(3), today.AddHours(17), important: true);
+        AddNote("Confirm the catering", null, today.AddDays(1).AddHours(8.5), important: true);
         AddNote("Prepare the workshop slides", Account(3), today.AddDays(1).AddHours(9));
         AddNote("Review the [contract draft](https://example.com/contract) before the call", Account(1), today.AddDays(2).AddHours(11));
         AddNote("Quarterly report due: see [the template](https://example.com/report) and [last quarter](https://example.com/report-q3)", Account(4), today.AddDays(8).AddHours(12));
         // Notes with no date: one important, one with a link, one with an account, a long one that wraps, and a few more for the lists.
-        AddNote("!! Back up the laptop", null, null);
+        AddNote("Back up the laptop", null, null, important: true);
         AddNote("Look at [other time-tracking tools](https://example.com/research) for ideas", null, null);
         AddNote("Write up the retro", Account(6), null);
         AddNote("Ask finance about the Q4 budget", Account(4), null);

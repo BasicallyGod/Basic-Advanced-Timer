@@ -95,22 +95,22 @@ public sealed class FeedbackRound8Tests
             var box = Find<TextBox>(window, "NotesSearch");
             Press(window, Centre(window, box)); Assert.True(box.IsFocused, "A real press lands in the box.");
             window.KeyTextInput("zzz"); Settle(window);
-            Assert.Equal("zzz", box.Text); Assert.Equal("Nothing matches that search.", Find<TextBlock>(window, "NotesPageEmpty").Text);
+            Assert.Equal("zzz", box.Text); Assert.Equal("No match", Find<TextBlock>(window, "NotesPageEmpty").Text);
         }
         finally { window.Close(); }
     }
 
     [AvaloniaFact]
-    public void NoteAndMeetingAreOneSwitchAndAddHasAccentInk()
+    public void NoteAndMeetingAreOnePickerAndAddHasAccentInk()
     {
         var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
             Click(window, "NotesTab");
-            var note = Find<Button>(window, "PageKindNote"); var meeting = Find<Button>(window, "PageKindMeeting");
-            Assert.Same(note.Parent, meeting.Parent); Assert.Contains("segTrack", ((Border)note.Parent!.Parent!).Classes);
-            Assert.Contains("optOn", note.Classes); Assert.DoesNotContain("optOn", meeting.Classes);
-            Click(window, "PageKindMeeting"); Assert.Contains("optOn", Find<Button>(window, "PageKindMeeting").Classes); Assert.DoesNotContain("optOn", Find<Button>(window, "PageKindNote").Classes);
+            var picker = Find<Border>(window, "PageKind"); Assert.Equal("Kind: Note", Avalonia.Automation.AutomationProperties.GetName(picker));
+            Assert.Equal(2, picker.GetVisualDescendants().OfType<Button>().Count());
+            window.GetVisualDescendants().OfType<NotesPage>().Single().SetKind(true); Settle(window);
+            Assert.Equal("Kind: Meeting", Avalonia.Automation.AutomationProperties.GetName(Find<Border>(window, "PageKind")));
             var add = Find<Button>(window, "PageSubmit"); Assert.Contains("primary", add.Classes);
             Assert.True(ThemeColours.Contrast(AppThemes.Light.Colour("AccentInk"), AppThemes.Light.Colour("Accent")) >= 4.5);
         }
@@ -129,7 +129,7 @@ public sealed class FeedbackRound8Tests
             field.Text = "Ring them #acc"; Dispatcher.UIThread.RunJobs(); Settle(window);
             Assert.Equal(2, window.GetVisualDescendants().OfType<Button>().Count(b => b.Name?.StartsWith("PageSuggest_") == true));
             Click(window, "PageSuggest_Accounttwo");
-            Assert.Equal("Ring them", Find<TextBox>(window, "PageNoteField").Text); Assert.Equal("Account two", Find<ComboBox>(window, "PageAccount").SelectedItem);
+            Assert.Equal("Ring them", Find<TextBox>(window, "PageNoteField").Text); Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "#Accounttwo"); Assert.NotNull(Find<Button>(window, "FormAccountChip"));
             Assert.Empty(window.GetVisualDescendants().OfType<Button>().Where(b => b.Name?.StartsWith("PageSuggest_") == true));
         }
         finally { window.Close(); }

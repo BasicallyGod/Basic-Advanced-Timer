@@ -22,6 +22,13 @@ public sealed class SoftDatePicker : Border
 
     public event Action<DateTime>? DayPicked;
 
+    /// <summary>The day number shared by the dashboard and reminder calendars.</summary>
+    public static TextBlock DayContent(string number, double size, bool bold = false) => new()
+    {
+        Text = number, FontSize = size, FontWeight = bold ? FontWeight.SemiBold : FontWeight.Normal,
+        HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Name = "DayNumber"
+    };
+
     public DateTime? SelectedDate
     {
         get => selected;
@@ -95,7 +102,8 @@ public sealed class SoftDatePicker : Border
             button.Classes.Set("outsideMonth", day.Month != month.Month);
             button.Classes.Set("chosenDay", selected?.Date == day);
             button.Classes.Set("todayDay", DateTime.Today == day);
-            button.FontSize = 13; button.FontWeight = selected?.Date == day ? FontWeight.SemiBold : FontWeight.Normal;
+            button.Classes.Set("weekendDay", day.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday);
+            button.Content = DayContent(day.Day.ToString(CultureInfo.InvariantCulture), 13, selected?.Date == day);
             AutomationProperties.SetName(button, day.ToString("dddd d MMMM yyyy", British));
             Ui.Put(days, button, i % 7, i / 7);
         }

@@ -47,9 +47,26 @@ public sealed class ShiftEditor : StackPanel
         var breakBox = new TextBox { Text = model.BreakAllowance.ToString(@"hh\:mm"), Width = 80, Name = "BreakAllowance" };
         if (withBreaks)
         {
-            var breakRow = Ui.Grid("*,80"); Ui.Put(breakRow, Ui.Text("Break each day", 14)); Ui.Put(breakRow, breakBox, 1); breakRow.Margin = new Thickness(0, 6, 0, 0);
-            root.Children.Add(breakRow);
-            root.Children.Add(Ui.Text("Taken off each working day's hours, so the schedule is the time you are to work.", 12, "muted"));
+            // The break is what turns the clock hours into the time you are to work, so it is a group of its own, set apart in a well with a live sum, and not one more line under the days.
+            var well = new Border { Name = "DailyBreak", CornerRadius = new CornerRadius(12), Padding = new Thickness(16, 12), Margin = new Thickness(0, 6, 0, 2) };
+            well.Bind(Border.BackgroundProperty, well.GetResourceObservable("Well")); well.Bind(Border.BoxShadowProperty, well.GetResourceObservable("ShadowSunk"));
+            var inner = new StackPanel { Spacing = 8 };
+            var breakRow = Ui.Grid("*,80"); var breakLabel = Ui.Text("Break each day", 14); breakLabel.Name = "BreakEachDay"; breakLabel.FontWeight = Avalonia.Media.FontWeight.SemiBold;
+            Ui.Put(breakRow, breakLabel); Ui.Put(breakRow, breakBox, 1); inner.Children.Add(breakRow);
+            var breakNote = Ui.Text("Taken off every working day, so the schedule is the time you are to work.", 12, "muted"); breakNote.TextWrapping = Avalonia.Media.TextWrapping.Wrap; inner.Children.Add(breakNote);
+            var sum = Ui.Text("", 13); sum.Name = "BreakSummary"; sum.FontWeight = Avalonia.Media.FontWeight.SemiBold; sum.TextWrapping = Avalonia.Media.TextWrapping.Wrap; inner.Children.Add(sum);
+            // A live example from the first working day: the hours, less the break, is what is to be worked.
+            void Sum()
+            {
+                var first = entries.FirstOrDefault(e => e.On.IsChecked == true);
+                bool ok1 = TimeSpan.TryParseExact((first.Start?.Text ?? "").Trim(), new[] { "h\\:mm", "hh\\:mm" }, CultureInfo.InvariantCulture, out var from), ok2 = TimeSpan.TryParseExact((first.End?.Text ?? "").Trim(), new[] { "h\\:mm", "hh\\:mm" }, CultureInfo.InvariantCulture, out var to), ok3 = TimeSpan.TryParseExact((breakBox.Text ?? "").Trim(), new[] { "h\\:mm", "hh\\:mm" }, CultureInfo.InvariantCulture, out var brk);
+                if (first.Start is null || !ok1 || !ok2 || !ok3 || to <= from) { sum.Text = ""; return; }
+                var net = to - from - brk; if (net < TimeSpan.Zero) net = TimeSpan.Zero;
+                sum.Text = $"{from:hh\\:mm} to {to:hh\\:mm} less {brk:hh\\:mm} break: {net:hh\\:mm} to work.";
+            }
+            foreach (var e in entries) { e.Start.PropertyChanged += (_, ev) => { if (ev.Property == TextBox.TextProperty) Sum(); }; e.End.PropertyChanged += (_, ev) => { if (ev.Property == TextBox.TextProperty) Sum(); }; e.On.IsCheckedChanged += (_, _) => Sum(); }
+            breakBox.PropertyChanged += (_, ev) => { if (ev.Property == TextBox.TextProperty) Sum(); };
+            Sum(); well.Child = inner; root.Children.Add(well);
         }
         var today = new CheckBox { Content = "Also reset today to its new scheduled start/end" };
         root.Children.Add(today);

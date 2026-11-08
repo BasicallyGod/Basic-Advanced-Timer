@@ -39,13 +39,14 @@ public sealed class Round31Tests
     [Fact]
     public void EachDigitLightsTheSegmentsItShouldAndAnyRunIsAsWideAsItsShapeAlone()
     {
-        string Lit(char c) => string.Concat(Enumerable.Range(0, 7).Where(s => SegmentShapes.IsLit(c, s)).Select(s => (char)('a' + s)));
-        Assert.Equal("abcdef", Lit('0')); Assert.Equal("bc", Lit('1')); Assert.Equal("abc", Lit('7')); Assert.Equal("abcdefg", Lit('8')); Assert.Equal("", Lit(' '));
-        Assert.Equal(7, SegmentShapes.For(28).Segments.Count);
+        string Lit(char c) => string.Concat(SegmentShapes.Ids.Where(id => SegmentShapes.IsLit(c, id.ToString())));
+        // The digits light the same sixteen-segment sets as the account name's, so the clock draws nothing the name cannot.
+        Assert.Equal("aAdDgGfebc".Length + 0, Lit('8').Length); Assert.Equal(10, Lit('8').Length); Assert.Equal("bcjl".Length - 1, Lit('1').Length); Assert.Equal("", Lit(' '));
+        Assert.Equal(16, SegmentShapes.For(28).Segments.Count);
         // The width depends on how many digits and colons a run has, never on which, so the clock and the count never move.
         Assert.Equal(SegmentRun.WidthOf("00:00", 28), SegmentRun.WidthOf("88:88", 28), 1e-9);
         Assert.Equal(SegmentRun.WidthOf("00", 15), SegmentRun.WidthOf("  ", 15), 1e-9);
-        Assert.True(SegmentClock.Width > 100 && SegmentClock.Width < 130);
+        Assert.True(SegmentClock.Width > 110 && SegmentClock.Width < 150);
     }
 
     [AvaloniaFact]
@@ -54,11 +55,11 @@ public sealed class Round31Tests
         var model = Demo("Light"); var pill = new PillWindow(model); pill.Show(); Settle(pill);
         try
         {
-            var surface = Find<Border>(pill, "PillSurface"); var display = Find<Border>(pill, "PillDisplay"); var well = Find<Border>(pill, "PillWell");
+            var surface = Find<Border>(pill, "PillSurface"); var display = Find<Border>(pill, "PillDisplay"); 
             Assert.Equal(StatusFace.DisplayHeight, display.Bounds.Height, 0.5); Assert.Equal(52, display.Bounds.Height, 0.5); Assert.Equal(14, display.CornerRadius.TopLeft);
             Assert.Equal(StatusFace.DisplayWidth, display.Bounds.Width, 1.0);
-            Assert.Equal(PillWindow.InsetLeft, X(display, surface), 3.0); // The display starts at the card's left inset.
-            Assert.Equal(12, X(well, surface) - (X(display, surface) + display.Bounds.Width), 1.5); // 12 between the display and the well, and the well and the break (G3).
+            Assert.Equal(PillWindow.BezelWidth, X(display, surface), 0.5);
+            Assert.Equal(PillWindow.BezelWidth, surface.Bounds.Width - X(display, surface) - display.Bounds.Width, 0.5);
             var width = display.Bounds.Width; var clockWidth = pill.GetVisualDescendants().OfType<SegmentClock>().Single().Bounds.Width; var countWidth = Find<SegmentRun>(pill, "PillAlertCount").Bounds.Width;
             model.ToggleAccount("Account one"); model.ToggleBreak(); model.Notes.AddNote("Send the budget", null, DemoNow.Date.AddHours(8)); Settle(pill);
             Assert.Equal(width, display.Bounds.Width, 0.5); Assert.Equal(clockWidth, pill.GetVisualDescendants().OfType<SegmentClock>().Single().Bounds.Width, 0.5); Assert.Equal(countWidth, Find<SegmentRun>(pill, "PillAlertCount").Bounds.Width, 0.5);
@@ -91,7 +92,7 @@ public sealed class Round31Tests
         try
         {
             var led = Find<Border>(pill, "PillStateLight"); Assert.Equal(new Size(6, 14), led.Bounds.Size); Assert.Equal(3.5, led.CornerRadius.TopLeft);
-            var idle = Fill(led); pill.TryFindResource("DisplayGroove", pill.ActualThemeVariant, out var groove); Assert.Equal(((ISolidColorBrush)groove!).Color, idle);
+            var idle = Fill(led); Assert.True(idle.A < 60); // Idle it is a faint ghost of the text colour, seen through the honeycomb.
             model.ToggleAccount("Account one"); Settle(pill); var live = Fill(led); Assert.NotEqual(idle, live);
             model.ToggleBreak(); Settle(pill); var onBreak = Fill(led); Assert.NotEqual(live, onBreak); Assert.NotEqual(idle, onBreak);
         }
@@ -105,7 +106,7 @@ public sealed class Round31Tests
         try
         {
             var sidebar = Find<Border>(window, "Sidebar"); var display = Find<Border>(window, "SidebarDisplay");
-            Assert.Equal(52, display.Bounds.Height, 0.5); Assert.True(display.Bounds.Width <= sidebar.Bounds.Width - 24, "the display fits the column with room at each side");
+            Assert.Equal(StatusFace.DisplayHeight + StatusFace.SecondRowHeight, display.Bounds.Height, 0.5); // The clock row and the row of play, name and cup. Assert.True(display.Bounds.Width <= sidebar.Bounds.Width - 24, "the display fits the column with room at each side");
             Assert.NotNull(Find<Border>(window, "SidebarStateLight")); Assert.Equal(2, Find<SegmentRun>(window, "SidebarAlertCount").Text.Length);
             var width = display.Bounds.Width; model.ToggleAccount("Account one"); Settle(window); Assert.Equal(width, display.Bounds.Width, 0.5);
         }

@@ -43,13 +43,13 @@ public sealed class Round22Tests
     [AvaloniaFact]
     public void AnImportantNoteIsGoldNotTheAccent()
     {
-        var model = Model(); model.Notes.AddNote("!! Ring the client", null, null); var window = new DashboardWindow(model); window.Show(); Settle(window);
+        var model = Model(); model.Notes.AddNote("Ring the client", null, null, important: true); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
             var app = Application.Current!;
             Avalonia.Media.Color Colour(string key) => ((Avalonia.Media.SolidColorBrush)app.FindResource(window.ActualThemeVariant, key)!).Color;
             var star = Colour("ImportantStar"); var accent = Colour("Accent");
-            Assert.True(star.R > star.B + 80 && star.R >= accent.R); // Warm: far from the accent's blue.
+            Assert.True(star.R > star.B + 80 && Hue(accent) > 250); // Warm gold, far from the orchid accent.
             Assert.NotEqual(Colour("ImportantTint"), Colour("Panel"));
             Assert.True(Hue(Colour("ImportantTint")) < 60 && Hue(Colour("ImportantEdge")) < 60);
         }
@@ -58,18 +58,17 @@ public sealed class Round22Tests
     private static double Hue(Avalonia.Media.Color c) { var hsv = c.ToHsv(); return hsv.H; }
 
     [AvaloniaFact]
-    public void TheStarKeepsItsPlaceWhetherOrNotTheBellIsThere()
+    public void TheStarAndBinKeepTheirPlaceOnEveryRowWhateverItsChips()
     {
-        var model = Model(); model.Notes.AddNote("!! With a bell", null, null); model.Notes.AddNote("!! Without a bell", null, Day.AddHours(15));
+        var model = Model(); model.Notes.AddNote("With a reminder", null, Day.AddHours(15), important: true); model.Notes.AddNote("Without one", null, null, important: true);
         var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            var withBell = model.Notes.All.Single(n => n.Text.Contains("With a bell")); var without = model.Notes.All.Single(n => n.Text.Contains("Without a bell"));
+            var withBell = model.Notes.All.Single(n => n.Text.Contains("With a reminder")); var without = model.Notes.All.Single(n => n.Text.Contains("Without one"));
             var a = Find<Button>(window, "NoteImportant_" + withBell.Id); var b = Find<Button>(window, "NoteImportant_" + without.Id);
-            var bell = Find<Button>(window, "NoteAddReminder_" + withBell.Id);
             Assert.Equal(a.Bounds.Width, b.Bounds.Width, 0.01);
             Assert.Equal(LeftOf(window, a) - LeftOf(window, Find<Button>(window, "NoteRemove_" + withBell.Id)), LeftOf(window, b) - LeftOf(window, Find<Button>(window, "NoteRemove_" + without.Id)), 0.01);
-            Assert.True(LeftOf(window, bell) < LeftOf(window, a)); // The bell is on the star's left, where it can come and go.
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), x => x.Name?.StartsWith("NoteAddReminder_") == true); // A reminder is set from Details, not from a bell on every row.
         }
         finally { window.Close(); }
     }
@@ -102,16 +101,17 @@ public sealed class Round22Tests
     }
 
     [AvaloniaFact]
-    public void TheTrackingCardsDotKeepsOneLeftEdgeWhateverTheNameIs()
+    public void TheTrackingDisplaysNameKeepsOneLeftEdgeWhateverTheNameIs()
     {
         var model = Model("Al", "A rather long account name that goes on"); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            double Edge() { var dot = Find<Border>(window, "SidebarWell").GetVisualDescendants().OfType<Ellipse>().First(e => e.Width == 9); return LeftOf(window, dot); }
+            double Edge() => LeftOf(window, Find<SegmentName>(window, "SidebarAccountName"));
+            var width = Find<Border>(window, "SidebarTrack").Bounds.Width;
             var idle = Edge(); model.ToggleAccount("Al"); Settle(window); var short1 = Edge();
             model.ToggleAccount("A rather long account name that goes on"); Settle(window); var long1 = Edge();
-            Assert.Equal(short1, long1, 0.01); Assert.Equal(idle, short1, 0.01);
-            var name = Find<TextBlock>(window, "SidebarWhoName"); Assert.True(name.Bounds.Right <= Find<Border>(window, "SidebarWell").Bounds.Width);
+            Assert.Equal(short1, long1, 0.01); Assert.Equal(idle, short1, 0.01); // The name starts at one place whatever it says,
+            Assert.Equal(width, Find<Border>(window, "SidebarTrack").Bounds.Width, 0.01); // and the display never changes width.
         }
         finally { window.Close(); }
     }

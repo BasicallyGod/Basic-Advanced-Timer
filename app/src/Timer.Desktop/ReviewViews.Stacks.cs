@@ -95,8 +95,8 @@ public static partial class ReviewViews
     // A line's colour in a tile: the account's deeper edge colour, taken towards the text colour until it holds 3 to 1 on the tile's fill, so it reads on Light as well as on Dark.
     private static Color LineColour(TimerModel model, string account)
     {
-        var tileFill = model.CurrentTheme.Colour("Hover"); var ink = model.CurrentTheme.Colour("Ink");
-        if (BreakAccount.Is(account)) return Color.Parse(model.CurrentTheme.Colour("Muted"));
+        var tileFill = model.GlassTheme.Colour("Hover"); var ink = model.GlassTheme.Colour("Ink");
+        if (BreakAccount.Is(account)) return Color.Parse(model.GlassTheme.Colour("Muted"));
         var colour = model.ReviewAccounts.FirstOrDefault(a => a.Name.Equals(account, StringComparison.OrdinalIgnoreCase))?.Colour ?? "#91B7D5";
         var shade = model.BlockLook(colour).Edge;
         for (var amount = 0.0; amount < 1 && ThemeColours.Contrast(shade, tileFill) < 3; amount += .1) shade = ThemeColours.Mix(model.BlockLook(colour).Edge, ink, amount + .1);
@@ -106,7 +106,7 @@ public static partial class ReviewViews
     // A tile for a stack of blocks. With the recording block over it (compact), the tile is slimmer and sits under that block's lane.
     private static void AddBlockTile(Canvas canvas, TimerModel model, List<Interval> members, bool compact, double bandTop, double bandHeight, double pixelsPerHour, Func<DateTime, double> X)
     {
-        var start = members.Min(i => i.Start); var day = start.Date; var end = members.Max(i => i.End); if (end > day.AddDays(1)) end = day.AddDays(1);
+        var begin = model.DayBegins(model.SelectedDate); var start = members.Min(i => i.Start); if (start < begin) start = begin; var end = members.Max(i => i.End); if (end > begin.AddDays(1)) end = begin.AddDays(1);
         var width = Math.Max(MinimumBlockWidth, (end - start).TotalHours * pixelsPerHour - BlockGap);
         var height = TileHeight(bandHeight, compact); var top = bandTop + bandHeight - height; // Sits on the foot of the band, where the blocks end.
         var total = members.Aggregate(TimeSpan.Zero, (sum, i) => sum + DurationOf(i));
@@ -120,12 +120,12 @@ public static partial class ReviewViews
         var title = Words(members.Count, "block", "blocks") + " · " + model.Format(total);
         var card = new Border { Name = "TimelineStack" + start.ToString("HHmmss"), Width = width, Height = height, CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1.5), Tag = new StackTag(members.Count), Cursor = new Cursor(StandardCursorType.Hand) };
         card.Classes.Add("stackTile");
-        FillTile(card, width, height, title, $"{start:HH:mm}–{end:HH:mm}", lines, rows, compact, null, Color.Parse(model.CurrentTheme.Colour("Ink")));
+        FillTile(card, width, height, title, $"{start:HH:mm}–{end:HH:mm}", lines, rows, compact, null, Color.Parse(model.GlassTheme.Colour("Ink")));
         var heading = $"{title} · {start:HH:mm}–{end:HH:mm}";
         ToolTip.SetTip(card, StackTip(heading, members.Take(8).Select(i => (model.Label(i.Account), $"{i.Start:HH:mm}–{i.End:HH:mm}", (string?)model.Format(DurationOf(i)))).ToList(), Math.Max(0, members.Count - 8)));
         Avalonia.Automation.AutomationProperties.SetName(card, $"{title}, {start:HH:mm} to {end:HH:mm}. Press to open them in Details");
         card.PointerEntered += (_, _) => card.Classes.Add("over"); card.PointerExited += (_, _) => card.Classes.Remove("over");
-        if (selectedIn) { card.Classes.Add("mergeSelected"); card.BoxShadow = new BoxShadows(new BoxShadow { Spread = 3, Color = Color.Parse(model.CurrentTheme.Colour("Accent")) }); card.ZIndex = 3; }
+        if (selectedIn) { card.Classes.Add("mergeSelected"); card.BoxShadow = Ring(Color.Parse(ThemeEngine.LitOf(model.GlassTheme))); card.ZIndex = 3; }
         Point? press = null;
         card.PointerPressed += (_, e) => { if (e.GetCurrentPoint(card).Properties.IsLeftButtonPressed) { press = e.GetPosition(canvas); e.Handled = true; } };
         card.PointerReleased += (_, e) =>
@@ -143,12 +143,12 @@ public static partial class ReviewViews
     // A tile for a stack of meetings, the height of the meeting row.
     private static void AddMeetingTile(Canvas canvas, TimerModel model, DateTime day, List<DayNote> stack, double meetingTop, double pixelsPerHour, Func<DateTime, double> X)
     {
-        var start = day + stack.Min(m => m.At!.Value); var end = day + stack.Max(m => m.End!.Value);
+        var start = stack.Min(m => MeetingStart(m)); var end = stack.Max(m => MeetingEnd(m));
         var width = Math.Max(24, (end - start).TotalHours * pixelsPerHour - 2);
-        var placed = PlaceLanes(stack.Select(m => (m, day + m.At!.Value, day + m.End!.Value))); var rows = placed.Values.Max(v => v.Count);
+        var placed = PlaceLanes(stack.Select(m => (m, MeetingStart(m), MeetingEnd(m)))); var rows = placed.Values.Max(v => v.Count);
         var selectedIn = stack.Any(m => m.Id == model.SelectedMeetingId);
-        var ink = Color.Parse(model.CurrentTheme.Colour("Ink"));
-        var lines = stack.Select(m => new StackLines.Line(Math.Max(8, ((day + m.At!.Value) - start).TotalHours * pixelsPerHour), Math.Min(width - 8, ((day + m.End!.Value) - start).TotalHours * pixelsPerHour), placed[m].Lane,
+        var ink = Color.Parse(model.GlassTheme.Colour("Ink"));
+        var lines = stack.Select(m => new StackLines.Line(Math.Max(8, ((MeetingStart(m)) - start).TotalHours * pixelsPerHour), Math.Min(width - 8, ((MeetingEnd(m)) - start).TotalHours * pixelsPerHour), placed[m].Lane,
             ink, selectedIn && m.Id == model.SelectedMeetingId, selectedIn && m.Id != model.SelectedMeetingId)).ToList();
         var title = Words(stack.Count, "meeting", "meetings");
         var card = new Border { Name = "TimelineMeetingStack" + start.ToString("HHmm"), Width = width, Height = MeetingHeight, CornerRadius = new CornerRadius(12), Tag = new StackTag(stack.Count), Cursor = new Cursor(StandardCursorType.Hand) };
@@ -157,7 +157,7 @@ public static partial class ReviewViews
         ToolTip.SetTip(card, StackTip($"{title} · {start:HH:mm}–{end:HH:mm}", stack.Take(8).Select(m => (model.Notes.Text(m), $"{Hm(m.At)}–{Hm(m.End)}", (string?)null)).ToList(), Math.Max(0, stack.Count - 8)));
         Avalonia.Automation.AutomationProperties.SetName(card, $"{title}, {start:HH:mm} to {end:HH:mm}. Press to open them in Details");
         card.PointerEntered += (_, _) => card.Classes.Add("over"); card.PointerExited += (_, _) => card.Classes.Remove("over");
-        if (selectedIn) { card.Classes.Add("mergeSelected"); card.BoxShadow = new BoxShadows(new BoxShadow { Spread = 3, Color = Color.Parse(model.CurrentTheme.Colour("Accent")) }); card.ZIndex = 3; }
+        if (selectedIn) { card.Classes.Add("mergeSelected"); card.BoxShadow = Ring(Color.Parse(ThemeEngine.LitOf(model.GlassTheme))); card.ZIndex = 3; }
         Point? press = null;
         card.PointerPressed += (_, e) => { if (e.GetCurrentPoint(card).Properties.IsLeftButtonPressed) { press = e.GetPosition(canvas); e.Handled = true; } };
         card.PointerReleased += (_, e) =>

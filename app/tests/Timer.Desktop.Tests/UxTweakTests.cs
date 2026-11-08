@@ -41,8 +41,13 @@ public sealed class UxTweakTests
     {
         foreach (var theme in new[] { AppThemes.Light, AppThemes.Dark })
         {
-            var accent = Color.Parse(theme.Colour("Accent"));
-            Assert.True(accent.B > accent.R + 40 && accent.B >= accent.G, $"{theme.Name} accent {theme.Colour("Accent")} is not clearly blue");
+            // Orchid sits between violet and magenta (hue 250 to 320 degrees), well away from red, orange and green, whose roles are tracking, a break and overdue.
+            foreach (var tone in new[] { theme.Colour("Accent"), ThemeEngine.AccentLit(theme.Colours) })
+            {
+                var c = Color.Parse(tone); double r = c.R / 255.0, g = c.G / 255.0, b = c.B / 255.0, max = Math.Max(r, Math.Max(g, b)), min = Math.Min(r, Math.Min(g, b)), d = max - min;
+                var hue = max == r ? 60 * (((g - b) / d) % 6) : max == g ? 60 * ((b - r) / d + 2) : 60 * ((r - g) / d + 4); if (hue < 0) hue += 360;
+                Assert.InRange(hue, 250, 320);
+            }
         }
     }
 
@@ -135,8 +140,10 @@ public sealed class UxTweakTests
         {
             Settle(window);
             double Top(string name) { var b = window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == name); return b.TranslatePoint(new Point(0, 0), window)!.Value.Y; }
-            Assert.True(Top("SidebarDashboard") < Top("SidebarPause")); Assert.True(Top("SidebarPause") < Top("Account0")); // The clock, then the tracking card, then the accounts.
-            Assert.Equal(Top("SidebarPause"), Top("DashboardBreak"), 1.0); Assert.True(Top("Account0") < Top("QuitTimer")); // Quit timer is at the foot.
+            Assert.True(Top("SidebarDashboard") < Top("SidebarPause"));
+            Assert.True(Top("SidebarPause") < Top("DashboardBreak"));
+            Assert.True(Top("DashboardBreak") < Top("Account0"));
+            Assert.True(Top("Account0") < Top("QuitTimer"));
             Assert.Equal("Collapse to pill", ToolTip.GetTip(window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == "SidebarDashboard")));
             window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == "SidebarDashboard").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Assert.Equal(1, back);
             var quits = 0; model.QuitRequested += () => quits++;

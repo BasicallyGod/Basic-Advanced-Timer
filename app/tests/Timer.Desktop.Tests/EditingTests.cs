@@ -429,7 +429,7 @@ Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame(
     }
 
     [AvaloniaFact]
-    public void TheBreakCupSteamsUnderThePointerAndStaysSteamingThroughAModelUpdate()
+    public void TheBreakBadgeStaysHighlightedUnderThePointerThroughAModelUpdate()
     {
         using var motion = new EnabledMotionScope();
         var now = new DateTime(2026, 10, 9, 7, 0, 0);
@@ -438,11 +438,15 @@ Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame(
         {
             Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame();
             var breakButton = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardBreak");
-            // The cup steams while the pointer is over the button. (Headless tests do not run animation timers, so this checks the switches, not the frames.)
-            var cup = breakButton.GetVisualDescendants().OfType<BreakGlyph>().Single(); var cupSpot = breakButton.TranslatePoint(new Point(breakButton.Bounds.Width / 2, breakButton.Bounds.Height / 2), dashboard)!.Value;
-            var wasSteaming = cup.Steaming; dashboard.MouseMoveUntil(cupSpot, () => cup.Steaming); Assert.True(cup.Steaming);
-            model.SetPillScale(null); Dispatcher.UIThread.RunJobs(); Assert.True(cup.Steaming); // A model update while the pointer is over it does not stop the steam, as on the pill.
-            dashboard.MouseMove(new Point(5, 5)); Assert.Equal(wasSteaming, cup.Steaming);
+            var badge = breakButton.GetVisualDescendants().OfType<BreakBadgeGlyph>().Single();
+            var spot = breakButton.TranslatePoint(new Point(breakButton.Bounds.Width / 2, breakButton.Bounds.Height / 2), dashboard)!.Value;
+            var wasHighlighted = badge.Highlighted;
+            dashboard.MouseMoveUntil(spot, () => badge.Highlighted);
+            Assert.True(badge.Highlighted);
+            model.SetPillScale(null); Dispatcher.UIThread.RunJobs();
+            Assert.True(badge.Highlighted);
+            dashboard.MouseMove(new Point(5, 5));
+            Assert.Equal(wasHighlighted, badge.Highlighted);
         }
         finally { dashboard.Close(); }
     }
@@ -477,10 +481,12 @@ Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame(
             if (model.IsOnBreak) model.ToggleBreak();
             model.ToggleBreak(); Settle(); Assert.Equal("On break", ToolTip.GetTip(lights));
             model.ToggleBreak(); Settle(); Assert.NotEqual("On break", ToolTip.GetTip(lights));
-            // The break is at the right end of the tracking card, level with the play tile.
+            // The break is directly below play in the same column.
             var breakButton = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "DashboardBreak"); var play = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "SidebarPause");
-            Assert.InRange(Math.Abs(breakButton.TranslatePoint(new Point(0, breakButton.Bounds.Height / 2), dashboard)!.Value.Y - play.TranslatePoint(new Point(0, play.Bounds.Height / 2), dashboard)!.Value.Y), 0, 1);
-            Assert.True(breakButton.TranslatePoint(default, dashboard)!.Value.X > play.TranslatePoint(default, dashboard)!.Value.X + play.Bounds.Width);
+            var breakAt = breakButton.TranslatePoint(default, dashboard)!.Value;
+            var playAt = play.TranslatePoint(default, dashboard)!.Value;
+            Assert.Equal(playAt.X, breakAt.X, 0.5);
+            Assert.True(breakAt.Y >= playAt.Y + play.Bounds.Height - 0.5);
             // The window can be picked up by the sidebar and the header row, but not by a button or the timeline.
             var tab = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "TimelineTab");
             var tabAt = tab.TranslatePoint(new Point(tab.Bounds.Width / 2, tab.Bounds.Height / 2), dashboard)!.Value;

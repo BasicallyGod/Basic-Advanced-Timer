@@ -29,18 +29,18 @@ public static class WeekOverview
 
     public static WeekFigures Figures(TimerModel model, DateTime weekStart)
     {
-        var engine = model.Engine; var accounts = model.ReviewAccounts.Where(a => !BreakAccount.Is(a.Name)).ToList(); var today = engine.Now.Date;
+        var engine = model.Engine; var accounts = model.ReviewAccounts.Where(a => !BreakAccount.Is(a.Name)).ToList(); var today = model.TodayKey;
         var shown = Enumerable.Range(0, 7).Where(i => engine.Schedule.Days.Contains(weekStart.AddDays(i).DayOfWeek)
-            || engine.Sessions.Any(s => s.Day == weekStart.AddDays(i)) || (engine.Active is not null && weekStart.AddDays(i) == today)).ToArray();
+            || engine.Sessions.Any(s => model.CountsOn(s, weekStart.AddDays(i))) || (engine.Active is not null && weekStart.AddDays(i) == today)).ToArray();
         if (shown.Length == 0) shown = Enumerable.Range(0, 5).ToArray();
         var days = new List<WeekDay>();
         foreach (var i in shown)
         {
-            var date = weekStart.AddDays(i); var totals = engine.Totals(date); var plan = engine.Plan(date);
+            var date = weekStart.AddDays(i); var plan = engine.Plan(date);
             var per = accounts.Select(a => (a, model.OnDay(a, date))).Where(p => p.Item2 > TimeSpan.Zero).ToList();
             var allocated = per.Aggregate(TimeSpan.Zero, (sum, p) => sum + p.Item2);
             var working = model.WorkingOn(date); var left = working - allocated; var dayBreaks = model.BreakTimeOn(date);
-            var blocks = engine.Sessions.Where(s => s.Day == date && s.Duration > TimeSpan.Zero && !BreakAccount.Is(s.Account)).OrderBy(s => s.From).ToList();
+            var blocks = engine.Sessions.Where(s => model.CountsOn(s, date) && s.Duration > TimeSpan.Zero && !BreakAccount.Is(s.Account)).OrderBy(s => s.From).ToList();
             var overlaps = false; var reach = DateTime.MinValue;
             foreach (var block in blocks) { if (block.From.AddSeconds(2) < reach) overlaps = true; if (block.To > reach) reach = block.To; }
             var meetings = model.Notes.MeetingsOn(date).Count;
@@ -205,7 +205,7 @@ public static class WeekOverview
         var label = Ui.Horizontal(); label.HorizontalAlignment = HorizontalAlignment.Center; label.Spacing = 5; label.VerticalAlignment = VerticalAlignment.Top;
         var name = Ui.Text(d.Date.ToString("ddd d", british), 12, d.IsToday ? "accent" : "muted"); if (d.IsToday) name.FontWeight = FontWeight.Bold;
         var underline = new Border { BorderThickness = new Thickness(0, 0, 0, d.IsToday ? 2 : 0), Child = name, Name = "WeekDayLabel" };
-        if (d.IsToday) underline.BorderBrush = Brush(model, "Accent");
+        if (d.IsToday) underline.BorderBrush = new SolidColorBrush(Color.Parse(ThemeEngine.LitOf(model.CurrentTheme)));
         label.Children.Add(underline);
         if (d.Marked) label.Children.Add(new Border { Name = "WeekDayMarker", Width = 6, Height = 6, CornerRadius = new CornerRadius(3), Background = Brush(model, "Ink"), VerticalAlignment = VerticalAlignment.Center });
         label.Margin = new Thickness(0, 6, 0, 0);
@@ -285,7 +285,8 @@ public static class WeekOverview
         foreach (var account in accounts)
         {
             var week = Enumerable.Range(0, 7).Aggregate(TimeSpan.Zero, (sum, i) => sum + model.OnDay(account, w.Start.AddDays(i)));
-            var line = Ui.Grid(columns); line.Height = 34; line.Name = "WeekAccount_" + account.Name.Replace(" ", "");
+            // One star row, or an implicit row sizes to its tallest child and a row with no budget sits at the top.
+            var line = Ui.Grid(columns, "*"); line.Height = 34; line.Name = "WeekAccount_" + account.Name.Replace(" ", "");
             // No line above the first account: under the heading it only made the list look squeezed.
             var row = new Border { BorderThickness = new Thickness(0, tile.Children.Count == 0 ? 0 : 1, 0, 0), BorderBrush = Brush(model, "Hover"), Child = line };
             Ui.Put(line, new Border { Width = 12, Height = 12, CornerRadius = new CornerRadius(6), Background = new SolidColorBrush(Color.Parse(model.ChartColour(account.Colour))), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center });

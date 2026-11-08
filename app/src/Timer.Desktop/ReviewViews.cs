@@ -1,3 +1,4 @@
+using System.Globalization;
 using Avalonia.LogicalTree;
 using Avalonia;
 using Avalonia.Controls;
@@ -98,7 +99,7 @@ public static partial class ReviewViews
     public static IReadOnlyList<StackItem>? BlockStackOf(TimerModel model, IReadOnlyList<SessionRow> selected)
     {
         if (selected.Count == 0) return null;
-        var intervals = IntervalsOn(model, selected[0].Day);
+        var intervals = IntervalsOn(model, model.DayOf(selected[0].From));
         var recording = intervals.FirstOrDefault(IsRecording); var recorded = intervals.Where(i => !IsRecording(i)).ToList();
         foreach (var cluster in ClustersOf(recorded.Select(i => (i, i.Start, i.End))))
         {
@@ -109,12 +110,15 @@ public static partial class ReviewViews
         }
         return null;
     }
+    /// <summary>When a meeting starts and ends: on its own calendar date, which on a day that begins in the evening may be the next date.</summary>
+    public static DateTime MeetingStart(DayNote meeting) => meeting.Day.Date + meeting.At!.Value;
+    public static DateTime MeetingEnd(DayNote meeting) => meeting.Day.Date + meeting.End!.Value;
     /// <summary>The stack of meetings (three or more deep at once) that this meeting belongs to, in time order, or null when it is not in one.</summary>
     public static IReadOnlyList<DayNote>? MeetingStackOf(TimerModel model, DayNote meeting)
     {
-        var planned = model.Notes.MeetingsOn(meeting.Day.Date); var day = meeting.Day.Date;
-        foreach (var cluster in ClustersOf(planned.Select(m => (m, day + m.At!.Value, day + m.End!.Value))))
-            if (cluster.Contains(meeting)) return DepthOf(cluster.Select(m => (m, day + m.At!.Value, day + m.End!.Value))) >= StackFrom ? cluster : null;
+        var planned = model.Notes.MeetingsOn(model.DayOf(MeetingStart(meeting)));
+        foreach (var cluster in ClustersOf(planned.Select(m => (m, MeetingStart(m), MeetingEnd(m)))))
+            if (cluster.Contains(meeting)) return DepthOf(cluster.Select(m => (m, MeetingStart(m), MeetingEnd(m)))) >= StackFrom ? cluster : null;
         return null;
     }
 
@@ -137,10 +141,10 @@ public static partial class ReviewViews
     public static double MeetingWidth(DayNote meeting, IEnumerable<DayNote> sameLane, DateTime day, double pixelsPerHour, Func<DateTime, double> X)
     {
         var width = Math.Max(24, (meeting.End!.Value - meeting.At!.Value).TotalHours * pixelsPerHour - 2);
-        var left = X(day + meeting.At.Value) + 1; var end = day + meeting.End.Value;
-        var next = sameLane.Where(m => m.Id != meeting.Id && day + m.At!.Value >= end.AddSeconds(-2) && day + m.At.Value >= day + meeting.At.Value).OrderBy(m => m.At).FirstOrDefault();
+        var left = X(MeetingStart(meeting)) + 1; var end = MeetingEnd(meeting);
+        var next = sameLane.Where(m => m.Id != meeting.Id && MeetingStart(m) >= end.AddSeconds(-2) && MeetingStart(m) >= MeetingStart(meeting)).OrderBy(m => m.At).FirstOrDefault();
         if (next is null) return width;
-        var room = X(day + next.At!.Value) + 1 - left - BlockGap;
+        var room = X(MeetingStart(next)) + 1 - left - BlockGap;
         return Math.Max(6, Math.Min(width, room));
     }
     public static Dictionary<T, (int Lane, int Count)> PlaceLanes<T>(IEnumerable<(T Item, DateTime Start, DateTime End)> blocks) where T : notnull
@@ -168,9 +172,11 @@ public static partial class ReviewViews
     }
 
     /// <summary>A diagonal hatch in two quiet shades of the theme, for a break: time that is kept apart from the day's work.</summary>
-    internal static Brush Hatch(TimerModel model)
+    /// <summary>The 3 pixel ring of a selected or recording block, with a soft bloom of the same colour round it, as glass lit from inside. The ring stays the first shadow.</summary>
+    internal static BoxShadows Ring(Color colour) => new(new BoxShadow { Spread = 3, Color = colour }, new[] { new BoxShadow { Blur = 12, Spread = 1, Color = Color.FromArgb(0x70, colour.R, colour.G, colour.B) } });
+    internal static Brush Hatch(TimerModel model) => Hatch(model.CurrentTheme);
+    internal static Brush Hatch(ThemeDefinition theme)
     {
-        var theme = model.CurrentTheme;
         var a = Color.Parse(ThemeColours.Mix(theme.Colour("Surface"), theme.Colour("Panel"), .5)); var b = Color.Parse(theme.Colour("Line"));
         return new LinearGradientBrush
         {
@@ -197,10 +203,12 @@ public static partial class ReviewViews
     {
         var groups = model.Editor.Entries(day, day.AddDays(1)).Where(e => e.GroupId is not null && e.Sources.Any(s => s.Duration > TimeSpan.Zero)).ToArray();
         var grouped = groups.SelectMany(e => e.Sources).ToHashSet();
-        var intervals = model.Engine.Sessions.Where(s => s.Day == day && s.Duration > TimeSpan.Zero && !grouped.Contains(s))
+        // The blocks that touch the day: those that start in it, and one that began before it and runs on into it (it is drawn from the edge).
+        var begin = model.DayBegins(day); var finish = model.DayEnds(day);
+        var intervals = model.Engine.Sessions.Where(s => s.Duration > TimeSpan.Zero && s.To > begin && s.From < finish && !grouped.Contains(s))
             .Select(s => new Interval(s.Account, s.From, s.To, s, null)).ToList();
-        if (model.Engine.Active is { } active && active.Start < day.AddDays(1) && model.Engine.Now > day)
-            intervals.Add(new(active.Account, active.Start < day ? day : active.Start, model.Engine.Now < day.AddDays(1) ? model.Engine.Now : day.AddDays(1), null, null));
+        if (model.Engine.Active is { } active && active.Start < finish && model.Engine.Now > begin)
+            intervals.Add(new(active.Account, active.Start < begin ? begin : active.Start, model.Engine.Now < finish ? model.Engine.Now : finish, null, null));
         // A merged block is one block from its first entry to its last, with the gaps between its entries drawn lighter.
         foreach (var group in groups)
         {
@@ -221,9 +229,14 @@ public static partial class ReviewViews
         var pinned = model.Notes.PinnedOn(day);
         var pinRoom = pinned.Count > 0 ? TimelineGuide.PinRoom : 0; var meetingTop = MeetingTop + pinRoom;
         var bandTop = (planned.Count > 0 ? BandTopWithMeetings : BandTopFree) + pinRoom; var bandHeight = BandBottom - bandTop;
-        double X(DateTime time) => TimelineGutter + (time - day).TotalHours * pixelsPerHour;
+        // The timeline runs from where the day begins (midnight unless someone works through it) for 24 hours.
+        var origin = model.DayBegins(day);
+        double X(DateTime time) => TimelineGutter + (time - origin).TotalHours * pixelsPerHour;
         // A little room before the first hour and after the last lets the end labels sit fully in view.
         var canvas = new Canvas { Name = "TimelineCanvas", Width = 24 * pixelsPerHour + 2 * TimelineGutter, Height = TimelineHeight, Background = Brushes.Transparent };
+        // Where the last right-click landed, to the 5 minutes: Add time and Paste on any menu, a block's included, use it.
+        DateTime clicked = origin.AddHours(9);
+        DateTime At(double x) => origin.AddMinutes(Math.Clamp(Math.Floor((x - TimelineGutter) / pixelsPerHour * 60 / 5) * 5, 0, 1435));
         var axis = new Border { Name = "TimelineAxis", Height = 1, Width = 24 * pixelsPerHour, Opacity = .8 }; axis.Classes.Add("rule");
         Canvas.SetLeft(axis, TimelineGutter); Canvas.SetTop(axis, AxisY); canvas.Children.Add(axis);
         void Tick(double hours, double height, double opacity)
@@ -234,7 +247,7 @@ public static partial class ReviewViews
         var hourLabels = new List<(TextBlock Label, TranslateTransform Shift)>();
         for (var hour = 0; hour < 24; hour++)
         {
-            var label = Ui.Text($"{hour:00}:00", 12, "muted"); label.Classes.Add("figures"); label.Width = LabelWidth; label.TextAlignment = TextAlignment.Center;
+            var label = Ui.Text(origin.AddHours(hour).ToString("HH:mm"), 12, "muted"); label.Classes.Add("figures"); label.Width = LabelWidth; label.TextAlignment = TextAlignment.Center;
             label.Name = "TimelineHour_" + hour;
             var shift = new TranslateTransform(); label.RenderTransform = shift; hourLabels.Add((label, shift));
             Canvas.SetLeft(label, TimelineGutter + hour * pixelsPerHour - LabelWidth / 2); Canvas.SetTop(label, 0); canvas.Children.Add(label);
@@ -254,6 +267,22 @@ public static partial class ReviewViews
                 var half = new Border { Width = 1, Height = TimelineHeight - LabelRow - 12, Opacity = .22, Tag = "HalfGuide", IsHitTestVisible = false }; half.Classes.Add("rule");
                 Canvas.SetLeft(half, TimelineGutter + (hour + .5) * pixelsPerHour - .5); Canvas.SetTop(half, LabelRow + 8); canvas.Children.Add(half);
             }
+        // The graticule: faint rules across the day that line up with the blocks, one on the band's top edge, one through its middle and one on its foot, so blocks sit between them
+        // like an instrument's grid. They stay behind everything (added first) and never take a press.
+        foreach (var (name, y) in new[] { ("Top", bandTop), ("Middle", bandTop + Math.Round(bandHeight / 2.0)), ("Foot", (double)BandBottom) })
+        {
+            var rule = new Border { Name = "TimelineGraticule" + name, Width = 2 * TimelineGutter + 24 * pixelsPerHour, Height = 1, Opacity = .3, Tag = "Graticule", IsHitTestVisible = false }; rule.Classes.Add("rule");
+            Canvas.SetLeft(rule, 0); Canvas.SetTop(rule, y); canvas.Children.Add(rule);
+        }
+        // When days begin in the evening, midnight is a quiet dashed marker with the new date, not a wall.
+        if (model.DayStart > TimeSpan.Zero)
+        {
+            var midnight = origin.Date.AddDays(1); var mx = X(midnight);
+            var mark = new Border { Name = "TimelineMidnight", Width = 1.5, Height = TimelineHeight - LabelRow - 12, Opacity = .55, IsHitTestVisible = false, Tag = "HourGuide" }; mark.Classes.Add("rule");
+            Canvas.SetLeft(mark, mx - .75); Canvas.SetTop(mark, LabelRow + 8); canvas.Children.Add(mark);
+            var named = Ui.Text(midnight.ToString("ddd", CultureInfo.GetCultureInfo("en-GB")), 11, "muted"); named.FontWeight = FontWeight.Bold; named.Name = "TimelineMidnightLabel"; named.IsHitTestVisible = false;
+            Canvas.SetLeft(named, mx + 4); Canvas.SetTop(named, LabelRow + 6); canvas.Children.Add(named);
+        }
         var intervals = IntervalsOn(model, day);
         // Three or more blocks at one moment are one tile for the whole stretch (see StackFrom); one or two keep their lanes. The block recording now is never in a tile: over
         // one it takes a lane of its own above the tile, and the tile is slimmer to make room.
@@ -264,7 +293,7 @@ public static partial class ReviewViews
         var liveOverStack = liveStacks.Count > 0;
         var loose = intervals.Where(i => !stacked.Contains(i) && !(liveOverStack && ReferenceEquals(i, recordingInterval))).ToList();
         var placement = PlaceLanes(loose.Select(i => (i, i.Start, i.End)));
-        var accent = Color.Parse(model.CurrentTheme.Colour("Accent"));
+        var accent = Color.Parse(ThemeEngine.LitOf(model.GlassTheme));
         foreach (var interval in loose.Concat(liveOverStack ? new[] { recordingInterval! } : Array.Empty<Interval>()).OrderBy(i => i.Start))
         {
             var recordingNow = IsRecording(interval);
@@ -274,12 +303,13 @@ public static partial class ReviewViews
             var colour = model.ReviewAccounts.FirstOrDefault(a => a.Name.Equals(interval.Account, StringComparison.OrdinalIgnoreCase))?.Colour ?? "#91B7D5";
             var look = model.BlockLook(colour);
             var isBreak = BreakAccount.Is(interval.Account);
-            var end = interval.End > day.AddDays(1) ? day.AddDays(1) : interval.End;
-            var duration = interval.Group is { } groupDuration ? TimeSpan.FromMinutes((double)groupDuration.Minutes) : end - interval.Start;
-            var width = Math.Max(MinimumBlockWidth, (end - interval.Start).TotalHours * pixelsPerHour - BlockGap);
+            var drawStart = interval.Start < origin ? origin : interval.Start; // A block that began before the day is drawn from its edge.
+            var end = interval.End > origin.AddDays(1) ? origin.AddDays(1) : interval.End;
+            var duration = interval.Group is { } groupDuration ? TimeSpan.FromMinutes((double)groupDuration.Minutes) : interval.Row is { } fullRow ? fullRow.Duration : end - interval.Start;
+            var width = Math.Max(MinimumBlockWidth, (end - drawStart).TotalHours * pixelsPerHour - BlockGap);
             var height = onStack ? LiveLane : laneCount == 1 ? bandHeight : (bandHeight - LaneGap * (laneCount - 1)) / laneCount;
             var cardTop = onStack ? LiveTop(bandTop, bandHeight) : bandTop + lane * (height + LaneGap);
-            var ink = isBreak ? model.CurrentTheme.Colour("Muted") : look.Text;
+            var ink = isBreak ? model.GlassTheme.Colour("Muted") : look.Text;
             var display = model.Label(interval.Account);
             // What is written on the block depends on the room it has: the whole block, a line, the duration alone, or nothing but the colour.
             var text = new StackPanel { Spacing = 2, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Margin = detail == BlockDetail.Full ? new Thickness(width < 84 ? 7 : 10, 6) : new Thickness(8, 0) };
@@ -316,7 +346,7 @@ public static partial class ReviewViews
             // The card itself is not clipped, or the selection ring round it would be cut off; what is inside it is clipped instead.
             var card = new Border { Width = width, Height = height, CornerRadius = new CornerRadius(CornerFor(laneCount, width, height)) };
             if (marquees.Count > 0) { card.PointerEntered += (_, _) => marquees.ForEach(m => m.Hover(true)); card.PointerExited += (_, _) => marquees.ForEach(m => m.Hover(false)); }
-            if (isBreak) { card.Background = Hatch(model); card.BorderBrush = Brush.Parse(model.CurrentTheme.Colour("Line")); card.BorderThickness = new Thickness(1); }
+            if (isBreak) { card.Background = Hatch(model.GlassTheme); card.BorderBrush = Brush.Parse(model.GlassTheme.Colour("Line")); card.BorderThickness = new Thickness(1); }
             else
             {
                 // A gentle gradient from the block's own fill to a slightly deeper shade of it, so a block has body without any text losing its contrast.
@@ -353,13 +383,13 @@ public static partial class ReviewViews
             if (model.IsSelected(selectionSources))
             {
                 // A selected block has a ring in the theme's accent colour round it, and the `mergeSelected` class so it can be found.
-                card.Classes.Add("mergeSelected"); card.BoxShadow = new BoxShadows(new BoxShadow { Spread = 3, Color = accent }); card.ZIndex = 3;
+                card.Classes.Add("mergeSelected"); card.BoxShadow = Ring(accent); card.ZIndex = 3;
             }
             ToolTip.SetTip(card, $"{display} · {interval.Start:HH:mm:ss} – {end:HH:mm:ss} · {model.Format(duration)}" + (string.IsNullOrWhiteSpace(note) ? "" : "\n" + note));
             if (interval.Row is { } row)
             {
                 card.Tag = row; card.Name = "TimelineEntry" + model.Engine.Sessions.IndexOf(row);
-                card.ContextMenu = new ContextMenu { ItemsSource = new Control[] { MoveMenu(model, new[] { row }), CopyMenu(model, new[] { row }), MergeMenu(model), new Separator(), DeleteMenu(model, new[] { row }) } };
+                card.ContextMenu = new ContextMenu { ItemsSource = new Control[] { MoveMenu(model, new[] { row }), CopyMenu(model, new[] { row }), MergeMenu(model), new Separator(), AddHereMenu(model, () => clicked), PasteHereMenu(model, () => clicked), new Separator(), DeleteMenu(model, new[] { row }) } };
                 Canvas.SetLeft(card, X(interval.Start) + BlockInset); Canvas.SetTop(card, cardTop); canvas.Children.Add(card); addedEarly = true;
                 TimelineGestures.Attach(card, canvas, model, row, pixelsPerHour, model.IsSelected(selectionSources));
             }
@@ -368,7 +398,7 @@ public static partial class ReviewViews
                 // The block that is recording now. A green ring and the stop menu make it clear why it can't be dragged. The ring is the same 3 pixels all round and
                 // outside the block as the selection ring (a border left the left side bare and ate into the block), so it is drawn the same way, in green.
                 card.Classes.Add("recording"); card.Name = "TimelineRecording"; card.Cursor = new Cursor(StandardCursorType.Arrow);
-                card.BoxShadow = new BoxShadows(new BoxShadow { Spread = 3, Color = Color.Parse(model.CurrentTheme.Colour("Live")) }); card.ZIndex = 3;
+                card.BoxShadow = Ring(Color.Parse(model.GlassTheme.Colour("Live"))); card.ZIndex = 3;
                 if (text.GetLogicalDescendants().OfType<TextBlock>().FirstOrDefault(t => t.Name == "BlockName") is { } liveName) liveName.Text = "● " + liveName.Text;
                 var stop = new MenuItem { Header = "Stop tracking" }; stop.Click += (_, _) => model.TogglePause();
                 card.ContextMenu = new ContextMenu { ItemsSource = new[] { stop } };
@@ -392,7 +422,7 @@ public static partial class ReviewViews
                 };
                 card.Tag = group; card.Name = "TimelineGroup" + group.GroupId + "-" + interval.Start.ToString("HHmmss");
                 var ungroup = new MenuItem { Header = "Unmerge", Name = "UnmergeMenu" }; ungroup.Click += (_, _) => model.UngroupEntries(group.GroupId!);
-                card.ContextMenu = new ContextMenu { ItemsSource = new Control[] { ungroup, CopyMenu(model, group.Sources), MergeMenu(model) } };
+                card.ContextMenu = new ContextMenu { ItemsSource = new Control[] { ungroup, CopyMenu(model, group.Sources), MergeMenu(model), new Separator(), AddHereMenu(model, () => clicked), PasteHereMenu(model, () => clicked) } };
                 ToolTip.SetTip(card, $"{model.Label(group.Account)} · {model.Format(duration)}\nMerged, {group.Sources.Count} blocks");
             }
             if (!addedEarly) { Canvas.SetLeft(card, X(interval.Start) + BlockInset); Canvas.SetTop(card, cardTop); canvas.Children.Add(card); }
@@ -412,17 +442,17 @@ public static partial class ReviewViews
             lane.PointerReleased += (_, e) =>
             {
                 if (pressed is { } p && Math.Abs(e.GetPosition(canvas).X - p.X) <= 5 && e.InitialPressMouseButton == MouseButton.Left)
-                    model.Notes.RequestNewMeeting(day.AddHours((e.GetPosition(canvas).X - TimelineGutter) / pixelsPerHour));
+                    model.Notes.RequestNewMeeting(origin.AddHours((e.GetPosition(canvas).X - TimelineGutter) / pixelsPerHour));
                 pressed = null; e.Handled = true;
             };
             Canvas.SetLeft(lane, TimelineGutter); Canvas.SetTop(lane, meetingTop); canvas.Children.Add(lane);
             // With no meetings the row is under the blocks, which take its height; a free place in it still starts a meeting.
             if (planned.Count == 0) lane.ZIndex = -1;
             // Three or more meetings at one moment are one tile for the whole stretch; one or two keep their lanes, so the row never needs more than two.
-            var meetingStacks = ClustersOf(planned.Select(m => (m, day + m.At!.Value, day + m.End!.Value))).Where(c => DepthOf(c.Select(m => (m, day + m.At!.Value, day + m.End!.Value))) >= StackFrom).ToList();
+            var meetingStacks = ClustersOf(planned.Select(m => (m, MeetingStart(m), MeetingEnd(m)))).Where(c => DepthOf(c.Select(m => (m, MeetingStart(m), MeetingEnd(m)))) >= StackFrom).ToList();
             var meetingsInStacks = meetingStacks.SelectMany(c => c).ToHashSet();
             var singles = planned.Where(m => !meetingsInStacks.Contains(m)).ToList();
-            var places = PlaceLanes(singles.Select(m => (m, day + m.At!.Value, day + m.End!.Value)));
+            var places = PlaceLanes(singles.Select(m => (m, MeetingStart(m), MeetingEnd(m))));
             foreach (var stack in meetingStacks) AddMeetingTile(canvas, model, day, stack, meetingTop, pixelsPerHour, X);
             foreach (var meeting in singles)
             {
@@ -449,14 +479,14 @@ public static partial class ReviewViews
                 card.PointerEntered += (_, _) => { card.Classes.Add("over"); title.Hover(true); }; card.PointerExited += (_, _) => { card.Classes.Remove("over"); title.Hover(false); };
                 // A press drags it (the middle moves it, an edge resizes it); a click that goes nowhere selects it, and the Details card edits it.
                 MeetingGestures.Attach(card, canvas, model, meeting, pixelsPerHour, span);
-                Canvas.SetLeft(card, X(day + meeting.At.Value) + 1); Canvas.SetTop(card, meetingTop + row * (height + LaneGap)); canvas.Children.Add(card);
-                if (model.SelectedMeetingId == meeting.Id) { card.Classes.Add("mergeSelected"); card.BoxShadow = new BoxShadows(new BoxShadow { Spread = 3, Color = accent }); card.ZIndex = 3; }
+                Canvas.SetLeft(card, X(MeetingStart(meeting)) + 1); Canvas.SetTop(card, meetingTop + row * (height + LaneGap)); canvas.Children.Add(card);
+                if (model.SelectedMeetingId == meeting.Id) { card.Classes.Add("mergeSelected"); card.BoxShadow = Ring(accent); card.ZIndex = 3; }
             }
         }
         // For today, a line down through the band at the current time, a dot at the top and a chip under it saying what it is. It moves on every half minute while on screen.
-        if (day == model.Engine.Now.Date)
+        if (day == model.TodayKey)
         {
-            var nowLine = new Border { Name = "NowMarker", Width = 2, Height = BandBottom + 8 - AxisY, Tag = "NowLine", IsHitTestVisible = false, ZIndex = 10 }; nowLine.Classes.Add("nowLine");
+            var nowLine = new Border { Name = "NowMarker", Width = 2, Height = BandBottom + 8 - AxisY, Tag = "NowLine", IsHitTestVisible = false, ZIndex = 10 }; nowLine.Classes.Add("nowLine"); nowLine.BoxShadow = new BoxShadows(new BoxShadow { Blur = 8, Spread = 0, Color = Color.FromArgb(0x80, accent.R, accent.G, accent.B) });
             var nowDot = new Avalonia.Controls.Shapes.Ellipse { Width = 10, Height = 10, Tag = "NowDot", IsHitTestVisible = false, ZIndex = 10 }; nowDot.Classes.Add("nowDot");
             var nowText = new TextBlock { FontSize = 12, FontWeight = FontWeight.Bold, TextAlignment = TextAlignment.Center, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Classes = { "nowChipText" } };
             var nowChip = new Border { Name = "NowChip", Child = nowText, CornerRadius = new CornerRadius(7), Height = 20, Width = 52, IsHitTestVisible = false, ZIndex = 10 }; nowChip.Classes.Add("nowChip"); // A fixed width, so it stays centred on the line whatever the digits.
@@ -473,18 +503,34 @@ public static partial class ReviewViews
             nowTimer.Tick += (_, _) => PlaceNow();
             _ = new ViewActivity(canvas, active => { if (active) { PlaceNow(); nowTimer.Start(); } else nowTimer.Stop(); });
         }
-        TimelineGuide.Attach(canvas, model, day, pixelsPerHour, TimelineGutter, AxisY, planned.Count > 0 ? meetingTop : bandTop, pinned);
-        DateTime clicked = day.AddHours(9);
-        DateTime At(double x) => day.AddMinutes(Math.Clamp(Math.Floor((x - TimelineGutter) / pixelsPerHour * 60 / 5) * 5, 0, 1435));
+        TimelineGuide.Attach(canvas, model, origin, pixelsPerHour, TimelineGutter, AxisY, planned.Count > 0 ? meetingTop : bandTop, pinned);
         var add = new MenuItem { Header = "Add time…" }; add.Click += (_, _) => model.OpenGap(clicked);
         var addMeeting = new MenuItem { Header = "Add meeting…", Name = "AddMeetingMenu" }; addMeeting.Click += (_, _) => model.Notes.RequestNewMeeting(clicked);
         // Paste puts the copied blocks with the first at the time that was right-clicked, snapped to five minutes like Add time.
-        var paste = new MenuItem { Header = "Paste here", Name = "PasteHereMenu", InputGesture = new KeyGesture(Key.V, KeyModifiers.Control), IsEnabled = model.CanPaste };
-        paste.Click += (_, _) => model.PasteBlocks(clicked);
+        var paste = PasteHereMenu(model, () => clicked);
         canvas.ContextMenu = new ContextMenu { ItemsSource = new Control[] { add, addMeeting, paste, MergeMenu(model) } };
         // Ctrl+V pastes where the pointer last was on this timeline.
-        canvas.PointerMoved += (_, e) => model.PasteTime = At(e.GetPosition(canvas).X);
-        canvas.PointerExited += (_, _) => model.PasteTime = null;
+        // While blocks are copied, outlines follow the pointer and show where Paste would put them (the first block's start snapped flush to a nearby edge; the gaps are kept).
+        var ghosts = new List<Border>();
+        void ClearGhosts() { foreach (var g in ghosts) canvas.Children.Remove(g); ghosts.Clear(); }
+        void ShowGhosts(DateTime at)
+        {
+            ClearGhosts(); if (!model.CanPaste) return;
+            var first = model.SnapPlacement(at, model.CopiedFirstLength); var index = 0;
+            foreach (var (offset, length) in model.CopiedShape)
+            {
+                var ghost = new Border { Name = "PastePreview" + index++, IsHitTestVisible = false, ZIndex = 11, CornerRadius = new CornerRadius(BlockRadius), BorderThickness = new Thickness(2),
+                    Width = Math.Max(MinimumBlockWidth, length.TotalHours * pixelsPerHour - BlockGap), Height = Math.Max(24, bandHeight * .6) };
+                ghost.Bind(Border.BorderBrushProperty, ghost.GetResourceObservable("AccentLit")); ghost.Bind(Border.BackgroundProperty, ghost.GetResourceObservable("Selected")); ghost.Opacity = .8;
+                Canvas.SetLeft(ghost, X(first + offset) + BlockInset); Canvas.SetTop(ghost, bandTop + 6); canvas.Children.Add(ghost); ghosts.Add(ghost);
+            }
+        }
+        canvas.PointerMoved += (_, e) =>
+        {
+            model.PasteTime = At(e.GetPosition(canvas).X);
+            if (e.GetCurrentPoint(canvas).Properties.IsLeftButtonPressed) ClearGhosts(); else ShowGhosts(model.PasteTime.Value);
+        };
+        canvas.PointerExited += (_, _) => { model.PasteTime = null; ClearGhosts(); };
         bool OnBlock(object? source) => source is Visual visual && (visual is Border { Tag: SessionRow or ReviewEntry or StackTag }
             || visual.GetVisualAncestors().OfType<Border>().Any(b => b.Tag is SessionRow or ReviewEntry or StackTag));
         Point? emptyPress = null;
@@ -507,7 +553,7 @@ public static partial class ReviewViews
             model.ClearSelection(); e.Handled = true;
         };
         var plan = model.Engine.Plan(day);
-        var first = intervals.Count > 0 ? intervals.Min(i => i.Start) : plan.Working ? plan.Start : day.AddHours(9);
+        var first = intervals.Count > 0 ? intervals.Min(i => i.Start < origin ? origin : i.Start) : plan.Working ? plan.Start : origin.AddHours(9);
         // The timeline scrolls along the day, and opens with the first block (or the start of the working day) a little way in from the left.
         var scroll = new ScrollViewer { Name = "TimelineScroll", Content = canvas, ClipToBounds = true,
             Tag = new Vector(model.TimelineOffset ?? Math.Max(0, X(first) - 56), 0),
@@ -547,8 +593,8 @@ public static partial class ReviewViews
     public static (WeekTable Table, int[] Days) WeekTableFor(TimerModel model, DateTime day)
     {
         var days = Enumerable.Range(0, 7).Where(i => model.Engine.Schedule.Days.Contains(day.AddDays(i).DayOfWeek)
-            || model.Engine.Sessions.Any(s => s.Day == day.AddDays(i))
-            || (model.Engine.Active is not null && day.AddDays(i) == model.Engine.Now.Date)).ToArray();
+            || model.Engine.Sessions.Any(s => model.CountsOn(s, day.AddDays(i)))
+            || (model.Engine.Active is not null && day.AddDays(i) == model.TodayKey)).ToArray();
         if (days.Length == 0) days = Enumerable.Range(0, 7).ToArray();
         var reconciled = new WeekExport(model.Editor, model.Engine, day);
         return (WeekTable.Build(model, reconciled, day, days), days);
@@ -585,6 +631,14 @@ public static partial class ReviewViews
         var item = new MenuItem { Name = "CopyBlocksMenu", Header = rows.Count > 1 ? $"Copy {rows.Count} blocks" : "Copy", InputGesture = new KeyGesture(Key.C, KeyModifiers.Control), IsEnabled = rows.Count > 0 };
         item.Click += (_, _) => model.CopyBlocks(rows);
         return item;
+    }
+    // Add time and Paste at the time that was right-clicked, from any menu on the timeline, so a crowded stretch is never a dead end. Both snap flush to a block's edge that is close by.
+    private static MenuItem AddHereMenu(TimerModel model, Func<DateTime> at)
+    { var item = new MenuItem { Name = "AddTimeHereMenu", Header = "Add time here…" }; item.Click += (_, _) => model.OpenGap(at()); return item; }
+    private static MenuItem PasteHereMenu(TimerModel model, Func<DateTime> at)
+    {
+        var item = new MenuItem { Header = "Paste here", Name = "PasteHereMenu", InputGesture = new KeyGesture(Key.V, KeyModifiers.Control), IsEnabled = model.CanPaste };
+        item.Click += (_, _) => model.PasteBlocks(model.SnapPlacement(at(), model.CopiedFirstLength)); return item;
     }
     private static MenuItem MergeMenu(TimerModel model)
     {

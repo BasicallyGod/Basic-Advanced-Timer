@@ -68,7 +68,7 @@ public sealed class UiEfficiencyTests
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => b.Name == "SettingsBack");
             Press(window, "Settings"); Assert.True(Find<Button>(window, "WeekOverviewTab").Classes.Contains("selected"));
             Press(window, "Settings"); Assert.NotSame(page, window.GetVisualDescendants().OfType<SettingsView>().Single());
-            Assert.Equal("Appearance", Find<TextBlock>(window, "SettingsTitle").Text);
+            Assert.Equal("Look", Find<TextBlock>(window, "SettingsTitle").Text);
             Press(window, "Settings");
             Assert.True(Find<Button>(window, "WeekOverviewTab").IsEffectivelyVisible);
         }
@@ -98,9 +98,9 @@ public sealed class UiEfficiencyTests
         try
         {
             Find<TextBox>(window, "PageNoteField").Text = "An unfinished draft";
-            Press(window, "NotesView_Important"); Press(window, "NotesAccount_Accountone");
+            Press(window, "NotesView_Important"); Press(window, "NotesAccountFilter"); Press(window, "NotesAccount_Accountone");
             Find<TextBox>(window, "NotesSearch").Text = "no match"; Settle(window);
-            Assert.Equal("Nothing matches that search.", Find<TextBlock>(window, "NotesPageEmpty").Text);
+            Assert.Equal("No match", Find<TextBlock>(window, "NotesPageEmpty").Text);
             Assert.Equal("Clear", Find<Button>(window, "NotesAccountClear").Content);
             Press(window, "NotesAccountClear");
             Assert.Equal("no match", Find<TextBox>(window, "NotesSearch").Text);
@@ -117,7 +117,7 @@ public sealed class UiEfficiencyTests
     [AvaloniaFact]
     public void RemovedNoteHasItsOwnUndoAndDoesNotUndoALedgerEdit()
     {
-        var model = Model(); model.Notes.AddNote("!! Keep the account and reminder", "Account one", Now.AddHours(1));
+        var model = Model(); model.Notes.AddNote("Keep the account and reminder", "Account one", Now.AddHours(1), important: true);
         var before = Assert.Single(model.Notes.All); model.Notes.Toggle(before.Id); before = Assert.Single(model.Notes.All);
         var window = new DashboardWindow(model); window.Show(); window.ShowNotes(); Settle(window);
         try
@@ -172,7 +172,7 @@ public sealed class UiEfficiencyTests
     {
         WithStore((folder, store, model) =>
         {
-            model.Notes.AddNote("!! Completed", "Account one", Now.AddHours(1)); var note = Assert.Single(model.Notes.All);
+            model.Notes.AddNote("Completed", "Account one", Now.AddHours(1), important: true); var note = Assert.Single(model.Notes.All);
             model.Notes.Toggle(note.Id); note = Assert.Single(model.Notes.All); model.RemoveNote(note.Id);
             store.Database.Execute("CREATE TRIGGER block_restore BEFORE INSERT ON day_notes BEGIN SELECT RAISE(ABORT, 'full'); END");
             model.UndoNotice(); Assert.True(model.Notes.Unsaved); Assert.True(Assert.Single(model.Notes.All).Done);

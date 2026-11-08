@@ -67,7 +67,7 @@ public sealed class SelectedBlockCardTests
             end.Text = "11:3"; // Half typed in the box that has the focus,
             Assert.True(model.NudgeSelection(1)); // while the block changes under it.
             Assert.Equal("11:3", end.Text); Assert.Equal("0:31", length.Text); Assert.Equal("11:00:00", start.Text);
-            end.Text = "10:00"; Enter(end); // Before the start: refused, so every box goes back to what is saved.
+            end.Text = "banana"; Enter(end); // Not a time: refused, so every box goes back to what is saved. (An end before the start is the next day's, since a block may cross midnight.)
             Assert.Equal("11:31:00", end.Text); Assert.Equal("11:00:00", start.Text);
             end.Text = "11:40"; Enter(end); Assert.Equal("0:40", length.Text); // And the same box takes the next edit.
         }
@@ -95,7 +95,7 @@ public sealed class SelectedBlockCardTests
         try
         {
             var row = engine.Sessions[0]; model.SelectBlock(new[] { row }, false); Settle(window);
-            var account = Find<ComboBox>(window, "SelectedAccount"); Assert.Contains("Break", account.ItemsSource!.Cast<string>());
+            var account = Find<ChoiceStrip>(window, "SelectedAccount"); Assert.Contains("Break", account.ItemsSource!.Cast<string>());
             account.SelectedItem = "Account two"; Settle(window);
             Assert.Equal("Account two", engine.Sessions[0].Account); Assert.Equal("30", engine.Sessions[0].Minutes); Assert.Equal("09:00:00", engine.Sessions[0].Start);
             Assert.True(model.UndoEdit()); Assert.Equal("Account one", engine.Sessions[0].Account);
@@ -146,7 +146,7 @@ public sealed class SelectedBlockCardTests
             var group = model.Editor.Entries(Day, Day.AddDays(1)).Single(e => e.GroupId is not null);
             model.SelectBlock(group.Sources, false); Settle(window);
             Assert.Equal("Details", Find<TextBlock>(window, "SelectedTitle").Text); Assert.Equal("Merged · 2 blocks", Kind(window));
-            Assert.False(Find<TextBox>(window, "SelectedStart").IsEnabled); Assert.False(Find<ComboBox>(window, "SelectedAccount").IsEnabled);
+            Assert.False(Find<TextBox>(window, "SelectedStart").IsEnabled); Assert.False(Find<ChoiceStrip>(window, "SelectedAccount").IsEnabled);
             Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "09:00–09:30"); Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "09:30–10:00");
             Click(window, "UnmergeSelected"); Settle(window);
             Assert.DoesNotContain(model.Editor.Entries(Day, Day.AddDays(1)), e => e.GroupId is not null); Assert.Contains("Unmerged", model.Notice);
@@ -195,7 +195,7 @@ public sealed class SelectedBlockCardTests
             model.SelectBlock(new[] { engine.Sessions[0] }, false); Settle(window);
             var card = Find<Border>(window, "TimelineEntry0");
             Assert.False(card.ClipToBounds); // The card is not clipped, or the ring round it would be cut off.
-            Assert.Equal(1, card.BoxShadow.Count); Assert.Equal(3, card.BoxShadow[0].Spread);
+            Assert.Equal(2, card.BoxShadow.Count); Assert.Equal(3, card.BoxShadow[0].Spread); // The ring, then its bloom.
             var time = card.GetVisualDescendants().OfType<TextBlock>().First(t => t.Name == "BlockDuration");
             Assert.DoesNotContain("clock", time.Classes); Assert.Equal(FontWeight.SemiBold, time.FontWeight);
         }
@@ -242,7 +242,7 @@ public sealed class SelectedBlockCardTests
         try
         {
             model.SelectBlock(new[] { model.Engine.Sessions[0] }, false); Settle(window);
-            Assert.Equal(new CornerRadius(12), Find<TextBox>(window, "SelectedStart").CornerRadius); Assert.Equal(new CornerRadius(12), Find<ComboBox>(window, "SelectedAccount").CornerRadius);
+            Assert.Equal(new CornerRadius(12), Find<TextBox>(window, "SelectedStart").CornerRadius);
             foreach (var theme in new[] { AppThemes.Light, AppThemes.Dark })
             {
                 var dictionary = (ResourceDictionary)Avalonia.Application.Current!.Resources.ThemeDictionaries[ThemeEngine.VariantFor(theme)]!;

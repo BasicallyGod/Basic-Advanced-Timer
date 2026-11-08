@@ -20,10 +20,13 @@ public sealed class PillWindow : Window
 {
     public Action? OpenDashboard { get; set; }
     private readonly TimerModel model;
-    /// <summary>The pill's own size before it is scaled for the screen: 336 wide and 72 tall, a card with the dashboard's 20 pixel corner. Its contents start 20 pixels from the left and end 14 from the right.</summary>
-    public const double PillWidth = 406, PillHeight = 72, PillRadius = 20, InsetLeft = 10, InsetRight = 14;
-    /// <summary>The compact pill is only the display: 10 either side of it, so it is 230 wide and the same height.</summary>
-    public const double CompactWidth = 2 * InsetLeft + 210;
+    public const double BezelWidth = 6;
+    public const double PillHeight = StatusFace.DisplayHeight + 2 * BezelWidth;
+    public const double PillRadius = StatusFace.DisplayRadius + BezelWidth;
+    internal static Thickness BezelPadding => new(BezelWidth - EdgeThickness);
+    /// <summary>The display and its bezel, before scaling for the screen.</summary>
+    public static double PillWidth => Math.Ceiling(StatusFace.DisplayWidth + 2 * BezelWidth);
+    public static double CompactWidth => Math.Ceiling(StatusFace.ShortDisplayWidth + 2 * BezelWidth);
     /// <summary>The card's width now: the full pill, or the compact one that is only its display.</summary>
     public double CardWidth => model.CompactPill ? CompactWidth : PillWidth;
     // The whole pill is drawn smaller than its design size on every screen, so it never takes a big share of a display. Two things shrink it further.
@@ -53,6 +56,9 @@ public sealed class PillWindow : Window
 
     private StatusFace face = null!;
     private Border surface = null!, shadowHost = null!;
+    private ChristmasDecor decorGarland = null!, decorLights = null!;
+    /// <summary>The garland and lights, so tests can read them.</summary>
+    public ChristmasDecor Garland => decorGarland; public ChristmasDecor Lights => decorLights;
     private Popup panel = new();
     private Popup alertsPanel = new();
     private PillAlertsCard? alertsCard; private Grid? alertsHung;
@@ -122,15 +128,21 @@ public sealed class PillWindow : Window
         // The top of the pill is shared with the dashboard's sidebar.
         face = new StatusFace(model, "Pill", "PillBreak", "Open dashboard", () => OpenDashboard?.Invoke(), OnCircle, ToggleAccounts, alertsClick: ToggleAlerts);
         var root = rootGrid = new Grid { Background = Brushes.Transparent };
-        // Along the card, centred on its height, with the room kept clear at each end (the card's edge is part of it).
-        face.Margin = new Thickness(InsetLeft - EdgeThickness, 0, InsetRight - EdgeThickness, 0); face.HorizontalAlignment = HorizontalAlignment.Left; face.VerticalAlignment = VerticalAlignment.Center;
         root.Children.Add(face);
         Ui.PillGestures(root, this);
-        ShapeApplied = model.CompactPill; face.SetCompact(ShapeApplied); face.Margin = new Thickness(InsetLeft - EdgeThickness, 0, (ShapeApplied ? InsetLeft : InsetRight) - EdgeThickness, 0);
-        surface = new Border { Name = "PillSurface", Child = root, ClipToBounds = true, Width = CardWidth, Height = PillHeight, BorderThickness = new Thickness(EdgeThickness) };
+        ShapeApplied = model.CompactPill;
+        face.SetCompact(ShapeApplied);
+        surface = new Border
+        {
+            Name = "PillSurface", Child = root, ClipToBounds = true, Width = CardWidth, Height = PillHeight,
+            BorderThickness = new Thickness(EdgeThickness), Padding = BezelPadding
+        };
         surface.Classes.Add("pillBody");
         shadowHost = Ui.Shadowed(surface, PillRadius);
-        Content = new LayoutTransformControl { LayoutTransform = pillScale, Child = shadowHost };
+        // The Christmas garland sits behind the card and the lights and bow over its edge, in the room the window keeps round the card.
+        decorGarland = new ChristmasDecor(ChristmasDecor.Layers.Garland); decorLights = new ChristmasDecor(ChristmasDecor.Layers.Lights);
+        var stack = new Grid { Background = Brushes.Transparent }; stack.Children.Add(decorGarland); stack.Children.Add(shadowHost); stack.Children.Add(decorLights);
+        Content = new LayoutTransformControl { LayoutTransform = pillScale, Child = stack };
         panel = new Popup();
         BuildDropdown();
         BuildAlerts();
@@ -244,7 +256,7 @@ public sealed class PillWindow : Window
         if (!peekOpened) return; foldTimer.Start();
     }
     private bool peekOpened;
-    private void OnFold(object? sender, EventArgs e) { foldTimer?.Stop(); if (alertsCard is { View: "card" } card && card.Items.Any(i => i.Kind == AlertKind.BudgetSpent)) return; if (!overList) FoldAlerts(); else foldTimer?.Start(); }
+    private void OnFold(object? sender, EventArgs e) { foldTimer?.Stop(); if (alertsCard is { } card && card.Items.Any(i => i.Kind == AlertKind.BudgetSpent)) return; if (!overList) FoldAlerts(); else foldTimer?.Start(); }
     /// <summary>
     /// Opens the card by itself when something new is waiting (under Peek, with the pill showing and no other list open). What was already waiting, or came while the
     /// dashboard was up, is not shown again; an alert that goes away and comes back (a break stayed on, then asked again) is new.
@@ -360,7 +372,6 @@ public sealed class PillWindow : Window
     private void ApplyShape()
     {
         ShapeApplied = model.CompactPill; face.SetCompact(ShapeApplied);
-        face.Margin = new Thickness(InsetLeft - EdgeThickness, 0, (ShapeApplied ? InsetLeft : InsetRight) - EdgeThickness, 0);
         surface.Width = CardWidth; CloseFlyouts(); EnsureSize();
     }
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -383,6 +394,9 @@ public sealed class PillWindow : Window
     {
         face.Refresh();
         var (key, _) = StatusFace.State(model);
+        // The decoration follows the season and the pill's state; a season that is not on hides it altogether.
+        var dressed = model.ActiveSeason?.Id == Seasons.Christmas.Id; var decorState = key == "Break" ? DecorState.Break : key == "Live" ? DecorState.Recording : DecorState.Idle;
+        decorGarland.Configure(dressed, decorState, ActualThemeVariant == ThemeVariant.Dark); decorLights.Configure(dressed, decorState, ActualThemeVariant == ThemeVariant.Dark);
         var stateColour = key == "Idle" ? Colors.Gray : Ui.PillStateColour(this, key);
 
         // A ring and a glow in the state's colour round the pill while it is doing something, and the plain edge and shadow when it is idle.

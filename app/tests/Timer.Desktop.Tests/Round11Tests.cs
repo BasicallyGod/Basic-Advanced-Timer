@@ -99,7 +99,7 @@ public sealed class Round11Tests
         var model = Model(); var window = new DashboardWindow(model); window.Show(); Dispatcher.UIThread.RunJobs();
         try
         {
-            window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "AddNote").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
+            window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "CardKindNotes").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
             window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "FormBell").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
             var card = window.GetVisualDescendants().OfType<ReminderPopup>().Single(); var host = window.GetVisualDescendants().OfType<Avalonia.Controls.Primitives.Popup>().Single(p => p.Name == "ReminderHost");
             Assert.Equal(HangingCard.Room, card.Margin); Assert.Equal(HangingCard.Shadow, card.BoxShadow); Assert.Equal(-HangingCard.Room.Top, host.VerticalOffset); // And the card still lands where it did.

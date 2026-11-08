@@ -113,9 +113,9 @@ public sealed class Round19Tests
             window.MouseMove(At(window, model, 8.0, Ruler)); Settle(window);
             var words = string.Join(" | ", Find<Border>(window, "TimelineGuideNote").GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text));
             Assert.Contains("3 reminders", words); Assert.Contains("First thing", words); Assert.Contains("Second thing", words); Assert.Contains("Third thing", words);
-            // Pressing the pin edits the first of them in the Notes card.
+            // Pressing the pin selects the first of them and Details edits it.
             var onPin = Find<Canvas>(window, "TimelinePin_" + first).TranslatePoint(new Point(10, 14), window)!.Value; window.MouseDown(onPin, MouseButton.Left); window.MouseUp(onPin, MouseButton.Left); Settle(window);
-            Assert.Equal("First thing", Find<TextBox>(window, "NoteField").Text);
+            Assert.Equal("First thing", Find<TextBox>(window, "DetailsNoteWords").Text); // Details shows the note.
         }
         finally { window.Close(); }
     }
@@ -138,31 +138,32 @@ public sealed class Round19Tests
     }
 
     [AvaloniaFact]
-    public void ANoteIsEditedInTheNotesCardByPressingItsWordsAndKeepsItsAccountAndReminder()
+    public void ANoteIsEditedInDetailsByPressingItsWordsInTheCardAndKeepsItsAccountAndReminder()
     {
         var model = Model(); model.Notes.AddNote("Ring the bank", "Account one", Day.AddHours(15));
         var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
             var id = model.Notes.All.Single().Id;
-            Click(window, "NoteEdit_" + id);
-            var field = Find<TextBox>(window, "NoteField"); Assert.Equal("Ring the bank", field.Text);
-            Assert.True(Has(window, "FormAccountChip")); Assert.True(Has(window, "FormReminder"));
-            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Save"); // The form says it is saving an existing note.
-            field.Text = "Ring the bank back"; Click(window, "SubmitNote");
+            Click(window, "NoteEdit_" + id); // Pressing the words selects the note, and Details edits it.
+            Assert.Equal(id, model.SelectedNoteId); Assert.Equal("Note", Find<Border>(window, "DetailsKind").GetVisualDescendants().OfType<TextBlock>().Single().Text);
+            var words = Find<TextBox>(window, "DetailsNoteWords"); Assert.Equal("Ring the bank", words.Text);
+            Assert.Equal("Account one", Find<ChoiceStrip>(window, "DetailsNoteAccount").SelectedItem); Assert.Contains(Find<Button>(window, "DetailsNoteReminder").GetVisualDescendants().OfType<TextBlock>(), t => t.Text!.Contains("15:00"));
+            words.Text = "Ring the bank back"; words.RaiseEvent(new Avalonia.Input.KeyEventArgs { RoutedEvent = Avalonia.Input.InputElement.KeyDownEvent, Key = Avalonia.Input.Key.Enter }); Settle(window);
             var note = model.Notes.All.Single(); Assert.Equal(id, note.Id);
             Assert.Equal("Ring the bank back", model.Notes.Text(note)); Assert.Equal("Account one", model.Notes.AccountOf(note)); Assert.Equal(Day.AddHours(15), NotesModel.ReminderOf(note));
-            Assert.False(Has(window, "NoteField")); // The form closes after saving.
+            Assert.Equal(id, model.SelectedNoteId); // Still selected after the edit.
+            Click(window, "NoteEdit_" + id); Assert.Null(model.SelectedNoteId); // Pressing the only selected note again clears it.
         }
         finally { window.Close(); }
     }
 
     [Fact]
-    public void ANoteIsMarkedImportantWithAMarkAtTheStartOfItsWordsAndComesFirst()
+    public void AStarredNoteComesFirstAndKeepsTheStoredFlagOutOfItsEditableWords()
     {
-        var model = Model(); model.Notes.AddNote("Plain one", null, null); model.Notes.AddNote("!! Pay the invoice", "Account one", null); model.Notes.AddNote("Plain two", null, null);
+        var model = Model(); model.Notes.AddNote("Plain one", null, null); model.Notes.AddNote("Pay the invoice", "Account one", null, important: true); model.Notes.AddNote("Plain two", null, null);
         var pay = model.Notes.All.Single(n => model.Notes.Text(n) == "Pay the invoice");
-        Assert.True(NotesModel.IsImportant(pay)); Assert.Equal("Pay the invoice", model.Notes.Text(pay)); Assert.Equal("!! Pay the invoice", model.Notes.Words(pay)); Assert.Equal("Account one", model.Notes.AccountOf(pay));
+        Assert.True(NotesModel.IsImportant(pay)); Assert.Equal("Pay the invoice", model.Notes.Text(pay)); Assert.Equal("Pay the invoice", model.Notes.Words(pay)); Assert.Equal("Account one", model.Notes.AccountOf(pay));
         Assert.Equal(new[] { "Pay the invoice", "Plain one", "Plain two" }, model.Notes.ForDay(Day).Select(model.Notes.Text)); // Important first, the rest in their order.
         var one = IdOf(model, "Plain one"); model.Notes.SetImportant(one, true);
         Assert.True(NotesModel.IsImportant(model.Notes.Find(one)!)); Assert.Equal("Plain one", model.Notes.Text(model.Notes.Find(one)!));
@@ -191,13 +192,13 @@ public sealed class Round19Tests
             var names = window.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Name?.StartsWith("NoteText_") == true).Select(t => t.Name!).ToList();
             Assert.Equal("NoteText_" + pay, names[0]); // Important first in the card.
             Click(window, "NoteImportant_" + pay); Assert.False(NotesModel.IsImportant(model.Notes.Find(pay)!)); Click(window, "NoteImportant_" + pay);
-            // The form's star puts the mark in its box and takes it off again.
-            Click(window, "AddNote"); var field = Find<TextBox>(window, "NoteField"); field.Text = "Call back";
-            Click(window, "FormImportant"); Assert.Equal("!! Call back", Find<TextBox>(window, "NoteField").Text); Click(window, "FormImportant"); Assert.Equal("Call back", Find<TextBox>(window, "NoteField").Text);
-            Click(window, "FormImportant"); Click(window, "SubmitNote"); Assert.True(NotesModel.IsImportant(model.Notes.All.Single(n => model.Notes.Text(n) == "Call back")));
+            // Punctuation is plain text; only the star marks a note important.
+            Click(window, "CardKindNotes"); var field = Find<TextBox>(window, "NoteField"); field.Text = "Call back";
+            field.Text = "!! Call back"; Click(window, "SubmitNote");
+            Assert.False(NotesModel.IsImportant(model.Notes.All.Single(n => model.Notes.Text(n) == "!! Call back")));
             // The Notes page lists them as a view with a count, and its rows have the star too.
             Click(window, "NotesTab");
-            Assert.Contains("2", Find<Button>(window, "NotesView_Important").GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text));
+            Assert.Contains("1", Find<Button>(window, "NotesView_Important").GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text));
             Click(window, "NotesView_Important");
             Assert.True(Has(window, "PageNoteText_" + pay)); Assert.False(Has(window, "PageNoteText_" + plain));
             Click(window, "PageNoteImportant_" + pay); Assert.False(NotesModel.IsImportant(model.Notes.Find(pay)!));

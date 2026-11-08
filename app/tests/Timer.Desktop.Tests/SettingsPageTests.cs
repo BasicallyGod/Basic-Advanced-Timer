@@ -28,7 +28,7 @@ public sealed class SettingsPageTests
             Assert.Contains(all.OfType<TextBlock>(), t => t.Text == "Settings" && t.Classes.Contains("clock"));
             Assert.Contains(all.OfType<Button>(), b => b.Name == "SaveShifts"); // The working hours form is on the page.
             Assert.Contains(all.OfType<Button>(), b => b.Name == "ThemeLight"); Assert.Contains(all.OfType<Button>(), b => b.Name == "EditAccounts");
-            Assert.Contains(all.OfType<CheckBox>(), c => c.Name == "WindowShadows");
+            Assert.Contains(all.OfType<Button>(), b => b.Name == "ShadowsOn"); Assert.Contains(all.OfType<Button>(), b => b.Name == "ShadowsOff");
             Assert.DoesNotContain(all.OfType<Button>(), b => b.Name == "PreviousPeriod" && b.IsVisible); // There is no date to step through here.
             Assert.Contains("on", window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").Classes); // The gear is lit while Settings shows.
             // Going back to a view brings the date controls back.
@@ -40,18 +40,18 @@ public sealed class SettingsPageTests
     }
 
     [AvaloniaFact]
-    public void TheHoursFormatCheckBoxAndTheRightClickMenuStayInStep()
+    public void TheTimeFormatChoiceAndTheRightClickMenuStayInStep()
     {
         var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show();
         try
         {
             OpenSettings(window);
-            var box = window.GetVisualDescendants().OfType<CheckBox>().Single(c => c.Name == "DecimalHours");
-            Assert.False(model.DecimalHours);
-            box.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); // A click on the box flips it and the model.
-            Assert.True(model.DecimalHours);
+            var hm = window.GetVisualDescendants().OfType<Button>().Single(c => c.Name == "TimeFormatHm"); var dec = window.GetVisualDescendants().OfType<Button>().Single(c => c.Name == "TimeFormatDecimal");
+            Assert.False(model.DecimalHours); Assert.Contains("selected", hm.Classes);
+            dec.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); // Choosing 1.50h flips the model.
+            Assert.True(model.DecimalHours); Assert.Contains("selected", dec.Classes); Assert.DoesNotContain("selected", hm.Classes);
             model.ToggleFormat(); Dispatcher.UIThread.RunJobs(); // Changed from the menu instead.
-            Assert.False(model.DecimalHours); Assert.False(box.IsChecked);
+            Assert.False(model.DecimalHours); Assert.Contains("selected", hm.Classes);
         }
         finally { window.Close(); }
     }
@@ -63,7 +63,7 @@ public sealed class SettingsPageTests
         var window = new DashboardWindow(model); window.Show();
         try
         {
-            OpenSettings(window); window.GetVisualDescendants().OfType<SettingsView>().Single().ShowSection("hours");
+            OpenSettings(window); window.GetVisualDescendants().OfType<SettingsView>().Single().ShowSection("day");
             Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
             var box = window.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "BreakAllowance");
             Assert.Equal("00:00", box.Text); // Nothing is taken off until one is chosen.
@@ -129,9 +129,10 @@ public sealed class SettingsPageTests
             double Centre(string name) { var c = window.GetVisualDescendants().OfType<Control>().Single(x => x.Name == name); return c.TranslatePoint(new Avalonia.Point(c.Bounds.Width / 2, 0), window)!.Value.X; }
             // The lights, the clock and the tracking card are all centred on the column.
             Assert.Equal(middle, Centre("SidebarDisplay"), 1.0);
-            // The well and the break key outside it make one row, centred on the column as a whole.
+            // The tracking display is centred too, and exactly as wide as the clock display above it.
             double Edge(string name, bool right) { var c = window.GetVisualDescendants().OfType<Control>().Single(x => x.Name == name); return c.TranslatePoint(new Avalonia.Point(right ? c.Bounds.Width : 0, 0), window)!.Value.X; }
-            Assert.Equal(middle, (Edge("SidebarWell", false) + Edge("DashboardBreak", true)) / 2, 6.0);
+            Assert.Equal(middle, Centre("SidebarTrack"), 1.0); Assert.Equal(window.GetVisualDescendants().OfType<Control>().Single(x => x.Name == "SidebarDisplay").Bounds.Width, window.GetVisualDescendants().OfType<Control>().Single(x => x.Name == "SidebarTrack").Bounds.Width, 0.5);
+            Assert.True(Edge("DashboardBreak", true) <= Edge("SidebarTrack", true) + 0.5);
             // Quit timer is at the foot on its own, centred on the column and the width of its foot.
             var quit = window.GetVisualDescendants().OfType<Button>().Single(x => x.Name == "QuitTimer");
             Assert.Equal(middle, Centre("QuitTimer"), 1.5); Assert.True(quit.Bounds.Width > sidebar.Bounds.Width - 40);

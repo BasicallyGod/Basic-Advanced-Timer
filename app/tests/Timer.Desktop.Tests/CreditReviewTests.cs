@@ -127,11 +127,11 @@ public sealed class CreditReviewTests
             Assert.Equal("Details|Block", Title()); Assert.Equal("09:00:00", Find<TextBox>(dashboard, "SelectedStart").Text);
             model.ToggleSelection(new[] { engine.Sessions[1] }); dashboard.UpdateLayout();
             Assert.Equal("Details|2 blocks selected", Title()); Assert.Contains("Joins them", model.MergeHint);
-            Assert.Contains("primary", Find<Button>(dashboard, "MergeSelected").Classes); Assert.DoesNotContain(dashboard.GetVisualDescendants().OfType<TextBlock>(), t => t.Name == "SelectedNote"); // No note under the card.
+            Assert.Contains("accentText", Find<Button>(dashboard, "MergeSelected").Classes); Assert.DoesNotContain(dashboard.GetVisualDescendants().OfType<TextBlock>(), t => t.Name == "SelectedNote"); // No note under the card.
             model.ToggleSelection(new[] { engine.Sessions[2] }); dashboard.UpdateLayout();
             Assert.Equal("Details|3 blocks selected", Title()); Assert.Contains("Same account", model.MergeHint);
             // Merge can still be pressed: it says why not in the toast.
-            Assert.DoesNotContain("primary", Find<Button>(dashboard, "MergeSelected").Classes); Assert.True(Find<Button>(dashboard, "MergeSelected").IsEnabled);
+            Assert.DoesNotContain("accentText", Find<Button>(dashboard, "MergeSelected").Classes); Assert.True(Find<Button>(dashboard, "MergeSelected").IsEnabled);
             Find<Button>(dashboard, "MergeSelected").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Assert.Contains("Same account", model.EditError);
             Find<Button>(dashboard, "ClearSelection").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); dashboard.UpdateLayout();
             Assert.Empty(model.SelectedRows); Assert.Equal("Details|", Title());
@@ -276,11 +276,11 @@ public sealed class CreditReviewTests
         Check("09:00:00", "53", "10:00:00", "30", 1, .5, -7, Day.AddHours(9).AddMinutes(53), Day.AddHours(10).AddMinutes(23));
         // Move downward until the bottom edge meets a 10:03 start.
         Check("09:00:00", "30", "10:03:00", "30", 0, .5, 33, Day.AddHours(9).AddMinutes(33), Day.AddHours(10).AddMinutes(3));
-        // Small overshoots stop at the first neighbour rather than overlap or jump past it.
-        Check("09:00:00", "53", "10:00:00", "30", 1, .5, -12, Day.AddHours(9).AddMinutes(53), Day.AddHours(10).AddMinutes(23));
-        Check("09:00:00", "30", "10:03:00", "30", 0, .5, 40, Day.AddHours(9).AddMinutes(33), Day.AddHours(10).AddMinutes(3));
-        Check("09:00:00", "53", "10:00:00", "30", 1, .01, -12, Day.AddHours(9).AddMinutes(53), Day.AddHours(10.5));
-        Check("09:00:00", "30", "10:03:00", "30", 0, .99, 40, Day.AddHours(9), Day.AddHours(10).AddMinutes(3));
+        // Past the magnet (10 pixels, under 4 minutes at this zoom) the edge is free: it goes where the pointer is, to the five minutes, and may overlap.
+        Check("09:00:00", "53", "10:00:00", "30", 1, .5, -12, Day.AddHours(9).AddMinutes(50), Day.AddHours(10).AddMinutes(20));
+        Check("09:00:00", "30", "10:03:00", "30", 0, .5, 40, Day.AddHours(9).AddMinutes(40), Day.AddHours(10).AddMinutes(10));
+        Check("09:00:00", "53", "10:00:00", "30", 1, .01, -12, Day.AddHours(9).AddMinutes(50), Day.AddHours(10.5));
+        Check("09:00:00", "30", "10:03:00", "30", 0, .99, 40, Day.AddHours(9), Day.AddHours(10).AddMinutes(10));
         // Resize either edge to the same exact boundaries.
         Check("09:00:00", "53", "10:00:00", "30", 1, .01, -7, Day.AddHours(9).AddMinutes(53), Day.AddHours(10.5));
         Check("09:00:00", "30", "10:03:00", "30", 0, .99, 33, Day.AddHours(9), Day.AddHours(10).AddMinutes(3));
@@ -290,8 +290,6 @@ public sealed class CreditReviewTests
     {
         var engine = Engine(); engine.Sessions.AddRange(new[] { Row("00:00:00", "30"), Row("00:30:00", "30") });
         var editor = new LedgerEditor(engine); var csv = editor.SessionsCsv;
-        Assert.Throws<ArgumentException>(() => editor.EditTimeline(engine.Sessions[1], Day.AddMinutes(-10), Day.AddMinutes(20), true));
-        Assert.Equal(csv, editor.SessionsCsv); Assert.False(editor.CanUndo);
         engine.Sessions.Clear(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("09:30:00", "30"), Row("10:15:00", "30") });
         engine.ToggleAccount("Account two"); csv = editor.SessionsCsv; var undo = System.Text.Json.JsonSerializer.Serialize(editor.Steps); // Running from 15:00.
         Assert.Throws<ArgumentException>(() => editor.EditTimeline(engine.Sessions[2], Day.AddHours(14).AddMinutes(50), Day.AddHours(15).AddMinutes(20), true));
@@ -359,7 +357,7 @@ public sealed class CreditReviewTests
         model.ChangeDate(1); Assert.Null(model.TimelineOffset);
     }
     [AvaloniaFact]
-    public void DragBeyondNestleThresholdInsertsAndPreviewsNeighbours()
+    public void HoldingShiftWhileDraggingAcrossANeighbourInsertsAndPreviewsNeighbours()
     {
         var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("09:30:00", "30"), Row("10:00:00", "30") });
         var model = new TimerModel(engine); model.SetTimelineScale(160, 0, 0); model.TimelineOffset = null; var window = new DashboardWindow(model); window.Show(); Capture(window, "nudge-before");
@@ -368,19 +366,40 @@ public sealed class CreditReviewTests
             var cards = window.GetVisualDescendants().OfType<Border>().Where(b => b.Tag is SessionRow).OrderBy(Canvas.GetLeft).ToArray();
             var csv = model.Editor.SessionsCsv; var oldLeft = Canvas.GetLeft(cards[1]);
             var point = cards[0].TranslatePoint(new Point(cards[0].Width / 2, cards[0].Height / 2), window)!.Value; var target = point + new Vector(20.0 / 60 * 160, 0);
-            window.MouseDown(point, MouseButton.Left); window.MouseMove(target);
+            window.MouseDown(point, MouseButton.Left, RawInputModifiers.Shift); window.MouseMove(target, RawInputModifiers.Shift);
             Assert.True(Canvas.GetLeft(cards[1]) < oldLeft); Assert.Equal(csv, model.Editor.SessionsCsv);
-            window.MouseUp(target, MouseButton.Left); Assert.Null(model.EditError); Assert.Empty(model.SelectedRows);
+            window.MouseUp(target, MouseButton.Left, RawInputModifiers.Shift); Assert.Null(model.EditError); Assert.Empty(model.SelectedRows);
             Assert.Equal(Day.AddHours(9), engine.Sessions[1].From); Assert.Equal(Day.AddHours(9.5), engine.Sessions[0].From); Assert.True(model.UndoEdit()); Assert.Equal(csv, model.Editor.SessionsCsv);
         }
         finally { window.Close(); }
     }
     [AvaloniaFact]
-    public void DraggingThroughAnOccupiedSlotIntoAGapRestoresNeighbourPositions()
+    public void DraggingAcrossANeighbourWithoutShiftOverlapsItAndMovesNothingElse()
+    {
+        var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("09:30:00", "30"), Row("10:00:00", "30") });
+        var model = new TimerModel(engine); model.SetTimelineScale(160, 0, 0); model.TimelineOffset = null; var window = new DashboardWindow(model); window.Show(); Capture(window, "overlap-before");
+        try
+        {
+            var cards = window.GetVisualDescendants().OfType<Border>().Where(b => b.Tag is SessionRow).OrderBy(Canvas.GetLeft).ToArray();
+            var oldLeft = Canvas.GetLeft(cards[1]); var csv = model.Editor.SessionsCsv;
+            var point = cards[0].TranslatePoint(new Point(cards[0].Width / 2, cards[0].Height / 2), window)!.Value; var target = point + new Vector(20.0 / 60 * 160, 0);
+            window.MouseDown(point, MouseButton.Left); window.MouseMove(target);
+            Assert.Equal(oldLeft, Canvas.GetLeft(cards[1])); // Nothing is pushed out of the way.
+            window.MouseUp(target, MouseButton.Left); Assert.Null(model.EditError);
+            Assert.Equal(Day.AddHours(9).AddMinutes(20), engine.Sessions[0].From); Assert.Equal(Day.AddHours(9.5), engine.Sessions[1].From); // The first now shares 09:30 to 09:50 with the second.
+            Assert.True(model.UndoEdit()); Assert.Equal(csv, model.Editor.SessionsCsv);
+        }
+        finally { window.Close(); }
+    }
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DraggingThroughAnOccupiedSlotIntoAGapLeavesNeighboursWhereTheyAre(bool checkpointDuringDrag)
     {
         var engine = Engine();
         engine.Sessions.AddRange(new[] { Row("09:00:00", "30"), Row("09:30:00", "30"), Row("11:00:00", "30") });
         var model = new TimerModel(engine);
+        if (checkpointDuringDrag) model.ToggleAccount("Account two");
         const double scale = 160;
         model.SetTimelineScale(scale, 0, 0);
         model.TimelineOffset = null;
@@ -397,8 +416,15 @@ public sealed class CreditReviewTests
 
             window.MouseDown(point, MouseButton.Left);
             window.MouseMove(point + new Vector(20d / 60 * scale, 0));
-            Assert.True(Canvas.GetLeft(cards[1]) < neighbourLeft);
+            Assert.Equal(neighbourLeft, Canvas.GetLeft(cards[1])); // Passing over a neighbour no longer shoves it.
 
+            if (checkpointDuringDrag)
+            {
+                for (var i = 0; i < 15; i++) model.Tick();
+                Capture(window, "checkpoint-during-drag");
+                Assert.Contains(cards[0], window.GetVisualDescendants());
+                Assert.True(model.TimelineGestureActive);
+            }
             var gap = point + new Vector(70d / 60 * scale, 0);
             window.MouseMove(gap);
             Assert.Equal(neighbourLeft, Canvas.GetLeft(cards[1]));
@@ -406,6 +432,7 @@ public sealed class CreditReviewTests
             Assert.Equal(csv, model.Editor.SessionsCsv);
 
             window.MouseUp(gap, MouseButton.Left);
+            Assert.False(model.TimelineGestureActive);
             Assert.Null(model.EditError);
             Assert.Equal(new[] { Day.AddHours(9.5), Day.AddHours(10).AddMinutes(10), Day.AddHours(11) },
                 engine.Sessions.Select(row => row.From).OrderBy(from => from).ToArray());

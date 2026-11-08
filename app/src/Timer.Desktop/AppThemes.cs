@@ -15,7 +15,7 @@ public static class AppThemes
         Colours = new Dictionary<string, string>(ThemeLibrary.Light.Colours)
         {
             ["Surface"] = "#E9E9E7", ["Panel"] = "#F3F3F1", ["Line"] = "#D9D9D5", ["Hover"] = "#E3E3E0", ["Muted"] = "#596070", ["Idle"] = "#596070",
-            ["Ink"] = "#1D222B", ["Clock"] = "#1D222B", ["Accent"] = "#B3A6E0", ["AccentInk"] = "#241B36", ["Selected"] = "#E6E0F4",
+            ["Ink"] = "#1D222B", ["Clock"] = "#1D222B", ["Accent"] = "#D3B0EA", ["AccentInk"] = "#241B36", ["Selected"] = "#EEE0F7",
             ["Live"] = "#12864D", ["Start"] = "#12864D", ["Overtime"] = "#C41E36", ["Finish"] = "#C41E36", ["BudgetWarning"] = "#E3920B",
             ["PillSurface"] = "#1D222B", ["PillInk"] = "#E9E9E7", ["PillBreak"] = "#FFA033", ["PillOvertime"] = "#C41E36", ["Break"] = BreakOnTheWarmPage()
         },
@@ -32,8 +32,8 @@ public static class AppThemes
     {
         Colours = new Dictionary<string, string>(ThemeLibrary.Dark.Colours)
         {
-            ["Surface"] = "#1A1C20", ["Panel"] = "#22252A", ["Line"] = "#32363D", ["Hover"] = "#2B2F36", ["Selected"] = "#39344A", ["Muted"] = "#A0A7B3", ["Idle"] = "#A0A7B3",
-            ["Ink"] = "#ECEEF2", ["Clock"] = "#ECEEF2", ["Accent"] = "#B3A6E0", ["AccentInk"] = "#0E1422",
+            ["Surface"] = "#1A1C20", ["Panel"] = "#22252A", ["Line"] = "#32363D", ["Hover"] = "#2B2F36", ["Selected"] = "#43364F", ["Muted"] = "#A0A7B3", ["Idle"] = "#A0A7B3",
+            ["Ink"] = "#ECEEF2", ["Clock"] = "#ECEEF2", ["Accent"] = "#CBA9E8", ["AccentInk"] = "#0E1422",
             ["Live"] = "#3EDC8E", ["Start"] = "#3EDC8E", ["Overtime"] = "#FF6B6B", ["Finish"] = "#FF6B6B", ["BudgetWarning"] = "#F5C04A", ["Break"] = "#FFA23F",
             ["PillSurface"] = "#2A2D33", ["PillInk"] = "#ECEEF2", ["PillBreak"] = "#FFA23F", ["PillOvertime"] = "#A02A38"
         }

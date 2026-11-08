@@ -45,6 +45,41 @@ public static class ThemeEngine
         }
         return ink;
     }
+
+    /// <summary>
+    /// The lit tone of the accent: what lamps, selection rings, the now line, focus edges and accent outlines are drawn in. The accent itself is a pale tone for washes and for
+    /// ink-on-accent buttons, and on a light ground it is too faint to read as lit, so this keeps its hue, makes it at least as saturated as a lamp needs and darkens it until it
+    /// holds 3.3 to 1 on the page, the card and a sunk well. On a dark ground the accent already holds that, so it is only made a little more saturated.
+    /// </summary>
+    /// <summary>The lit accent of a theme, for code that draws its own rings and lines.</summary>
+    public static string LitOf(ThemeDefinition theme) => AccentLit(theme.Colours);
+    public static string AccentLit(IReadOnlyDictionary<string, string> colours)
+    {
+        string accent = colours["Accent"], surface = colours["Surface"], panel = colours["Panel"], ink = colours["Ink"];
+        var light = ThemeColours.Contrast(surface, "#FFFFFF") < ThemeColours.Contrast(surface, "#000000");
+        var well = light ? ThemeColours.Mix(surface, ink, .03) : ThemeColours.Mix(surface, "#000000", .2);
+        var grounds = new[] { surface, panel, well };
+        var (h, s, l) = ToHsl(Color.Parse(accent));
+        s = light ? Math.Max(s, .58) : Math.Min(1, Math.Max(s, .6) * 1.1);
+        var colour = FromHsl(h, s, l);
+        if (!light) return colour;
+        for (var step = 0; step <= 60 && !grounds.All(g => ThemeColours.Contrast(colour, g) >= 3.3); step++) { l -= .01; colour = FromHsl(h, s, l); }
+        return colour;
+    }
+    private static (double H, double S, double L) ToHsl(Color c)
+    {
+        double r = c.R / 255.0, g = c.G / 255.0, b = c.B / 255.0, max = Math.Max(r, Math.Max(g, b)), min = Math.Min(r, Math.Min(g, b)), l = (max + min) / 2, d = max - min;
+        if (d < 1e-9) return (0, 0, l);
+        var s = l > .5 ? d / (2 - max - min) : d / (max + min);
+        var h = max == r ? (g - b) / d + (g < b ? 6 : 0) : max == g ? (b - r) / d + 2 : (r - g) / d + 4;
+        return (h / 6, s, l);
+    }
+    private static string FromHsl(double h, double s, double l)
+    {
+        double Channel(double t) { t = (t % 1 + 1) % 1; var q = l < .5 ? l * (1 + s) : l + s - l * s; var p = 2 * l - q; return t < 1.0 / 6 ? p + (q - p) * 6 * t : t < .5 ? q : t < 2.0 / 3 ? p + (q - p) * (2.0 / 3 - t) * 6 : p; }
+        byte B(double v) => (byte)Math.Round(Math.Clamp(v, 0, 1) * 255);
+        return $"#{B(Channel(h + 1.0 / 3)):X2}{B(Channel(h)):X2}{B(Channel(h - 1.0 / 3)):X2}";
+    }
     private static void Write(Application app, ThemeVariant variant, IReadOnlyDictionary<string, string> colours)
     {
         if (!app.Resources.ThemeDictionaries.TryGetValue(variant, out var found) || found is not ResourceDictionary dictionary)
@@ -77,11 +112,11 @@ public static class ThemeEngine
             foreach (var key in new[] { "CheckBoxCheckBackgroundStrokeChecked", "CheckBoxCheckBackgroundStrokeCheckedPointerOver", "CheckBoxCheckBackgroundStrokeCheckedPressed",
                 "CheckBoxCheckBackgroundStrokeUnchecked", "CheckBoxCheckBackgroundStrokeUncheckedPointerOver", "CheckBoxCheckBackgroundStrokeUncheckedPressed" }) Put(key, boxEdge);
         }
-        Put("FocusStroke", Color.Parse(TextShade(colours["Accent"], colours["Ink"], new[] { colours["Panel"], colours["Surface"] }, 3)));
+        var lit = AccentLit(colours); Put("AccentLit", Color.Parse(lit)); Put("FocusStroke", Color.Parse(lit));
         foreach (var key in new[] {
             // The export dialog's week and month choices are radio buttons, which follow the theme too.
             "RadioButtonOuterEllipseCheckedFill", "RadioButtonOuterEllipseCheckedFillPointerOver", "RadioButtonOuterEllipseCheckedFillPressed",
-            "RadioButtonOuterEllipseCheckedStroke", "RadioButtonOuterEllipseCheckedStrokePointerOver", "RadioButtonOuterEllipseCheckedStrokePressed" }) Put(key, accent);
+            "RadioButtonOuterEllipseCheckedStroke", "RadioButtonOuterEllipseCheckedStrokePointerOver", "RadioButtonOuterEllipseCheckedStrokePressed" }) Put(key, Color.Parse(lit));
         foreach (var key in new[] { "RadioButtonCheckGlyphFill", "RadioButtonCheckGlyphFillPointerOver", "RadioButtonCheckGlyphFillPressed", "RadioButtonCheckGlyphStroke", "RadioButtonCheckGlyphStrokePointerOver", "RadioButtonCheckGlyphStrokePressed" }) Put(key, accentInk);
         foreach (var key in new[] { "CheckBoxCheckGlyphForegroundChecked", "CheckBoxCheckGlyphForegroundCheckedPointerOver", "CheckBoxCheckGlyphForegroundCheckedPressed" }) Put(key, Color.Parse(TextShade(colours["Accent"], colours["Ink"], new[] { colours["Panel"], colours["Surface"], colours["Hover"] })));
         // Tooltips are drawn by a pop-up that otherwise takes the computer's own light or dark colours, which left dark text on a dark tooltip (or the reverse)
@@ -103,6 +138,8 @@ public static class ThemeEngine
         Put("DisplayWell", Color.Parse(lightGround ? ThemeColours.Mix(colours["Surface"], colours["Ink"], .035) : ThemeColours.Mix(colours["Panel"], "#000000", .45)));
         Put("DisplayGroove", Color.Parse(lightGround ? ThemeColours.Mix(colours["Surface"], colours["Ink"], .02) : ThemeColours.Mix(colours["Panel"], "#000000", .55)));
         Put("DisplayShade", lightGround ? Color.FromArgb(38, 60, 52, 100) : Color.FromArgb(166, 0, 0, 0));
+        Put("ZoneHover", Color.FromArgb(lightGround ? (byte)22 : (byte)24, lightGround ? (byte)60 : (byte)255, lightGround ? (byte)52 : (byte)255, lightGround ? (byte)100 : (byte)255));
+        Put("ZonePressed", Color.FromArgb(lightGround ? (byte)40 : (byte)42, lightGround ? (byte)60 : (byte)255, lightGround ? (byte)52 : (byte)255, lightGround ? (byte)100 : (byte)255));
         Put("DisplayEdge", lightGround ? Color.FromArgb(255, 255, 255, 255) : Color.FromArgb(18, 255, 255, 255));
         // Depth: every raised thing (a key, a card, a menu) throws one soft shadow down and to the right with a pale edge up and to the left, and every sunk thing (a field,
         // a track, a pressed key) is the same two turned inward, so the whole app reads as one room lit from the top left. In Dark the pale edge is a whisper and the
@@ -204,7 +241,7 @@ public static class ThemeEngine
     /// </summary>
     public static (Color Fill, Color Track) SliderColours(IReadOnlyDictionary<string, string> colours)
     {
-        string surface = colours["Surface"], panel = colours["Panel"], ink = colours["Ink"], accent = colours["Accent"];
+        string surface = colours["Surface"], panel = colours["Panel"], ink = colours["Ink"], accent = AccentLit(colours);
         bool Seen(string colour) => ThemeColours.Contrast(colour, surface) >= 3 && ThemeColours.Contrast(colour, panel) >= 3;
         var fill = Seen(accent) ? accent : ink;
         var track = surface;

@@ -20,7 +20,7 @@ public static class NoteParts
     public static Border Chip(string text, string tone, IconKind? icon = null, Control? lead = null, IconKind? trailing = null)
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5 };
-        var token = tone switch { "accent" => "Accent", "late" => "Overtime", "quiet" => "Muted", _ => "Ink" };
+        var token = tone switch { "accent" => "AccentText", "late" => "Overtime", "quiet" => "Muted", _ => "Ink" };
         if (lead is not null) row.Children.Add(lead);
         if (icon is { } kind) row.Children.Add(new IconGlyph(kind) { TintKey = token == "Ink" ? null : token });
         row.Children.Add(Ink(text, token));
@@ -54,7 +54,7 @@ public static class NoteParts
     }
 
     /// <summary>The time of a meeting as 09:15–10:00.</summary>
-    public static string Span(DayNote note) => note.At is { } a && note.End is { } z ? a.ToString(@"hh\:mm") + "–" + z.ToString(@"hh\:mm") : "";
+    public static string Span(DayNote note) => note.At is { } a && note.End is { } z ? a.ToString(@"hh\:mm") + "–" + z.ToString(@"hh\:mm") + (z >= TimeSpan.FromDays(1) ? " (+1 day)" : "") : "";
 
     /// <summary>Which of the offered accounts is lit, so the arrow keys can move through them and Tab or Enter take the lit one. It goes back to the first when the words change.</summary>
     public sealed class SuggestionState

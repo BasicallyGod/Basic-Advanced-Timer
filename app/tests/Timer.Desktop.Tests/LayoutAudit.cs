@@ -29,6 +29,8 @@ internal static class LayoutAudit
                 && t.Bounds.Width > 0 && t.DesiredSize.Width > t.Bounds.Width + 1.5 && !t.GetVisualAncestors().Any(a => a is MarqueeText))
                 faults.Add($"words squeezed: {Describe(c)} '{t.Text}' wants {t.DesiredSize.Width:0} has {t.Bounds.Width:0}");
         }
+        // A drawing scaled down (the settings pictures of the pill) is measured at full size, so its neighbours are left alone.
+        all = all.Where(c => !c.GetVisualAncestors().Any(a => a is LayoutTransformControl)).ToList();
         foreach (var panel in all.OfType<StackPanel>().Where(p => p.Orientation == Orientation.Horizontal))
             Neighbours(panel, panel.Children.Where(ch => Shown(ch, window) && ch is not Popup).ToList(), surface, faults);
         foreach (var grid in all.OfType<Grid>().Where(g => g.Children.Select(Grid.GetColumn).Distinct().Count() > 1)) // Not ColumnDefinitions: reading it creates the list on a grid that has none, which breaks that grid's next arrange.
@@ -56,6 +58,7 @@ internal static class LayoutAudit
     // Things that are meant to run on: the timeline's long canvas inside its own scroll, a row of chips that scrolls sideways.
     private static bool InsideSideways(Control c, Window w) => c.GetVisualAncestors().Any(a => a is ScrollViewer s && s.HorizontalScrollBarVisibility != Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled)
         || c is Popup || c.GetVisualAncestors().Any(a => a is ComboBox || a is Popup) // (a combo box's drop-down glyph is measured at the popup's size)
+        || c.GetVisualAncestors().Any(a => a is LayoutTransformControl) // A drawing scaled down (the settings pictures of the pill): its parts are measured at full size.
         || c.GetVisualAncestors().Any(a => a.GetType().Name is "ContextMenu" or "ToolTip");
     private static string Describe(Visual v) => v is Control c ? $"{c.GetType().Name}{(string.IsNullOrEmpty(c.Name) ? "" : " " + c.Name)}" : v.GetType().Name;
 }

@@ -77,8 +77,8 @@ Dispatcher.UIThread.RunJobs(); using var panelFrame = dashboard.CaptureRenderedF
             Assert.True(model.IsOnBreak); Assert.Contains("onBreak", dashboardBreak.Classes); Assert.Equal("Break", model.ThemeState);
             Assert.StartsWith("End break", ToolTip.GetTip(dashboardBreak)?.ToString());
             Assert.Equal("On break", ToolTip.GetTip(pill.GetVisualDescendants().OfType<Border>().Single(p => p.Name == "PillStateLight")));
-            Assert.True(pill.GetVisualDescendants().OfType<BreakGlyph>().Single().Steaming); // The steam moves while the break is on.
-            Assert.True(dashboard.GetVisualDescendants().OfType<BreakGlyph>().Single().Steaming);
+            Assert.True(pill.GetVisualDescendants().OfType<BreakBadgeGlyph>().Single().Highlighted);
+            Assert.True(dashboard.GetVisualDescendants().OfType<BreakBadgeGlyph>().Single().Highlighted);
             var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR");
             if (folder is not null)
             {
@@ -90,7 +90,7 @@ Dispatcher.UIThread.RunJobs(); using var panelFrame = dashboard.CaptureRenderedF
             Assert.Contains("Break", ToolTip.GetTip(running)!.ToString()); // so the running break block says what it is in its tooltip.
             pillBreak.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
             Assert.False(model.IsOnBreak); Assert.Equal("Account one", model.ActiveAccount); Assert.DoesNotContain("onBreak", pillBreak.Classes);
-            Assert.False(pill.GetVisualDescendants().OfType<BreakGlyph>().Single().Steaming); // And it is still when the break ends.
+            Assert.False(pill.GetVisualDescendants().OfType<BreakBadgeGlyph>().Single().Highlighted);
         }
         finally { pill.Close(); dashboard.Close(); }
     }
@@ -104,7 +104,7 @@ Dispatcher.UIThread.RunJobs(); using var panelFrame = dashboard.CaptureRenderedF
         try
         {
             Dispatcher.UIThread.RunJobs(); using var frame = editor.CaptureRenderedFrame();
-            var accounts = editor.GetVisualDescendants().OfType<ComboBox>().Single(c => c.Name == "EntryAccount");
+            var accounts = editor.GetVisualDescendants().OfType<ChoiceStrip>().Single(c => c.Name == "EntryAccount");
             var items = accounts.ItemsSource!.Cast<string>().ToList();
             Assert.Contains("Break", items); Assert.DoesNotContain("Lunch", items);
             accounts.SelectedItem = "Break";

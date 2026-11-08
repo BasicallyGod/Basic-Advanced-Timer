@@ -5,11 +5,12 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Timer.Core;
+using Timer.Storage;
 using Xunit;
 
 namespace Timer.Desktop.Tests;
 
-// The plain clock digits, the compact pill, the alerts card that opens from the sidebar's count (in place of the bell) and the all-red alerts.
+// The segmented display, the compact pill and the alerts that open from the sidebar's count.
 public sealed class DisplayOptionsTests
 {
     private static readonly DateTime DemoNow = new(2026, 10, 14, 14, 15, 7);
@@ -25,27 +26,28 @@ public sealed class DisplayOptionsTests
     }
 
     [Fact]
-    public void PlainDigitsAndTheCompactPillAreSavedAsAppearanceLinesAndComeBackOff()
+    public void TheCompactPillCanBeTurnedOnAndOff()
     {
-        var model = Demo(); Assert.False(model.PlainClock); Assert.False(model.CompactPill);
-        model.SetPlainClock(true); model.SetCompactPill(true); Assert.True(model.PlainClock); Assert.True(model.CompactPill);
-        model.SetPlainClock(false); model.SetCompactPill(false); Assert.False(model.PlainClock); Assert.False(model.CompactPill);
+        var model = Demo();
+        Assert.False(model.CompactPill);
+        model.SetCompactPill(true); Assert.True(model.CompactPill);
+        model.SetCompactPill(false); Assert.False(model.CompactPill);
     }
 
     [AvaloniaFact]
-    public void PlainDigitsKeepTheDisplayExactlyAsWideAndDrawTheClockAndTheCount()
+    public void AStoredPlainDigitsPreferenceStillOpensTheSegmentedDisplay()
     {
-        var model = Demo(); var pill = new PillWindow(model); pill.Show(); Settle(pill);
+        var extras = SettingsExtras.Empty with { AppearanceLines = new List<string> { "clockdigits=plain" } };
+        var model = new TimerModel(new TrackingEngine(clock: () => DemoNow),
+            new StoreSettings(new() { new("Account one") }, false, "Dark", DayOfWeek.Monday, SetupDone: true, Extras: extras));
+        var pill = new PillWindow(model); pill.Show(); Settle(pill);
         try
         {
             var display = Find<Border>(pill, "PillDisplay"); var width = display.Bounds.Width; var clock = pill.GetVisualDescendants().OfType<SegmentClock>().Single(); var clockWidth = clock.Bounds.Width;
-            var count = Find<SegmentRun>(pill, "PillAlertCount");
-            Assert.False(count.Plain);
-            model.SetPlainClock(true); Settle(pill);
-            Assert.True(clock.Plain); Assert.True(count.Plain);
-            Assert.Equal(width, display.Bounds.Width, 0.5); Assert.Equal(clockWidth, clock.Bounds.Width, 0.5);
+            Assert.Equal(2, clock.GetVisualDescendants().OfType<SegmentRun>().Count());
+            Assert.Equal("  ", Find<SegmentRun>(pill, "PillAlertCount").Text);
             model.ToggleAccount("Account one"); Settle(pill); Assert.Equal(width, display.Bounds.Width, 0.5); // Ticking on changes nothing about the width.
-            model.SetPlainClock(false); Settle(pill); Assert.False(clock.Plain);
+            Assert.Equal(clockWidth, clock.Bounds.Width, 0.5);
         }
         finally { pill.Close(); }
     }
@@ -59,15 +61,18 @@ public sealed class DisplayOptionsTests
             var surface = Find<Border>(pill, "PillSurface");
             Assert.Equal(PillWindow.PillWidth, surface.Width);
             model.SetCompactPill(true); Settle(pill);
-            Assert.Equal(PillWindow.CompactWidth, surface.Width); Assert.Equal(230, PillWindow.CompactWidth);
+            Assert.Equal(PillWindow.CompactWidth, surface.Width); Assert.Equal(StatusFace.ShortDisplayWidth + 12, PillWindow.CompactWidth, 1.0);
             Assert.Equal((PillWindow.CompactWidth + 2 * Ui.ShadowMargin) * pill.Scale, pill.WindowWidthNow, 0.5);
-            Assert.False(Find<Border>(pill, "PillWell").IsVisible); Assert.False(Find<Button>(pill, "PillBreak").IsVisible);
+            Assert.False(Find<Button>(pill, "PillPause").IsVisible); Assert.False(Find<Button>(pill, "PillBreak").IsVisible);
             var display = Find<Border>(pill, "PillDisplay"); Assert.True(display.IsVisible);
-            var edge = surface.Bounds.Width - (display.TranslatePoint(default, surface)!.Value.X + display.Bounds.Width);
-            Assert.Equal(PillWindow.InsetLeft, edge, 3.0); // The display sits in the card with the same room each side.
+            var inset = display.TranslatePoint(default, surface)!.Value;
+            Assert.Equal(PillWindow.BezelWidth, inset.X, 0.5);
+            Assert.Equal(inset.X, surface.Bounds.Width - inset.X - display.Bounds.Width, 0.5);
+            Assert.Equal(inset.Y, surface.Bounds.Height - inset.Y - display.Bounds.Height, 0.5);
+            Assert.Equal(inset.X, inset.Y, 0.5);
             Assert.True(pill.AlertsButton.IsVisible); // The count still opens what is waiting.
             model.SetCompactPill(false); Settle(pill);
-            Assert.Equal(PillWindow.PillWidth, surface.Width); Assert.True(Find<Border>(pill, "PillWell").IsVisible);
+            Assert.Equal(PillWindow.PillWidth, surface.Width); Assert.True(Find<Button>(pill, "PillPause").IsVisible);
         }
         finally { pill.Close(); }
     }

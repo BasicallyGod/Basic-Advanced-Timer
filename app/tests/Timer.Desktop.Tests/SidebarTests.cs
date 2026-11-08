@@ -41,11 +41,11 @@ public sealed class SidebarTests
                 model.SelectBlock(model.Engine.Sessions.Take(1).ToArray(), false); Settle(window); Audit("timeline, one block selected");
                 model.SelectBlock(model.Engine.Sessions.Take(3).ToArray(), false); Settle(window); Audit("timeline, three blocks selected");
                 model.SelectBlock(Array.Empty<SessionRow>(), false);
-                Click(window, "AddMeeting"); Audit("timeline, meeting form"); Click(window, "AddNote"); Audit("timeline, note form");
-                Click(window, "NotesTab"); Audit("notes"); Click(window, "PageKindMeeting"); Audit("notes, meeting form");
+                Click(window, "CardKindMeetings"); Audit("timeline, meeting form"); Click(window, "CardKindNotes"); Audit("timeline, note form");
+                Click(window, "NotesTab"); Audit("notes"); window.GetVisualDescendants().OfType<NotesPage>().Single().SetKind(true); Dispatcher.UIThread.RunJobs(); Audit("notes, meeting form");
                 Click(window, "WeekOverviewTab"); Audit("week chart"); Click(window, "WeekTable"); Audit("week table");
                 Click(window, "Settings");
-                foreach (var section in new[] { "Appearance", "Behaviour", "Hours", "Accounts", "Export", "About" }) { Click(window, "Settings" + section); Audit("settings " + section); }
+                foreach (var section in new[] { "Look", "Pill", "Alerts", "Day", "Accounts", "Export", "About" }) { Click(window, "Settings" + section); Audit("settings " + section); }
             }
             finally { window.Close(); }
         }
@@ -63,11 +63,12 @@ public sealed class SidebarTests
             Click(window, "NotesTab");
             // The left column is the views alone: no accounts list, so nothing in it can be mistaken for the sidebar's rows.
             Assert.DoesNotContain(Find<Border>(window, "NotesViews").GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "ACCOUNTS");
+            Click(window, "NotesAccountFilter"); // One button; the list of accounts hangs under it.
             var one = Find<Button>(window, "NotesAccount_Accountone"); var two = Find<Button>(window, "NotesAccount_Accounttwo");
             Assert.Contains(one.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "#Accountone"); Assert.Contains(one.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "2"); // Tagged as a note carries it, with its count.
             Assert.False(Has(window, "NotesAccountClear")); Assert.Equal(4, window.GetVisualDescendants().OfType<TextBlock>().Count(t => t.Name?.StartsWith("PageNoteText_") == true));
             Click(window, "NotesAccount_Accountone"); one = Find<Button>(window, "NotesAccount_Accountone");
-            Assert.Contains("on", one.Classes); Assert.Equal(2, window.GetVisualDescendants().OfType<TextBlock>().Count(t => t.Name?.StartsWith("PageNoteText_") == true)); Assert.True(Has(window, "NotesAccountClear"));
+            Assert.Contains("tickDone", one.GetVisualDescendants().OfType<Border>().First(b => b.Classes.Contains("tick")).Classes); Assert.Equal(2, window.GetVisualDescendants().OfType<TextBlock>().Count(t => t.Name?.StartsWith("PageNoteText_") == true)); Assert.True(Has(window, "NotesAccountClear"));
             Click(window, "NotesAccount_Accounttwo"); // Several at once.
             Assert.Equal(3, window.GetVisualDescendants().OfType<TextBlock>().Count(t => t.Name?.StartsWith("PageNoteText_") == true));
             Click(window, "NotesAccount_Accountone"); Assert.Equal(1, window.GetVisualDescendants().OfType<TextBlock>().Count(t => t.Name?.StartsWith("PageNoteText_") == true)); // Pressing a chosen one takes it off.
@@ -77,14 +78,15 @@ public sealed class SidebarTests
     }
 
     [AvaloniaFact]
-    public void TheTrackingCardNamesTheAccountAndItsStateAndTheClockIsOneCentredLine()
+    public void TheTrackingDisplayNamesTheAccountAndItsStateAndTheClockIsOneCentredLine()
     {
         var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            Assert.Equal("Account one", Find<TextBlock>(window, "SidebarWhoName").Text); Assert.Equal("Ready to track", Find<TextBlock>(window, "SidebarWhoStatus").Text);
-            model.ToggleAccount("Account two"); Settle(window); Assert.Equal("Account two", Find<TextBlock>(window, "SidebarWhoName").Text); Assert.False(Find<TextBlock>(window, "SidebarWhoStatus").IsVisible); // Tracking says itself, on the tile and the light.
-            model.ToggleBreak(); Settle(window); Assert.Equal("Break", Find<TextBlock>(window, "SidebarWhoName").Text); Assert.StartsWith("On break", Find<TextBlock>(window, "SidebarWhoStatus").Text);
+            string Tip() => ToolTip.GetTip(Find<Border>(window, "SidebarWhoName"))!.ToString()!;
+            Assert.Equal("ACCOUNT ONE", Find<SegmentName>(window, "SidebarAccountName").Text); Assert.Equal("Account one · Ready to track", Tip());
+            model.ToggleAccount("Account two"); Settle(window); Assert.Equal("ACCOUNT TWO", Find<SegmentName>(window, "SidebarAccountName").Text); Assert.Equal("Account two · Recording", Tip()); // The words the card used to carry are the tooltip now.
+            model.ToggleBreak(); Settle(window); Assert.StartsWith("Account two · On break", Tip());
             // The clock is seven-segment digits (hours and minutes, then the seconds the same height) inside the display, and the display is centred in the column.
             var display = Find<Border>(window, "SidebarDisplay"); var sidebar = Find<Border>(window, "Sidebar");
             var clock = display.GetVisualDescendants().OfType<SegmentClock>().Single(); var parts = clock.GetVisualDescendants().OfType<SegmentRun>().ToList(); Assert.Equal(2, parts.Count);

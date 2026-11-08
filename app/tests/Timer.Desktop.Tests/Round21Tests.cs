@@ -54,7 +54,7 @@ public sealed class Round21Tests
         var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            var id = model.Notes.All.Single().Id; Click(window, "NoteReminder_" + id);
+            var id = model.Notes.All.Single().Id; model.SelectNote(id); Settle(window); Click(window, "DetailsNoteReminder");
             Assert.Equal("31", Find<TextBox>(window, "ReminderMinute").Text); Assert.Equal("14", Find<TextBox>(window, "ReminderHour").Text); // Not 30.
             Assert.Contains("14:31", Find<TextBlock>(window, "ReminderSummary").Text);
         }
@@ -64,7 +64,7 @@ public sealed class Round21Tests
     [AvaloniaFact]
     public void AnImportantNoteHasNoBoldWordsButASolidGoldStarAndATintedRow()
     {
-        var model = Model(); model.Notes.AddNote("!! Ring the client", null, null); model.Notes.AddNote("Tidy the drive", null, null);
+        var model = Model(); model.Notes.AddNote("Ring the client", null, null, important: true); model.Notes.AddNote("Tidy the drive", null, null);
         var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
@@ -85,7 +85,7 @@ public sealed class Round21Tests
         var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            Click(window, "AddNote");
+            Click(window, "CardKindNotes");
             Find<TextBox>(window, "NoteField").Text = "#Accountt"; Settle(window); Click(window, "Suggest_Accounttwo");
             Find<TextBox>(window, "NoteField").Text = "!! What if we put a really long reminder in here that ends up breaking the limit"; Settle(window);
             Click(window, "FormBell"); Click(window, "ReminderSet");

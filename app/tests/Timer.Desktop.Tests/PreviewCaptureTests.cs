@@ -27,13 +27,14 @@ public sealed class PreviewCaptureTests
                     using var picture = window.CaptureRenderedFrame(); picture?.Save(Path.Combine(folder, $"ui-efficiency-{theme}-{name}.png"));
                 }
                 void Press(string name) => window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                Shot("timeline"); Press("AddNote"); Shot("inline-note"); Press("AddNote");
+                Shot("timeline"); model.SelectNote(model.Notes.All.First(n => !NotesModel.IsMeeting(n) && n.Day.Date == model.Engine.Now.Date).Id); Shot("timeline-note"); model.ClearSelection(); Press("CardKindMeetings"); Shot("timeline-meetings"); Press("CardKindNotes");
                 window.ShowNotes(); Shot("notes");
                 window.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "PageNoteField").Focus(); Shot("notes-focused");
-                Press("PageKindMeeting"); Shot("meeting");
+                window.GetVisualDescendants().OfType<NotesPage>().Single().OpenNote(model.Notes.All.First(n => !NotesModel.IsMeeting(n) && n.Day.Date == model.Engine.Now.Date).Id); Shot("note-edit");
+                window.GetVisualDescendants().OfType<NotesPage>().Single().SetKind(true); Dispatcher.UIThread.RunJobs(); Shot("meeting");
                 window.GetVisualDescendants().OfType<NotesPage>().Single().OpenNote(model.Notes.MeetingsOn(model.Engine.Now.Date).First().Id); Shot("meeting-edit");
                 window.SelectTab(true); Shot("week"); Press("WeekTable"); Shot("week-table");
-                Press("Settings"); Press("SettingsExport"); Shot("export");
+                Press("Settings"); foreach (var section in new[] { "Look", "Pill", "Alerts", "Day", "Accounts", "Export", "About" }) { Press("Settings" + section); Shot("settings-" + section.ToLowerInvariant()); }
             }
             finally { window.Close(); }
         }
@@ -64,7 +65,7 @@ public sealed class PreviewCaptureTests
             void Press(string name) { window.GetVisualDescendants().OfType<Button>().First(b => b.Name == name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
             model.Notes.AddNote("Send the invoice batch", "Accountoneoneoneoneoneon", model.Engine.Now.Date.AddHours(17)); Dispatcher.UIThread.RunJobs();
             Press("TimelineTab"); Shot("long-list");
-            Press("AddNote");
+            Press("CardKindNotes");
             window.GetVisualDescendants().OfType<TextBox>().First(t => t.Name == "NoteField").Text = "Send the invoice batch #Accountone"; Dispatcher.UIThread.RunJobs();
             Press("Suggest_Accountoneoneoneoneoneon"); Press("FormBell"); Press("ReminderSet"); Shot("long-form");
         }
@@ -122,7 +123,7 @@ public sealed class PreviewCaptureTests
                 foreach (var (page, tab) in new[] { ("timeline", "TimelineTab"), ("notes", "NotesTab"), ("week", "WeekOverviewTab") }) { Press(tab); Shot(page); }
                 Press("TimelineTab"); model.SelectBlock(model.Engine.Sessions.Take(1).ToArray(), false); Shot("timeline-selected");
                 model.SelectBlock(Array.Empty<Timer.Core.SessionRow>(), false);
-                Press("NotesTab"); Press("NotesAccount_Accountone"); Shot("notes-filtered");
+                Press("NotesTab"); Press("NotesAccountFilter"); Press("NotesAccount_Accountone"); Shot("notes-filtered");
             }
             finally { window.Close(); }
         }
@@ -142,19 +143,19 @@ public sealed class PreviewCaptureTests
                 void Shot(string name) { Dispatcher.UIThread.RunJobs(); using var f = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var g = window.CaptureRenderedFrame(); g?.Save(Path.Combine(folder, $"r20-{theme}-{name}.png")); }
                 void Press(string name) { window.GetVisualDescendants().OfType<Button>().First(b => b.Name == name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
                 var due = model.Engine.Now.Date.AddHours(14);
-                model.Notes.AddNote("Follow up on the new brief", "Account two", due); model.Notes.AddNote("!! What if we put a really long reminder in here that ends up breaking the limit on characters", "Account four", due); Dispatcher.UIThread.RunJobs();
+                model.Notes.AddNote("Follow up on the new brief", "Account two", due); model.Notes.AddNote("What if we put a really long reminder in here that ends up breaking the limit on characters", "Account four", due, important: true); Dispatcher.UIThread.RunJobs();
                 Press("TimelineTab"); Shot("timeline");
                 var pin = window.GetVisualDescendants().OfType<Border>().First(b => b.Name?.StartsWith("TimelinePinMark_") == true);
                 var at = pin.TranslatePoint(new Point(pin.Bounds.Width / 2, pin.Bounds.Height / 2), window)!.Value;
                 Avalonia.Headless.HeadlessWindowExtensions.MouseMove(window, at); Dispatcher.UIThread.RunJobs(); Shot("pin-hover");
                 Avalonia.Headless.HeadlessWindowExtensions.MouseMove(window, new Point(5, 5)); Dispatcher.UIThread.RunJobs();
-                Press("AddNote");
+                Press("CardKindNotes");
                 window.GetVisualDescendants().OfType<TextBox>().First(t => t.Name == "NoteField").Text = "Follow #Accountt"; Dispatcher.UIThread.RunJobs();
                 Press("Suggest_Accounttwo");
                 window.GetVisualDescendants().OfType<TextBox>().First(t => t.Name == "NoteField").Text = "Follow up on the new brief"; Dispatcher.UIThread.RunJobs();
                 Press("FormBell"); Press("ReminderSet"); Shot("note-form");
-                Press("AddMeeting"); Shot("meeting-form");
-                Press("NotesTab"); Shot("notes"); Press("PageKindMeeting"); Shot("notes-meeting");
+                Press("CardKindMeetings"); Shot("meeting-form");
+                Press("NotesTab"); Shot("notes"); window.GetVisualDescendants().OfType<NotesPage>().Single().SetKind(true); Dispatcher.UIThread.RunJobs(); Shot("notes-meeting");
                 Press("WeekOverviewTab"); Shot("week");
             }
             finally { window.Close(); }
