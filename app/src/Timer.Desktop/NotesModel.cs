@@ -109,9 +109,10 @@ public sealed class NotesModel
     /// <summary>The words shown for a note: without a deadline marker, without the important mark and without the #Tag that has its own chip.</summary>
     public string Text(DayNote note) => NoteLinks.Flatten(Shown(note));
     /// <summary>The editable words, including link markup, without the stored importance flag.</summary>
-    public string Words(DayNote note)
+    public string Words(DayNote note) => Words(note, note.Text.Contains('#') ? Names : Array.Empty<string>());
+    private static string Words(DayNote note, IReadOnlyList<string> names)
     {
-        var words = NoteShorthand.Display(note, Names);
+        var words = NoteShorthand.Display(note, names);
         if (IsMeeting(note)) return words;
         words = WithoutMark(words);
         return words.StartsWith(LiteralPrefix, StringComparison.Ordinal) ? words[LiteralPrefix.Length..] : words;
@@ -142,7 +143,7 @@ public sealed class NotesModel
         Change(id, n => n with { Text = WithMark(n.Text, important) }); NotifyChanged();
     }
     /// <summary>The account a note is tagged with, or null.</summary>
-    public string? AccountOf(DayNote note) => NoteShorthand.AccountOf(note.Text, Names);
+    public string? AccountOf(DayNote note) => note.Text.Contains('#') ? NoteShorthand.AccountOf(note.Text, Names) : null;
     /// <summary>When a note's reminder is, or null for a note with none.</summary>
     public static DateTime? ReminderOf(DayNote note) => note.HasDate && note.At is { } at && !IsMeeting(note) ? note.Day.Date + at : null;
     public bool IsLate(DayNote note) => !note.Done && ReminderOf(note) is { } due && due < now();
@@ -217,8 +218,28 @@ public sealed class NotesModel
     public IReadOnlyList<DayNote> MatchingAny(string search, IReadOnlyCollection<string>? accounts)
     {
         var words = search.Trim();
-        return Listed().Where(n => (accounts is not { Count: > 0 } || accounts.Any(a => string.Equals(AccountOf(n), a, StringComparison.OrdinalIgnoreCase)))
-            && (words.Length == 0 || Text(n).Contains(words, StringComparison.OrdinalIgnoreCase) || (AccountOf(n)?.Contains(words, StringComparison.OrdinalIgnoreCase) ?? false))).ToList();
+        var listed = Listed();
+        var filteringAccounts = accounts is { Count: > 0 };
+        if (words.Length == 0 && !filteringAccounts) return listed;
+        // The account catalogue includes names from the ledger. Read it once for the entire search.
+        var names = Names;
+        return listed.Where(note =>
+        {
+            var account = note.Text.Contains('#') ? NoteShorthand.AccountOf(note.Text, names) : null;
+            if (filteringAccounts && (account is null || !accounts!.Contains(account, StringComparer.OrdinalIgnoreCase))) return false;
+            return words.Length == 0 || NoteLinks.Flatten(Words(note, names)).Contains(words, StringComparison.OrdinalIgnoreCase)
+                || account?.Contains(words, StringComparison.OrdinalIgnoreCase) == true;
+        }).ToList();
+    }
+
+    internal IReadOnlyDictionary<string, int> AccountCounts()
+    {
+        var names = Names;
+        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var note in Listed())
+            if (note.Text.Contains('#') && NoteShorthand.AccountOf(note.Text, names) is { } account)
+                counts[account] = counts.GetValueOrDefault(account) + 1;
+        return counts;
     }
 
     public bool InView(DayNote n, NoteView view)

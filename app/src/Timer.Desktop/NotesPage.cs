@@ -104,8 +104,9 @@ public sealed class NotesPage : Grid
         if (editing is { } id && Notes.Find(id) is { } edited) editing = edited.Id;
         if (removing is { } pending && Notes.Find(pending) is { } scoped) removing = scoped.Id;
         syncedMinute = MinuteNow();
-        accountFilters.RemoveAll(name => !model.ReviewAccounts.Any(a => a.Name.Equals(name, StringComparison.OrdinalIgnoreCase)));
-        var accounts = string.Join(";", model.ReviewAccounts.Select(a => $"{a.Name}/{a.Display}/{a.Colour}"));
+        var catalogue = model.ReviewAccounts;
+        accountFilters.RemoveAll(name => !catalogue.Any(a => a.Name.Equals(name, StringComparison.OrdinalIgnoreCase)));
+        var accounts = string.Join(";", catalogue.Select(a => $"{a.Name}/{a.Display}/{a.Colour}"));
         var signature = $"{Notes.Revision}#{view}#{string.Join(",", accountFilters)}#{query}#{editing}#{removing}#{syncedMinute:yyyyMMddHHmm}#{accounts}";
         if (signature == shown) return; shown = signature;
         var matches = Notes.MatchingAny(query, accountFilters);
@@ -213,10 +214,10 @@ public sealed class NotesPage : Grid
     internal Control BuildAccountFilterCard()
     {
         var rows = new StackPanel { Spacing = 2, Margin = new Thickness(4) };
-        var listed = Notes.Listed();
+        var counts = Notes.AccountCounts();
         foreach (var a in model.Accounts.Where(x => !BreakAccount.Is(x.Name)))
         {
-            var count = listed.Count(n => string.Equals(Notes.AccountOf(n), a.Name, StringComparison.OrdinalIgnoreCase));
+            var count = counts.GetValueOrDefault(a.Name);
             var on = accountFilters.Any(f => string.Equals(f, a.Name, StringComparison.OrdinalIgnoreCase));
             var tick = new Border { Width = 18, Height = 18, CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(1.4), VerticalAlignment = VerticalAlignment.Center }; tick.Classes.Add("tick"); tick.Classes.Set("tickDone", on);
             if (on) tick.Child = new Avalonia.Controls.Shapes.Path { Data = Geometry.Parse("M 3.2,8.2 L 6.6,11.4 L 12.2,4.6"), StrokeThickness = 1.8, StrokeLineCap = PenLineCap.Round, StrokeJoin = PenLineJoin.Round };
