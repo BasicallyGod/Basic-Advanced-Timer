@@ -13,11 +13,11 @@ namespace Timer.Desktop;
 /// <summary>
 /// The honeycomb of a vacuum-fluorescent display's grid anode: hexagonal cells a little smaller than their lattice, so the gaps between them are the dark lines of the grid.
 /// One brush, used as an opacity mask over every lit and unlit shape in a display (the clock, the count, the name, the lights and the glyphs), so the whole display shares one
-/// cell size. A cell is 1.24 pixels from its middle to a corner (about 2.1 across), the size that looked right on the play and break buttons.
+/// cell size. A cell is 1.45 pixels from its middle to a corner (about 2.5 across), chosen from the sixteen-segment clock study at 3.5 times the first mesh.
 /// </summary>
 public static class Honeycomb
 {
-    public const double Cell = 1.24, Inset = 0.93;
+    public const double Cell = 1.45, Inset = 0.93;
     private static readonly Lazy<IBrush> Shared = new(() =>
     {
         double s = Cell, w = Math.Sqrt(3) * s, h = 3 * s; var g = new StreamGeometry();
