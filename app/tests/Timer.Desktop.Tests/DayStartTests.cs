@@ -44,6 +44,53 @@ public sealed class DayStartTests
         Assert.Equal(model.WorkingOn(Friday), model.Elapsed); // The pill's clock is today's, which is still Friday.
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ExportIncludesSavedTimeAcrossTheCalendarPeriodBoundary(bool wholeMonth)
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "timer-workday-export-" + Guid.NewGuid());
+        try
+        {
+            using var store = new TimerStore(folder);
+            var boundary = wholeMonth ? new DateTime(2026, 11, 1) : new DateTime(2026, 11, 2);
+            var engine = new TrackingEngine(clock: () => boundary.AddDays(2));
+            var model = new TimerModel(engine, store.Load(engine), store);
+            model.SetDayStart(TimeSpan.FromHours(18));
+            var start = boundary.AddHours(2);
+            Assert.True(model.AddEntry("Account one", start, start.AddHours(1), "Night handover"));
+
+            Assert.True(model.ExportWeek(wholeMonth, boundary.AddDays(-1)), model.EditError);
+            var exported = File.ReadAllText(Path.Combine(model.ExportPath!, "Detail.csv"));
+            Assert.Contains("Night handover", exported);
+        }
+        finally { Directory.Delete(folder, true); }
+    }
+
+    [AvaloniaFact]
+    public void WeekOverviewHandlesAnExistingGroupSplitByANewWorkdayBoundary()
+    {
+        var model = Night(out var engine, startHour: 0);
+        var start = Friday.AddHours(16);
+        for (var i = 0; i < 3; i++)
+            Assert.True(model.AddEntry("Account one", start.AddHours(i), start.AddHours(i + 1), ""));
+        model.Editor.Group(engine.Sessions);
+        var original = Assert.Single(model.Editor.Entries(Friday, Friday.AddDays(1)));
+        Assert.NotNull(original.GroupId);
+        var groups = model.Editor.GroupsCsv;
+
+        model.SetDayStart(TimeSpan.FromHours(18));
+        Assert.NotNull(WeekOverview.Build(model));
+        var entries = model.Editor.Entries(Friday.AddDays(-1), Friday.AddDays(1));
+        Assert.Collection(entries,
+            first => { Assert.Equal(Friday.AddDays(-1), first.Day); Assert.Equal(120m, first.Minutes); Assert.Equal(original.GroupId, first.GroupId); },
+            second => { Assert.Equal(Friday, second.Day); Assert.Equal(60m, second.Minutes); Assert.Null(second.GroupId); });
+        Assert.True(model.Editor.IsGrouped(engine.Sessions[2]));
+        Assert.Equal(groups, model.Editor.GroupsCsv);
+        model.SetDayStart(TimeSpan.Zero);
+        Assert.Equal(original.GroupId, Assert.Single(model.Editor.Entries(Friday, Friday.AddDays(1))).GroupId);
+    }
+
     [Fact]
     public void Details_AddTime_AndTheFitKeysAllowAnEndAfterMidnight()
     {
