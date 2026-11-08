@@ -123,7 +123,7 @@ public sealed class PreviewCaptureTests
                 foreach (var (page, tab) in new[] { ("timeline", "TimelineTab"), ("notes", "NotesTab"), ("week", "WeekOverviewTab") }) { Press(tab); Shot(page); }
                 Press("TimelineTab"); model.SelectBlock(model.Engine.Sessions.Take(1).ToArray(), false); Shot("timeline-selected");
                 model.SelectBlock(Array.Empty<Timer.Core.SessionRow>(), false);
-                Press("NotesTab"); Press("NotesAccount_Accountone"); Shot("notes-filtered");
+                Press("NotesTab"); Press("NotesAccountFilter"); Press("NotesAccount_Accountone"); Shot("notes-filtered");
             }
             finally { window.Close(); }
         }

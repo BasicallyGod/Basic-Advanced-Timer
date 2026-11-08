@@ -130,20 +130,6 @@ public sealed class ChoiceStrip : Border
         button.Click += (_, _) => Choose(item);
         return button;
     }
-    /// <summary>A stand-alone chip with a lamp, for several-at-once choices such as the Notes account filter: lit when on.</summary>
-    public static Button LitChip(Control host, string name, string text, string? dotHex, bool on, Action click)
-    {
-        var button = new Button { Name = name }; button.Classes.Add("ctl"); button.Classes.Add("chip");
-        var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 7, VerticalAlignment = VerticalAlignment.Center };
-        var lit = Ui.ThemeColour(host, "AccentLit", Colors.MediumPurple);
-        content.Children.Add(new Border { Name = "Lamp", Width = 3, Height = 11, CornerRadius = new CornerRadius(2), VerticalAlignment = VerticalAlignment.Center, Background = new SolidColorBrush(lit), Opacity = on ? 1 : .24,
-            BoxShadow = on && SoftTint.IsDark(host) ? new BoxShadows(new BoxShadow { Blur = 7, Spread = 1, Color = SoftTint.WithAlpha(lit, .5) }) : default });
-        if (dotHex is not null) content.Children.Add(new Avalonia.Controls.Shapes.Ellipse { Width = 8, Height = 8, VerticalAlignment = VerticalAlignment.Center, Fill = Brush.Parse(dotHex) });
-        content.Children.Add(new TextBlock { Text = text, FontSize = 12.5, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center, Name = "ChipText" });
-        button.Content = content; button.Classes.Set("chipOn", on); AutomationProperties.SetName(button, text); AutomationProperties.SetHelpText(button, on ? "Chosen" : "");
-        button.Click += (_, _) => click(); return button;
-    }
-
     private Button MoreChip(string words, Action click)
     {
         var button = new Button { Name = (string.IsNullOrEmpty(Name) ? "Choice" : Name) + "_More", Content = new TextBlock { Text = words, FontSize = 12.5, FontWeight = FontWeight.SemiBold } };
