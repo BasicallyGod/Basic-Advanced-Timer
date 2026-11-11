@@ -192,10 +192,7 @@ public sealed partial class SelectedBlockCard : Border
             };
         var start = Box("SelectedStart", TimeText.ShowClock(block.Start, day), !group); var end = Box("SelectedEnd", TimeText.ShowClock(block.End, day), !group);
         var length = Box("SelectedLength", TimeText.ShowLength(block.End - block.Start), !group);
-        // Two small keys beside the labels set the start to the end of the block before, or the end to the start of the block after, for anyone who types times.
-        Control? fitStart = group ? null : FitKey("FitToPrevious", IconKind.Previous, "Start where the block before ends", () => { if (current is { Row: not null } now) model.FitToPrevious(now.Row); });
-        Control? fitEnd = group ? null : FitKey("FitToNext", IconKind.Next, "End where the block after starts", () => { if (current is { Row: not null } now) model.FitToNext(now.Row); });
-        Field(fields, 0, "Account", account); Field(fields, 1, "Start", start, fitStart); Field(fields, 2, "End", end, fitEnd); Field(fields, 3, "Length", length);
+        Field(fields, 0, "Account", account); Field(fields, 1, "Start", start); Field(fields, 2, "End", end); Field(fields, 3, "Length", length);
         body.Children.Add(fields);
         if (!group)
         {
@@ -301,10 +298,6 @@ public sealed partial class SelectedBlockCard : Border
         if (extra is null) stack.Children.Add(Label(label));
         else { var line = Ui.Grid("*,Auto"); line.Height = 18; var text = Label(label); text.VerticalAlignment = VerticalAlignment.Center; Ui.Put(line, text); extra.HorizontalAlignment = HorizontalAlignment.Right; Ui.Put(line, extra, 1); stack.Children.Add(line); }
         stack.Children.Add(control); Ui.Put(grid, stack, column);
-    }
-    private static Button FitKey(string name, IconKind icon, string tip, Action click)
-    {
-        var key = Ui.IconButton(icon, tip, name, click); key.Width = 22; key.Height = 18; key.Margin = new Thickness(0, -2, 0, -2); return key;
     }
     /// <summary>Applies a box when Enter is pressed in it or when it loses the focus (once for the two together, until it is typed in again).</summary>
     private static void Committing(TextBox box, Action commit)
