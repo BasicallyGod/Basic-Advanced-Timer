@@ -251,7 +251,8 @@ public static partial class ReviewViews
         var planned = model.Notes.MeetingsOn(day);
         // A day with a timed note has its pins hung under the ruler, so the meeting row and the blocks sit a little lower to make room, and the blocks are that much shorter.
         var pinned = model.Notes.PinnedOn(day);
-        var pinRoom = pinned.Count > 0 ? TimelineGuide.PinRoom : 0; var meetingTop = MeetingTop + pinRoom;
+        // On the display the tags sit above the line among the hour digits, so they need no room under it.
+        var pinRoom = pinned.Count > 0 && !vfd ? TimelineGuide.PinRoom : 0; var meetingTop = MeetingTop + pinRoom;
         var bandTop = (planned.Count > 0 ? BandTopWithMeetings : BandTopFree) + pinRoom; var bandHeight = BandBottom - bandTop;
         // The timeline runs from where the day begins (midnight unless someone works through it) for 24 hours.
         var origin = model.DayBegins(day);
