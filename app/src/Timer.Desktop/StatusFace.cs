@@ -110,6 +110,27 @@ public sealed class StatusFace : Grid
         nameSpacer!.IsVisible = tagSpacer!.IsVisible = AccountsButton.IsVisible = !compact;
         transportControls.IsVisible = Circle.IsVisible = Break.IsVisible = !compact;
     }
+    /// <summary>The tall pill's lower display and the button round it that steps it on; null on the sidebar.</summary>
+    public LowerDisplay? Lower { get; private set; }
+    public Button? LowerButton { get; private set; }
+    private Border? lowerHost;
+    /// <summary>Shows the tall pill's lower display (or hides it for the full and compact pills). Not for the sidebar.</summary>
+    public void SetTall(bool tall)
+    {
+        if (lowerHost is null) return;
+        lowerHost.IsVisible = tall; RefreshLower();
+    }
+    private void RefreshLower()
+    {
+        if (lowerHost is null || Lower is null || LowerButton is null) return;
+        // Named even while hidden, so the button always says what it does.
+        var all = Enum.GetValues<PillLower>(); var next = all[(Array.IndexOf(all, model.PillLower) + 1) % all.Length];
+        var tip = LowerDisplay.NameOf(model.PillLower) + " · press for " + LowerDisplay.NameOf(next).ToLowerInvariant();
+        ToolTip.SetTip(LowerButton, tip); Avalonia.Automation.AutomationProperties.SetName(LowerButton, tip);
+        if (!lowerHost.IsVisible) return;
+        Lower.Show(model.PillLower);
+        lowerHost.BorderBrush = new SolidColorBrush(SoftTint.WithAlpha(ThemeColourOr("Ink", "#18233A"), SoftTint.IsDark(this) ? .07 : .08));
+    }
     public Button ClockButton { get; }
     /// <summary>The lights as a button that opens the pill's alerts; null on the sidebar.</summary>
     public Button? AlertsButton { get; }
@@ -215,6 +236,16 @@ public sealed class StatusFace : Grid
             AccountsButton.Content = NameRun; AccountsButton.Classes.Add("zone"); AccountsButton.Margin = default; AccountsButton.Padding = new Thickness(0); AccountsButton.Width = NameZone; AccountsButton.Height = 40; AccountsButton.VerticalAlignment = VerticalAlignment.Center;
             displayBox.Padding = new Thickness(DisplayPadding, 0, RightPadding, 0);
             inside.Children.Add(nameSpacer); inside.Children.Add(AccountsButton); inside.Children.Add(tagSpacer); inside.Children.Add(transportControls);
+            // The tall pill's second row sits under the clock row in the same window, behind a faint etched rule. It reaches past the window's padding to both edges,
+            // and pressing it steps to the next display.
+            Lower = new LowerDisplay(model) { Name = prefix + "Lower" };
+            LowerButton = Ui.Button("", () => model.CyclePillLower(), prefix + "LowerDisplay");
+            LowerButton.Classes.Add("pillBare"); LowerButton.Classes.Add("zone"); LowerButton.Padding = new Thickness(0); LowerButton.Content = Lower;
+            LowerButton.HorizontalAlignment = HorizontalAlignment.Stretch; LowerButton.HorizontalContentAlignment = HorizontalAlignment.Stretch;
+            lowerHost = new Border { Name = prefix + "LowerRow", Child = LowerButton, BorderThickness = new Thickness(0, 1, 0, 0), Margin = new Thickness(-DisplayPadding, 0, -RightPadding, 0), Padding = new Thickness(0, 0, 0, 0), IsVisible = false };
+            Grid.SetRow(lowerHost, 1);
+            var rows = new Grid { RowDefinitions = new RowDefinitions(DisplayHeight + ",Auto") };
+            displayBox.Child = null; rows.Children.Add(inside); rows.Children.Add(lowerHost); displayBox.Child = rows;
         }
         else
         {
@@ -349,6 +380,7 @@ public sealed class StatusFace : Grid
         Break.Refresh();
         PaintAccountsTile();
         RefreshTransport(onBreak, shown);
+        RefreshLower();
     }
 
     private void RefreshTransport(bool onBreak, string? shown)

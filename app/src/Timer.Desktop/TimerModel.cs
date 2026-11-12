@@ -1089,7 +1089,26 @@ public sealed class TimerModel : INotifyPropertyChanged
     private const string CompactPillLine = "pillcompact=";
     /// <summary>Whether the pill is only its display: the state light, the clock and the alert count. Saved as pillcompact=on; the full pill has no line.</summary>
     public bool CompactPill => AppearanceValue(CompactPillLine) == "on";
-    public void SetCompactPill(bool on) { if (on == CompactPill) return; SetAppearanceFlag(CompactPillLine, on ? "on" : null, true); Notify(PresentationChange); }
+    public void SetCompactPill(bool on)
+    {
+        if (on == CompactPill) return;
+        // The three styles are one choice: compact and tall cannot both be on.
+        if (on && TallPill) SetAppearanceFlag(TallPillLine, null, true);
+        SetAppearanceFlag(CompactPillLine, on ? "on" : null, true); Notify(PresentationChange);
+    }
+    private const string TallPillLine = "pilltall=", PillLowerLine = "pilllower=";
+    /// <summary>Whether the pill is the tall one: the full pill with a second display row under the clock (<see cref="PillLower"/>). Saved as pilltall=on.</summary>
+    public bool TallPill => AppearanceValue(TallPillLine) == "on" && !CompactPill;
+    public void SetTallPill(bool on)
+    {
+        if (on == TallPill) return;
+        if (on && CompactPill) SetAppearanceFlag(CompactPillLine, null, true);
+        SetAppearanceFlag(TallPillLine, on ? "on" : null, true); Notify(PresentationChange);
+    }
+    /// <summary>What the tall pill's lower display shows. Pressing it steps to the next; saved as pilllower=strip and so on (the day strip has no line).</summary>
+    public PillLower PillLower => Enum.TryParse<PillLower>(AppearanceValue(PillLowerLine), true, out var shown) && Enum.IsDefined(shown) ? shown : PillLower.Strip;
+    public void SetPillLower(PillLower shown) { if (shown == PillLower) return; SetAppearanceFlag(PillLowerLine, shown == PillLower.Strip ? null : shown.ToString().ToLowerInvariant(), true); Notify(PresentationChange); }
+    public void CyclePillLower() { var all = Enum.GetValues<PillLower>(); SetPillLower(all[(Array.IndexOf(all, PillLower) + 1) % all.Length]); }
     // ---- seasonal decorations: a wreath and lights round the pill on holidays
     private const string SeasonalLine = "seasonal=";
     /// <summary>Whether seasonal decorations are allowed. Off until chosen, saved as the appearance line seasonal=on; each season then shows only within its own dates.</summary>

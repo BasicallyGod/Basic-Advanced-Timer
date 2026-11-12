@@ -142,8 +142,9 @@ public sealed class SettingsView : Grid
         stack.Children.Add(Section("Size", sizeStack));
 
         var style = Choices(
-            Choice("StyleFull", "Full", "Clock, keys and alert count", SettingsPictures.Pill(true, null, 1), () => !model.CompactPill, () => model.SetCompactPill(false)),
-            Choice("StyleCompact", "Compact", "Only the clock. The keys move to its right-click menu", SettingsPictures.Pill(false, null, 1), () => model.CompactPill, () => model.SetCompactPill(true)));
+            Choice("StyleFull", "Full", "Clock, keys and alert count", SettingsPictures.Pill(true, null, 1), () => !model.CompactPill && !model.TallPill, () => { model.SetCompactPill(false); model.SetTallPill(false); }),
+            Choice("StyleCompact", "Compact", "Only the clock. The keys move to its right-click menu", SettingsPictures.Pill(false, null, 1), () => model.CompactPill, () => model.SetCompactPill(true)),
+            Choice("StyleTall", "Tall", "A second display below: press it for the day, up next, budgets, the week and more", SettingsPictures.Pill(true, null, 1, tall: true), () => model.TallPill, () => model.SetTallPill(true)));
         stack.Children.Add(Section("Style", style));
 
         // The windows: nothing here changes how anything looks, so these are plain ticks.
