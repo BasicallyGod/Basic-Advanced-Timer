@@ -109,6 +109,7 @@ public sealed class SettingsView : Grid
             Choice("ShadowsOn", "On", "Soft shadows under the pill and the dashboard", SettingsPictures.Shadows(true), () => model.Shadows, () => model.SetShadows(true)),
             Choice("ShadowsOff", "Off", "Flat, with a hairline", SettingsPictures.Shadows(false), () => !model.Shadows, () => model.SetShadows(false)))));
         stack.Children.Add(Section("Hints", Toggle("Show tooltips", "Short hints on hover. With them off, budget percentages are still in Week overview.", "ShowTooltips", () => model.Tooltips, v => model.SetTooltips(v))));
+        stack.Children.Add(Section("Timeline", Toggle("Display timeline", "Draw the timeline as the pill's display: lit blocks through the honeycomb and segment figures.", "DisplayTimeline", () => model.DisplayTimeline, v => model.SetDisplayTimeline(v))));
         stack.Children.Add(Section("Seasonal", Toggle("Seasonal decorations", "A wreath and lights round the pill at Christmas, 1 December to 6 January. Off by default.", "SeasonalDecorations", () => model.SeasonalDecorations, v => model.SetSeasonalDecorations(v))));
         return stack;
     }

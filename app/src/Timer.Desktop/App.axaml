@@ -243,6 +243,11 @@
     <!-- The tile for a stack of blocks (the meetings' tile is a meetingCard): a quiet fill and a hairline, the selected tint under the pointer. -->
     <Style Selector="Border.stackTile"><Setter Property="Background" Value="{DynamicResource MeetBg}" /><Setter Property="BorderBrush" Value="{DynamicResource KeyEdge}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowThumb}" /></Style>
     <Style Selector="Border.stackTile.over"><Setter Property="Background" Value="{DynamicResource Selected}" /></Style>
+    <!-- The display look (Settings, Look, Display timeline): meetings are outlines and stacks a dimmer grey-lit panel, each a step brighter under the pointer, with no raised shadow. -->
+    <Style Selector="Border.meetingCard.vfd"><Setter Property="Background" Value="Transparent" /><Setter Property="BoxShadow" Value="none" /></Style>
+    <Style Selector="Border.meetingCard.vfd.over"><Setter Property="Background" Value="#269AA6BD" /></Style>
+    <Style Selector="Border.stackTile.vfd"><Setter Property="Background" Value="#5A9AA6BD" /><Setter Property="BorderBrush" Value="#C9D2E3" /><Setter Property="BoxShadow" Value="none" /></Style>
+    <Style Selector="Border.stackTile.vfd.over"><Setter Property="Background" Value="#7A9AA6BD" /></Style>
     <Style Selector="Button.iconButton /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Transitions"><Transitions><BrushTransition Property="Background" Duration="0:0:0.2" /></Transitions></Setter>
     </Style>
