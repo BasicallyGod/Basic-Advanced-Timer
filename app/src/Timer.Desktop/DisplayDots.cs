@@ -93,7 +93,7 @@ internal readonly struct PhosphorBloom
 /// <summary>Play, pause and break badges drawn through the display's shared honeycomb and bloom.</summary>
 public abstract class VfdGlyph : SteppedControl
 {
-    public const double BadgeWidth = 30, BadgeHeight = 14, StrokeWidth = 1.4;
+    public const double BadgeWidth = 30, BadgeHeight = 14, StrokeWidth = 1.4, BadgeRadius = 3.5;
     private Color colour = Colors.Green;
     public Color Colour
     {
@@ -165,15 +165,16 @@ internal sealed class AlertBellGlyph : Control
     }
 }
 
-/// <summary>A pointed play/pause badge that cross-fades between the triangle and bars, or swaps instantly with reduced motion.</summary>
+/// <summary>A rounded play/pause badge that cross-fades between the triangle and bars, or swaps instantly with reduced motion.</summary>
 public sealed class TransportGlyph : VfdGlyph
 {
     public const double WipeMilliseconds = 180;
-    private static readonly StreamGeometry BadgeOutline = Poly(true, (1, 1), (20.5, 1), (29, 7), (20.5, 13), (1, 13));
-    private static readonly StreamGeometry Triangle = Fill((8.8, 4.1), (15.9, 7), (8.8, 9.9));
+    // The play and pause key is the same rounded box as the BREAK label under it, with its symbol in the middle (the tall pill study), so the two read as a pair of keys.
+    private static readonly Geometry BadgeOutline = new RectangleGeometry(new Rect(1, 1, BadgeWidth - 2, BadgeHeight - 2), BadgeRadius, BadgeRadius);
+    private static readonly StreamGeometry Triangle = Fill((12.3, 4.1), (18.7, 7), (12.3, 9.9));
     private static readonly StreamGeometry Bars = Build(c =>
     {
-        foreach (var x in new[] { 8.8, 13.3 })
+        foreach (var x in new[] { 11.6, 16.2 })
         {
             c.BeginFigure(new Point(x, 4.1), true);
             c.LineTo(new Point(x + 2.2, 4.1));
@@ -216,12 +217,12 @@ public sealed class TransportGlyph : VfdGlyph
 public sealed class BreakBadgeGlyph : VfdGlyph
 {
     public const double FadeMilliseconds = 180;
-    private static readonly Geometry BadgeOutline = new RectangleGeometry(new Rect(1, 1, BadgeWidth - 2, BadgeHeight - 2), 1.2, 1.2);
+    private static readonly Geometry BadgeOutline = new RectangleGeometry(new Rect(1, 1, BadgeWidth - 2, BadgeHeight - 2), BadgeRadius, BadgeRadius);
     private static readonly Lazy<Geometry> Label = new(() =>
     {
         var family = new FontFamily($"avares://{typeof(BreakBadgeGlyph).Assembly.GetName().Name}/Assets/Fonts#Chakra Petch");
         var face = new Typeface(family, FontStyle.Normal, FontWeight.SemiBold);
-        var text = new FormattedText("BREAK", System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, face, 8, Brushes.White);
+        var text = new FormattedText("BREAK", System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, face, 7, Brushes.White);
         return text.BuildGeometry(default) ?? new StreamGeometry();
     });
     public bool Highlighted { get; private set; }
@@ -273,7 +274,7 @@ public sealed class SegmentName : SteppedControl
     public const double CellWidth = 13.5, CellHeight = 20, GlyphWidth = 9.6, Slant = .158, StepMilliseconds = 380, Thickness = 1.7;
     // Segments by letter: a/A top left and right halves, d/D bottom, g/G middle, f/e left upper and lower, b/c right upper and lower, i/l centre upper and lower,
     // h/j upper diagonals (left, right), k/m lower diagonals (left, right), p the point.
-    private static readonly Dictionary<char, string> Font = new()
+    internal static readonly Dictionary<char, string> Font = new()
     {
         ['A'] = "aAfbegGc", ['B'] = "aAbcdDGil", ['C'] = "aAfedD", ['D'] = "aAbcdDil", ['E'] = "aAfedDg", ['F'] = "aAfeg", ['G'] = "aAfedDcG", ['H'] = "febcgG",
         ['I'] = "aAdDil", ['J'] = "bcedD", ['K'] = "fegjm", ['L'] = "fedD", ['M'] = "febchj", ['N'] = "febchm", ['O'] = "aAfebcdD", ['P'] = "aAfebgG",

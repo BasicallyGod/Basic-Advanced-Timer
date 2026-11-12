@@ -80,12 +80,23 @@ internal static class SettingsPictures
 
     /// <summary>The pill as a pictogram. <paramref name="keys"/> adds the play key and the break key (the full pill); without them it is the compact pill. <paramref name="scale"/> is the size
     /// of the whole drawing, 1 being about 135 pixels wide for the full pill.</summary>
-    public static Control Pill(bool keys, int? alerts, double scale)
+    public static Control Pill(bool keys, int? alerts, double scale, bool tall = false)
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5 * scale, VerticalAlignment = VerticalAlignment.Center };
         row.Children.Add(Display(alerts is not null, scale));
         if (keys) { row.Children.Add(Key(true, scale)); row.Children.Add(Key(false, scale)); }
-        var card = new Border { Height = 28 * scale, CornerRadius = new CornerRadius(9 * scale), Padding = new Thickness(5 * scale, 0), Child = row, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        Control content = row;
+        if (tall)
+        {
+            // The tall pill: a second strip of display under the row, with a few blocks of the day lit in it.
+            var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 * scale, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8 * scale, 0, 0, 0) };
+            foreach (var (width, key) in new[] { (14.0, "Live"), (18.0, "Accent"), (5.0, "Break"), (12.0, "Live"), (9.0, "Accent") })
+            { var block = new Border { Width = width * scale, Height = 4 * scale, CornerRadius = new CornerRadius(1.5 * scale) }; Fill(block, key); strip.Children.Add(block); }
+            var lower = new Border { Height = 12 * scale, CornerRadius = new CornerRadius(6 * scale), Child = strip, Margin = new Thickness(0, 3 * scale, 0, 0) };
+            Fill(lower, "DisplayWell"); Edge(lower, "Line");
+            content = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { row, lower } };
+        }
+        var card = new Border { Height = (tall ? 43 : 28) * scale, CornerRadius = new CornerRadius(9 * scale), Padding = new Thickness(5 * scale, 0), Child = content, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         Fill(card, "PillBody"); Edge(card, "Line");
         return card;
     }

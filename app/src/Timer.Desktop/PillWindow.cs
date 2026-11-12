@@ -29,6 +29,8 @@ public sealed class PillWindow : Window
     public static double CompactWidth => Math.Ceiling(StatusFace.ShortDisplayWidth + 2 * BezelWidth);
     /// <summary>The card's width now: the full pill, or the compact one that is only its display.</summary>
     public double CardWidth => model.CompactPill ? CompactWidth : PillWidth;
+    /// <summary>The card's height now: the pill, and for the tall pill its lower display under it.</summary>
+    public double CardHeight => PillHeight + (model.TallPill ? LowerDisplay.HeightFor(model.PillLower) : 0);
     // The whole pill is drawn smaller than its design size on every screen, so it never takes a big share of a display. Two things shrink it further.
     // A narrow screen (its width in device independent pixels over 1800, never above 95 per cent or below 80 per cent), and a screen with a low
     // Windows scale, because it has fewer pixels to the inch, so the same pill looks bigger on it. Windows scale 125 per cent or more gives the
@@ -47,9 +49,9 @@ public sealed class PillWindow : Window
     private readonly ScaleTransform pillScale = new(1, 1);
     public double Scale => pillScale.ScaleX;
     /// <summary>The window height at the size the pill is drawn on this screen.</summary>
-    public double WindowHeightNow => (PillHeight + 2 * Ui.ShadowMargin) * Scale;
+    public double WindowHeightNow => (CardHeight + 2 * Ui.ShadowMargin) * Scale;
     /// <summary>The card's own size as drawn (the window less the room round it), and its corner radius, for the dashboard to grow from.</summary>
-    public Size CardSizeNow => new(CardWidth * Scale, PillHeight * Scale);
+    public Size CardSizeNow => new(CardWidth * Scale, CardHeight * Scale);
     public double CardRadiusNow => PillRadius * Scale;
     /// <summary>The window width at the size the pill is drawn on this screen.</summary>
     public double WindowWidthNow => (CardWidth + 2 * Ui.ShadowMargin) * Scale;
@@ -130,11 +132,11 @@ public sealed class PillWindow : Window
         var root = rootGrid = new Grid { Background = Brushes.Transparent };
         root.Children.Add(face);
         Ui.PillGestures(root, this);
-        ShapeApplied = model.CompactPill;
-        face.SetCompact(ShapeApplied);
+        ShapeApplied = Shape;
+        face.SetCompact(model.CompactPill); face.SetTall(model.TallPill);
         surface = new Border
         {
-            Name = "PillSurface", Child = root, ClipToBounds = true, Width = CardWidth, Height = PillHeight,
+            Name = "PillSurface", Child = root, ClipToBounds = true, Width = CardWidth, Height = CardHeight,
             BorderThickness = new Thickness(EdgeThickness), Padding = BezelPadding
         };
         surface.Classes.Add("pillBody");
@@ -366,20 +368,23 @@ public sealed class PillWindow : Window
         // With nothing to run or resume, the list opens so an account can be picked.
         if (model.IsTracking || chosen) model.TogglePause(); else ShowPanel();
     }
-    /// <summary>Whether the card was last built for the compact shape, so a change in Settings is applied once.</summary>
-    private bool ShapeApplied;
-    /// <summary>Switches the card between the full pill and the compact one (only the display), and brings the window to the new width.</summary>
+    /// <summary>The shape the card was last built for (compact, tall, and the tall pill's lower height), so a change in Settings or a press on the lower display is applied once.</summary>
+    private (bool Compact, bool Tall, double Height) ShapeApplied;
+    private (bool, bool, double) Shape => (model.CompactPill, model.TallPill, CardHeight);
+    /// <summary>Switches the card between the full, compact (only the display) and tall pills, and brings the window to the new size. The window grows downward,
+    /// so the clock stays where it was.</summary>
     private void ApplyShape()
     {
-        ShapeApplied = model.CompactPill; face.SetCompact(ShapeApplied);
-        surface.Width = CardWidth; CloseFlyouts(); EnsureSize();
+        var resized = ShapeApplied.Compact != model.CompactPill || ShapeApplied.Tall != model.TallPill;
+        ShapeApplied = Shape; face.SetCompact(model.CompactPill); face.SetTall(model.TallPill);
+        surface.Width = CardWidth; surface.Height = CardHeight; if (resized) CloseFlyouts(); EnsureSize();
     }
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (Topmost != model.PillOnTop) Topmost = model.PillOnTop;
         // A new pill size from settings takes effect straight away, even while the pill is hidden behind the dashboard.
         if (model.PillScalePercent != appliedChoice) FitToScreen(Screens.ScreenFromWindow(this));
-        if (model.CompactPill != ShapeApplied) ApplyShape();
+        if (Shape != ShapeApplied) ApplyShape();
         Refresh(); PeekAtNewAlerts();
     }
     /// <summary>The first letters of up to two words, so Account three reads AT, Northwind Traders reads NT and Client 7 reads C7.</summary>
