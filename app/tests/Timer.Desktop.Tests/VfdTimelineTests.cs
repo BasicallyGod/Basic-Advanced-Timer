@@ -83,4 +83,30 @@ public sealed class VfdTimelineTests
         }
         finally { window.Close(); }
     }
+
+    [AvaloniaFact]
+    public void OnTheDisplayTheWeekIsDrawnAsPanelsAndADayStillOpensTheTimeline()
+    {
+        var model = Demo(); model.SetDisplayTimeline(true);
+        var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            var tab = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "WeekOverviewTab");
+            tab.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Settle(window);
+            Assert.Contains(window.GetVisualDescendants().OfType<Border>(), b => b.Name == "WeekTotals");
+            Assert.Contains(window.GetVisualDescendants().OfType<Border>(), b => b.Name == "WeekVfdChart");
+            Assert.Contains(window.GetVisualDescendants().OfType<Border>(), b => b.Name == "WeekVfdAccounts");
+            var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR");
+            var today = window.GetVisualDescendants().OfType<Button>().First(b => b.Name == "WeekDay_" + model.TodayKey.ToString("yyyyMMdd"));
+            var at = today.TranslatePoint(new Point(today.Bounds.Width / 2, today.Bounds.Height / 2), window)!.Value;
+            window.MouseMove(at); Settle(window);
+            if (folder is not null) { Directory.CreateDirectory(folder); using var frame = window.CaptureRenderedFrame(); frame?.Save(Path.Combine(folder, "vfd-week-dark.png")); }
+            today.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Settle(window);
+            Assert.Equal(model.TodayKey, model.SelectedDate);
+            // The table keeps its plain type.
+            model.SetWeekAsTable(true); Settle(window);
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Border>(), b => b.Name == "WeekVfdChart");
+        }
+        finally { window.Close(); }
+    }
 }

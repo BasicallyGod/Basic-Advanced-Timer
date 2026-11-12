@@ -57,17 +57,19 @@ public sealed class SegmentText : Control
         ('f', 0, 0, 0, .5), ('e', 0, .5, 0, 1), ('b', 1, 0, 1, .5), ('c', 1, .5, 1, 1), ('i', .5, 0, .5, .5), ('l', .5, .5, .5, 1),
         ('h', 0, 0, .5, .5), ('j', 1, 0, .5, .5), ('k', 0, 1, .5, .5), ('m', 1, 1, .5, .5),
     };
-    public override void Render(DrawingContext context)
+    public override void Render(DrawingContext context) => Draw(context, Text, 0, 0, CellHeight, Colour, Ghosts, Weight);
+    /// <summary>Draws <paramref name="text"/> in segment cells with its top left at (<paramref name="x"/>, <paramref name="y"/>); returns its width. Used by drawn panels too.</summary>
+    public static double Draw(DrawingContext context, string text, double x, double y, double h, Color colour, bool ghosts = false, double weight = 1)
     {
-        var h = CellHeight; var cw = CellWidth(h); var gw = h * 13.4 / 28; var th = Math.Max(1.1, SegmentName.Thickness * h / 20) * Weight;
+        var cw = CellWidth(h); var gw = h * 13.4 / 28; var th = Math.Max(1.1, SegmentName.Thickness * h / 20) * weight;
         var ins = th / 2; var inner = h - 2 * ins; var trimMax = 1.1 * h / 20;
-        var lit = new Pen(new SolidColorBrush(Colour), th, lineCap: PenLineCap.Round);
-        var ghost = Ghosts ? new Pen(new SolidColorBrush(SoftTint.WithAlpha(Colour, .09)), th, lineCap: PenLineCap.Round) : null;
-        var text = Text.ToUpperInvariant();
+        var lit = new Pen(new SolidColorBrush(colour), th, lineCap: PenLineCap.Round);
+        var ghost = ghosts ? new Pen(new SolidColorBrush(SoftTint.WithAlpha(colour, .09)), th, lineCap: PenLineCap.Round) : null;
+        text = text.ToUpperInvariant();
         for (var i = 0; i < text.Length; i++)
         {
-            var ch = text[i]; var x0 = i * cw;
-            Point P(double fx, double fy) { var yy = ins + fy * inner; return new Point(x0 + ins + fx * gw + (h - yy) * SegmentName.Slant, yy); }
+            var ch = text[i]; var x0 = x + i * cw;
+            Point P(double fx, double fy) { var yy = ins + fy * inner; return new Point(x0 + ins + fx * gw + (h - yy) * SegmentName.Slant, y + yy); }
             // A colon is two leaning dots, as the clock draws it, not the name's tall pair of bars.
             if (ch == ':') { foreach (var f in new[] { .3, .7 }) context.DrawEllipse(lit.Brush, null, P(.5, f), th * .62, th * .62); continue; }
             var on = SegmentName.Font.TryGetValue(ch, out var segments) ? segments : "";
@@ -78,6 +80,7 @@ public sealed class SegmentText : Control
                 context.DrawLine(isOn ? lit : ghost!, a + u * trim, b - u * trim);
             }
         }
+        return text.Length * cw;
     }
 }
 
