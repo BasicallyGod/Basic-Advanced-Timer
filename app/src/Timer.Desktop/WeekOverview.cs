@@ -66,7 +66,8 @@ public static class WeekOverview
         var figures = Figures(model, start); var (grid, _) = ReviewViews.WeekTableFor(model, start);
         // The totals and the chart keep their place; only the By account list scrolls, inside its own tile, when there are more accounts than the window has room for.
         var root = Ui.Grid("*", "Auto,Auto,*"); root.Margin = new Thickness(0, 0, 14, 4);
-        var totals = Totals(model, figures); var byDay = ByDay(model, figures, grid); byDay.Margin = new Thickness(0, 14, 0, 0);
+        // The display look (the same setting as the timeline) draws the totals and the accounts as display panels; the chart follows inside its tile.
+        var totals = model.DisplayTimeline ? VfdWeek.Totals(model, figures) : Totals(model, figures); var byDay = ByDay(model, figures, grid); byDay.Margin = new Thickness(0, 14, 0, 0);
         var byAccount = ByAccount(model, figures, grid); byAccount.Margin = new Thickness(0, 14, 0, 0);
         Ui.Put(root, totals); Ui.Put(root, byDay, 0, 1); Ui.Put(root, byAccount, 0, 2);
         return root;
@@ -141,7 +142,7 @@ public static class WeekOverview
         }, small: true);
         Ui.Put(head, Ui.Horizontal(copy, export), 2); Ui.Put(head, seg, 3);
         var body = new StackPanel(); body.Children.Add(head);
-        body.Children.Add(inChart ? Chart(model, w) : Table(model, grid));
+        body.Children.Add(inChart ? (model.DisplayTimeline ? VfdWeek.Chart(model, w) : Chart(model, w)) : Table(model, grid));
         var tile = Tile(body, new Thickness(18, 12, 18, 10)); tile.Name = "WeekByDay"; return tile;
     }
 
@@ -279,6 +280,11 @@ public static class WeekOverview
     {
         var tile = new StackPanel { Name = "WeekByAccount", Spacing = 2 };
         var title = Ui.Text("By account", 15); title.FontWeight = FontWeight.SemiBold; title.Margin = new Thickness(0, 0, 0, 6);
+        if (model.DisplayTimeline)
+        {
+            var shown = Ui.Grid("*", "Auto,*"); Ui.Put(shown, title); Ui.Put(shown, VfdWeek.Accounts(model, w, grid), 0, 1);
+            var displayTile = Tile(shown, new Thickness(18, 12, 18, 12)); displayTile.Name = "WeekByAccountTile"; return displayTile;
+        }
         const string columns = "26,1.2*,64,18,2*,200";
         var accounts = model.ReviewAccounts.Where(a => !BreakAccount.Is(a.Name)).ToList();
         var weekEnd = w.Start.AddDays(7);

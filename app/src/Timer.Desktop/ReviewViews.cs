@@ -219,15 +219,40 @@ public static partial class ReviewViews
         return intervals;
     }
 
+    /// <summary>A block's words on the display, by the room it has: the length over the name, a line of both, or initials, in segment letters in the given ink.</summary>
+    private static void VfdWords(StackPanel text, BlockDetail detail, double width, string length, string name, Color ink)
+    {
+        var room = width - 16; var upper = LowerDisplay.Drawable(name); var initials = LowerDisplay.Drawable(PillWindow.Initials(name));
+        SegmentText Seg(string words, double height) => new(words, height, ink, weight: 1.12) { Name = "BlockWords" };
+        switch (detail)
+        {
+            case BlockDetail.Full:
+                if (SegmentText.Fits(length, 13, room)) text.Children.Add(Seg(length, 13)); else if (SegmentText.Fits(length, 9, room)) text.Children.Add(Seg(length, 9));
+                var shown = SegmentText.Fits(upper, 11, room) ? upper : SegmentText.Fits(initials, 11, room) ? initials : null;
+                if (shown is not null) text.Children.Add(Seg(shown, 11));
+                text.Spacing = 6; break;
+            case BlockDetail.Inline:
+                var line = SegmentText.Fits(length + " " + upper, 9, room) ? length + " " + upper : SegmentText.Fits(length + " " + initials, 9, room) ? length + " " + initials : SegmentText.Fits(length, 9, room) ? length : null;
+                if (line is not null) text.Children.Add(Seg(line, 9)); break;
+            default:
+                var small = SegmentText.Fits(initials + " " + length, 8, room) ? initials + " " + length : SegmentText.Fits(initials, 8, room) ? initials : null;
+                if (small is not null) text.Children.Add(Seg(small, 8)); break;
+        }
+    }
+
     public static Control Timeline(TimerModel model)
     {
         FrameMonitor.Bump("timeline builds");
         var day = model.SelectedDate;
         var pixelsPerHour = model.TimelinePixelsPerHour;
+        // The display look (a setting): lit blocks through one honeycomb laid over the whole trough, and sixteen-segment words and figures.
+        var vfd = model.DisplayTimeline;
+        var glassInk = Color.Parse(model.GlassTheme.Colour("Ink")); var glassQuiet = Color.Parse(model.GlassTheme.Colour("Muted"));
         var planned = model.Notes.MeetingsOn(day);
         // A day with a timed note has its pins hung under the ruler, so the meeting row and the blocks sit a little lower to make room, and the blocks are that much shorter.
         var pinned = model.Notes.PinnedOn(day);
-        var pinRoom = pinned.Count > 0 ? TimelineGuide.PinRoom : 0; var meetingTop = MeetingTop + pinRoom;
+        // On the display the tags sit above the line among the hour digits, so they need no room under it.
+        var pinRoom = pinned.Count > 0 && !vfd ? TimelineGuide.PinRoom : 0; var meetingTop = MeetingTop + pinRoom;
         var bandTop = (planned.Count > 0 ? BandTopWithMeetings : BandTopFree) + pinRoom; var bandHeight = BandBottom - bandTop;
         // The timeline runs from where the day begins (midnight unless someone works through it) for 24 hours.
         var origin = model.DayBegins(day);
@@ -244,13 +269,15 @@ public static partial class ReviewViews
             var tick = new Border { Width = 1.5, Height = height, Opacity = opacity, Tag = "Tick" }; tick.Classes.Add("rule");
             Canvas.SetLeft(tick, TimelineGutter + hours * pixelsPerHour - .75); Canvas.SetTop(tick, LabelRow + 7 - height); canvas.Children.Add(tick);
         }
-        var hourLabels = new List<(TextBlock Label, TranslateTransform Shift)>();
+        var hourLabels = new List<(Control Label, TranslateTransform Shift)>();
         for (var hour = 0; hour < 24; hour++)
         {
-            var label = Ui.Text(origin.AddHours(hour).ToString("HH:mm"), 12, "muted"); label.Classes.Add("figures"); label.Width = LabelWidth; label.TextAlignment = TextAlignment.Center;
+            Control label; double labelWidth;
+            if (vfd) { label = new SegmentText(origin.AddHours(hour).ToString("HH:mm"), 11, glassQuiet, ghosts: true); labelWidth = SegmentText.WidthOf(5, 11); }
+            else { var words = Ui.Text(origin.AddHours(hour).ToString("HH:mm"), 12, "muted"); words.Classes.Add("figures"); words.Width = LabelWidth; words.TextAlignment = TextAlignment.Center; label = words; labelWidth = LabelWidth; }
             label.Name = "TimelineHour_" + hour;
             var shift = new TranslateTransform(); label.RenderTransform = shift; hourLabels.Add((label, shift));
-            Canvas.SetLeft(label, TimelineGutter + hour * pixelsPerHour - LabelWidth / 2); Canvas.SetTop(label, 0); canvas.Children.Add(label);
+            Canvas.SetLeft(label, TimelineGutter + hour * pixelsPerHour - labelWidth / 2); Canvas.SetTop(label, vfd ? 5 : 0); canvas.Children.Add(label);
             // The half hours are nearly as tall as the hours and as dark, with a faint line down through the band, so they can be read at a glance.
             Tick(hour, 9, 1);
             Tick(hour + .5, 6, 1);
@@ -273,6 +300,12 @@ public static partial class ReviewViews
         {
             var rule = new Border { Name = "TimelineGraticule" + name, Width = 2 * TimelineGutter + 24 * pixelsPerHour, Height = 1, Opacity = .3, Tag = "Graticule", IsHitTestVisible = false }; rule.Classes.Add("rule");
             Canvas.SetLeft(rule, 0); Canvas.SetTop(rule, y); canvas.Children.Add(rule);
+        }
+        // On the display, an unlit track runs the length of the band, so the empty day still reads as display.
+        if (vfd)
+        {
+            var track = new Border { Name = "TimelineTrack", Width = 24 * pixelsPerHour, Height = BandBottom - bandTop, CornerRadius = new CornerRadius(BlockRadius), Background = new SolidColorBrush(VfdLook.Ghost(glassInk)), IsHitTestVisible = false };
+            Canvas.SetLeft(track, TimelineGutter); Canvas.SetTop(track, bandTop); canvas.Children.Add(track);
         }
         // When days begin in the evening, midnight is a quiet dashed marker with the new date, not a wall.
         if (model.DayStart > TimeSpan.Zero)
@@ -342,11 +375,14 @@ public static partial class ReviewViews
                     var bare = Ui.Text(PillWindow.Initials(display), 10); bare.LineHeight = 11; bare.FontWeight = FontWeight.SemiBold; bare.Name = "BlockInitials"; text.Children.Add(bare);
                     break;
             }
+            if (vfd) { text.Children.Clear(); marquees.Clear(); VfdWords(text, detail, width, model.Format(duration), display, isBreak ? StatusFace.BreakGlyphColour(canvas) : VfdLook.BlockInk); }
             foreach (var child in text.GetLogicalDescendants().OfType<TextBlock>()) child.Foreground = Brush.Parse(ink);
             // The card itself is not clipped, or the selection ring round it would be cut off; what is inside it is clipped instead.
             var card = new Border { Width = width, Height = height, CornerRadius = new CornerRadius(CornerFor(laneCount, width, height)) };
             if (marquees.Count > 0) { card.PointerEntered += (_, _) => marquees.ForEach(m => m.Hover(true)); card.PointerExited += (_, _) => marquees.ForEach(m => m.Hover(false)); }
-            if (isBreak) { card.Background = Hatch(model.GlassTheme); card.BorderBrush = Brush.Parse(model.GlassTheme.Colour("Line")); card.BorderThickness = new Thickness(1); }
+            if (isBreak && vfd) { card.Background = Brushes.Transparent; card.BorderBrush = new SolidColorBrush(Color.Parse("#F5B63A")); card.BorderThickness = new Thickness(1.4); }
+            else if (isBreak) { card.Background = Hatch(model.GlassTheme); card.BorderBrush = Brush.Parse(model.GlassTheme.Colour("Line")); card.BorderThickness = new Thickness(1); }
+            else if (vfd) card.Background = new SolidColorBrush(SoftTint.WithAlpha(Color.Parse(look.Fill), .92)); // Lit phosphor: one even colour, which the mesh and glow give its texture.
             else
             {
                 // A gentle gradient from the block's own fill to a slightly deeper shade of it, so a block has body without any text losing its contrast.
@@ -372,10 +408,13 @@ public static partial class ReviewViews
                 }
             }
             // A block with a note carries a small page mark in its corner, when it is wide enough for the note's first line.
-            if (interval.Row is { } notedRow && detail == BlockDetail.Full && width >= 140 && !string.IsNullOrWhiteSpace(model.Editor.Note(notedRow)))
+            // On the display a note is one small dark dot in the block's bottom right corner, whatever its size.
+            if (vfd && width >= 16 && !recording && !string.IsNullOrWhiteSpace(note) && (interval.Row is not null || interval.Group is not null))
+                content.Children.Add(new Avalonia.Controls.Shapes.Ellipse { Name = "NoteDot", Width = 6.5, Height = 6.5, Fill = new SolidColorBrush(VfdLook.BlockInk), HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 7, 7), IsHitTestVisible = false });
+            if (!vfd && interval.Row is { } notedRow && detail == BlockDetail.Full && width >= 140 && !string.IsNullOrWhiteSpace(model.Editor.Note(notedRow)))
                 content.Children.Add(new IconGlyph(IconKind.Note) { HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 8, 7), IsHitTestVisible = false, Opacity = .75, Name = "NoteMark" });
             // A block too small for the page mark still shows that it has a note, with a small dot at its top right, well inside the block so the selection ring never meets it.
-            if (!content.Children.OfType<IconGlyph>().Any(g => g.Name == "NoteMark") && width >= 16 && !recording && !string.IsNullOrWhiteSpace(note) && (interval.Row is not null || interval.Group is not null))
+            if (!vfd && !content.Children.OfType<IconGlyph>().Any(g => g.Name == "NoteMark") && width >= 16 && !recording && !string.IsNullOrWhiteSpace(note) && (interval.Row is not null || interval.Group is not null))
                 content.Children.Add(new Avalonia.Controls.Shapes.Ellipse { Name = "NoteDot", Width = 7, Height = 7, Fill = Brush.Parse(ink), Opacity = .8, HorizontalAlignment = width < NarrowDotWidth ? Avalonia.Layout.HorizontalAlignment.Center : Avalonia.Layout.HorizontalAlignment.Right, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top, Margin = width < NarrowDotWidth ? new Thickness(0, 8, 0, 0) : new Thickness(0, 8, 8, 0), IsHitTestVisible = false });
             card.Child = content;
             var addedEarly = false;
@@ -384,6 +423,12 @@ public static partial class ReviewViews
             {
                 // A selected block has a ring in the theme's accent colour round it, and the `mergeSelected` class so it can be found.
                 card.Classes.Add("mergeSelected"); card.BoxShadow = Ring(accent); card.ZIndex = 3;
+            }
+            // A lit block glows into the mesh round it, after any ring it wears.
+            if (vfd && !isBreak)
+            {
+                var worn = card.BoxShadow; var rest = new List<BoxShadow>(); for (var k = 1; k < worn.Count; k++) rest.Add(worn[k]); rest.Add(VfdLook.Glow(Color.Parse(look.Fill)));
+                card.BoxShadow = worn.Count > 0 ? new BoxShadows(worn[0], rest.ToArray()) : new BoxShadows(VfdLook.Glow(Color.Parse(look.Fill)));
             }
             ToolTip.SetTip(card, $"{display} · {interval.Start:HH:mm:ss} – {end:HH:mm:ss} · {model.Format(duration)}" + (string.IsNullOrWhiteSpace(note) ? "" : "\n" + note));
             if (interval.Row is { } row)
@@ -398,7 +443,8 @@ public static partial class ReviewViews
                 // The block that is recording now. A green ring and the stop menu make it clear why it can't be dragged. The ring is the same 3 pixels all round and
                 // outside the block as the selection ring (a border left the left side bare and ate into the block), so it is drawn the same way, in green.
                 card.Classes.Add("recording"); card.Name = "TimelineRecording"; card.Cursor = new Cursor(StandardCursorType.Arrow);
-                card.BoxShadow = Ring(Color.Parse(model.GlassTheme.Colour("Live"))); card.ZIndex = 3;
+                // On the display the ring is inside the block's own edge, so a selected neighbour's ring outside never meets it.
+                card.BoxShadow = vfd ? VfdLook.RecordingRing(Color.Parse(look.Fill)) : Ring(Color.Parse(model.GlassTheme.Colour("Live"))); card.ZIndex = 3;
                 if (text.GetLogicalDescendants().OfType<TextBlock>().FirstOrDefault(t => t.Name == "BlockName") is { } liveName) liveName.Text = "● " + liveName.Text;
                 var stop = new MenuItem { Header = "Stop tracking" }; stop.Click += (_, _) => model.TogglePause();
                 card.ContextMenu = new ContextMenu { ItemsSource = new[] { stop } };
@@ -466,7 +512,14 @@ public static partial class ReviewViews
                 if (width >= 60) { Ui.Put(head, new IconGlyph(IconKind.Today)); Ui.Put(head, title, 1); if (model.Notes.SeriesOf(meeting) is not null) Ui.Put(head, new IconGlyph(IconKind.Repeat) { Opacity = .8 }, 2); }
                 else Ui.Put(head, title);
                 var body = new StackPanel { Spacing = 2, Margin = rows == 1 ? new Thickness(8, 6) : new Thickness(8, 0), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
-                body.Children.Add(head);
+                if (vfd)
+                {
+                    // On the display a meeting is an outline with its name in segment letters; the times stay as quiet words, which follow a drag.
+                    var words = LowerDisplay.Drawable(model.Notes.Text(meeting)); var cells = Math.Max(1, (int)((width - 16) / SegmentText.CellWidth(9)));
+                    head = Ui.Grid("*"); Ui.Put(head, new SegmentText(words.Length > cells ? words[..cells] : words, 9, glassInk));
+                    body.Children.Clear(); body.Children.Add(head);
+                }
+                else body.Children.Add(head);
                 TextBlock? span = null;
                 if (rows == 1) { span = new TextBlock { Text = Hm(meeting.At) + "–" + Hm(meeting.End), FontSize = 11, TextTrimming = TextTrimming.CharacterEllipsis }; span.Classes.Add("muted"); body.Children.Add(span); }
                 // A meeting is a quiet block of its own, a light grey with no outline, so it reads as a plan beside the coloured time that was tracked; the pointer over it turns it to
@@ -474,6 +527,7 @@ public static partial class ReviewViews
                 // The card itself is not clipped, so the guide's ring (the card's own shadow) shows; its content is.
                 var card = new Border { Width = width, Height = height, CornerRadius = new CornerRadius(12), Child = new Border { ClipToBounds = true, CornerRadius = new CornerRadius(12), Child = body }, Name = "TimelineMeeting" + meeting.Id, Tag = meeting, Cursor = new Cursor(StandardCursorType.Hand) };
                 card.Classes.Add("meetingCard");
+                if (vfd) { card.Classes.Add("vfd"); card.BorderBrush = new SolidColorBrush(SoftTint.WithAlpha(glassQuiet, .9)); card.BorderThickness = new Thickness(1.2); }
                 ToolTip.SetTip(card, model.Notes.Text(meeting) + "\n" + Hm(meeting.At) + "–" + Hm(meeting.End) + " · planned");
                 Avalonia.Automation.AutomationProperties.SetName(card, "Meeting " + model.Notes.Text(meeting) + ", " + Hm(meeting.At) + " to " + Hm(meeting.End));
                 card.PointerEntered += (_, _) => { card.Classes.Add("over"); title.Hover(true); }; card.PointerExited += (_, _) => { card.Classes.Remove("over"); title.Hover(false); };
@@ -490,13 +544,15 @@ public static partial class ReviewViews
             var nowDot = new Avalonia.Controls.Shapes.Ellipse { Width = 10, Height = 10, Tag = "NowDot", IsHitTestVisible = false, ZIndex = 10 }; nowDot.Classes.Add("nowDot");
             var nowText = new TextBlock { FontSize = 12, FontWeight = FontWeight.Bold, TextAlignment = TextAlignment.Center, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Classes = { "nowChipText" } };
             var nowChip = new Border { Name = "NowChip", Child = nowText, CornerRadius = new CornerRadius(7), Height = 20, Width = 52, IsHitTestVisible = false, ZIndex = 10 }; nowChip.Classes.Add("nowChip"); // A fixed width, so it stays centred on the line whatever the digits.
+            var nowSegments = new SegmentText("00:00", 10, accent) { HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
+            if (vfd) { nowChip.Child = nowSegments; nowChip.Classes.Add("vfd"); nowChip.Background = new SolidColorBrush(SoftTint.WithAlpha(accent, .2)); }
             canvas.Children.Add(nowLine); canvas.Children.Add(nowDot); canvas.Children.Add(nowChip);
             void PlaceNow()
             {
                 var now = model.Engine.Now; var x = X(now);
                 Canvas.SetLeft(nowLine, x - 1); Canvas.SetTop(nowLine, AxisY);
                 Canvas.SetLeft(nowDot, x - 5); Canvas.SetTop(nowDot, AxisY - 4);
-                nowText.Text = now.ToString("HH:mm"); Canvas.SetLeft(nowChip, x - nowChip.Width / 2); Canvas.SetTop(nowChip, BandBottom + 10);
+                nowText.Text = now.ToString("HH:mm"); nowSegments.Text = nowText.Text; Canvas.SetLeft(nowChip, x - nowChip.Width / 2); Canvas.SetTop(nowChip, BandBottom + 10);
             }
             PlaceNow();
             var nowTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
@@ -504,6 +560,8 @@ public static partial class ReviewViews
             _ = new ViewActivity(canvas, active => { if (active) { PlaceNow(); nowTimer.Start(); } else nowTimer.Stop(); });
         }
         TimelineGuide.Attach(canvas, model, origin, pixelsPerHour, TimelineGutter, AxisY, planned.Count > 0 ? meetingTop : bandTop, pinned);
+        // One honeycomb over the whole trough, above everything drawn in it, so the mesh never drifts between blocks.
+        if (vfd) { var mesh = new HoneycombOverlay { Name = "TimelineMesh", Width = canvas.Width, Height = canvas.Height, ZIndex = 40 }; canvas.Children.Add(mesh); }
         var add = new MenuItem { Header = "Add time…" }; add.Click += (_, _) => model.OpenGap(clicked);
         var addMeeting = new MenuItem { Header = "Add meeting…", Name = "AddMeetingMenu" }; addMeeting.Click += (_, _) => model.Notes.RequestNewMeeting(clicked);
         // Paste puts the copied blocks with the first at the time that was right-clicked, snapped to five minutes like Add time.

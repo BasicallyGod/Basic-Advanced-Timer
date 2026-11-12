@@ -55,13 +55,22 @@ public static partial class ReviewViews
     }
 
     // The tile's own text and lines. The lines sit under the title, one row for each lane the stack needs.
-    private static void FillTile(Border card, double width, double height, string title, string? range, IReadOnlyList<StackLines.Line> lines, int rows, bool compact, Control? icon, Color outline)
+    private static void FillTile(Border card, double width, double height, string title, string? range, IReadOnlyList<StackLines.Line> lines, int rows, bool compact, Control? icon, Color outline, bool vfd = false)
     {
         var grid = new Grid { ClipToBounds = true };
         var heading = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 6, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top, Margin = new Thickness(10, compact ? 3 : 7, 8, 0) };
-        if (icon is not null) heading.Children.Add(icon);
-        var words = Ui.Text(title, 13); words.FontWeight = FontWeight.SemiBold; words.Name = "StackTitle"; heading.Children.Add(words);
-        if (range is not null && width >= 190) { var span = Ui.Text(range, 11, "muted"); span.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center; heading.Children.Add(span); }
+        if (vfd)
+        {
+            // On the display the caption is segment letters, and the range follows only where there is room.
+            var caption = LowerDisplay.Drawable(title.Replace("·", " ")); var cells = Math.Max(1, (int)((width - 20) / SegmentText.CellWidth(10)));
+            heading.Children.Add(new SegmentText(caption.Length > cells ? caption[..cells] : caption, 10, outline) { Name = "StackTitle", VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center });
+        }
+        else
+        {
+            if (icon is not null) heading.Children.Add(icon);
+            var words = Ui.Text(title, 13); words.FontWeight = FontWeight.SemiBold; words.Name = "StackTitle"; heading.Children.Add(words);
+            if (range is not null && width >= 190) { var span = Ui.Text(range, 11, "muted"); span.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center; heading.Children.Add(span); }
+        }
         grid.Children.Add(heading);
         var top = compact ? 22.0 : 29.0; var room = height - top - (compact ? 4 : 8);
         grid.Children.Add(new StackLines(lines, top, room, rows, outline));
@@ -120,7 +129,9 @@ public static partial class ReviewViews
         var title = Words(members.Count, "block", "blocks") + " · " + model.Format(total);
         var card = new Border { Name = "TimelineStack" + start.ToString("HHmmss"), Width = width, Height = height, CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1.5), Tag = new StackTag(members.Count), Cursor = new Cursor(StandardCursorType.Hand) };
         card.Classes.Add("stackTile");
-        FillTile(card, width, height, title, $"{start:HH:mm}–{end:HH:mm}", lines, rows, compact, null, Color.Parse(model.GlassTheme.Colour("Ink")));
+        // On the display a stack is a dimmer grey-lit panel, so its coloured lines stand out as the blocks it holds.
+        if (model.DisplayTimeline) card.Classes.Add("vfd");
+        FillTile(card, width, height, title, $"{start:HH:mm}–{end:HH:mm}", lines, rows, compact, null, Color.Parse(model.GlassTheme.Colour("Ink")), model.DisplayTimeline);
         var heading = $"{title} · {start:HH:mm}–{end:HH:mm}";
         ToolTip.SetTip(card, StackTip(heading, members.Take(8).Select(i => (model.Label(i.Account), $"{i.Start:HH:mm}–{i.End:HH:mm}", (string?)model.Format(DurationOf(i)))).ToList(), Math.Max(0, members.Count - 8)));
         Avalonia.Automation.AutomationProperties.SetName(card, $"{title}, {start:HH:mm} to {end:HH:mm}. Press to open them in Details");
@@ -153,7 +164,8 @@ public static partial class ReviewViews
         var title = Words(stack.Count, "meeting", "meetings");
         var card = new Border { Name = "TimelineMeetingStack" + start.ToString("HHmm"), Width = width, Height = MeetingHeight, CornerRadius = new CornerRadius(12), Tag = new StackTag(stack.Count), Cursor = new Cursor(StandardCursorType.Hand) };
         card.Classes.Add("meetingCard");
-        FillTile(card, width, MeetingHeight, title, $"{start:HH:mm}–{end:HH:mm}", lines, rows, false, new IconGlyph(IconKind.Today) { VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center }, ink);
+        if (model.DisplayTimeline) { card.Classes.Add("vfd"); card.BorderBrush = new SolidColorBrush(SoftTint.WithAlpha(Color.Parse(model.GlassTheme.Colour("Muted")), .9)); card.BorderThickness = new Thickness(1.2); }
+        FillTile(card, width, MeetingHeight, title, $"{start:HH:mm}–{end:HH:mm}", lines, rows, false, new IconGlyph(IconKind.Today) { VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center }, ink, model.DisplayTimeline);
         ToolTip.SetTip(card, StackTip($"{title} · {start:HH:mm}–{end:HH:mm}", stack.Take(8).Select(m => (model.Notes.Text(m), $"{Hm(m.At)}–{Hm(m.End)}", (string?)null)).ToList(), Math.Max(0, stack.Count - 8)));
         Avalonia.Automation.AutomationProperties.SetName(card, $"{title}, {start:HH:mm} to {end:HH:mm}. Press to open them in Details");
         card.PointerEntered += (_, _) => card.Classes.Add("over"); card.PointerExited += (_, _) => card.Classes.Remove("over");
