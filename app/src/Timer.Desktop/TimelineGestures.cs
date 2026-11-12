@@ -160,7 +160,8 @@ public static class TimelineGestures
     {
         note = default;
         var begin = model.DayBegins(model.SelectedDate); var floor = row.From < begin ? row.From : begin; var ceiling = row.To > begin.AddDays(1) ? row.To : begin.AddDays(1);
-        var others = model.Engine.Sessions.Where(s => !ReferenceEquals(s, row) && s.Duration > TimeSpan.Zero).Select(s => (Start: s.From, End: s.To)).ToList();
+        // Only blocks that reach into the day on show can be snapped to; the rest of the history is days away and only slowed every move down.
+        var others = model.Engine.Sessions.Where(s => !ReferenceEquals(s, row) && s.Duration > TimeSpan.Zero && s.To > floor && s.From < ceiling).Select(s => (Start: s.From, End: s.To)).ToList();
         (DateTime Start, DateTime End)? running = model.Engine.Active is { } active && model.Engine.Now > active.Start ? (active.Start, model.Engine.Now) : null;
         bool Legal(TimeSpan delta)
         {
@@ -313,7 +314,9 @@ public static class TimelineGestures
         {
             var from = row.From + (edge <= 0 ? delta : TimeSpan.Zero);
             var until = row.To + (edge >= 0 ? delta : TimeSpan.Zero);
-            if ((until - from).TotalSeconds < 3) break;
+            // A block may be no shorter than three seconds and no longer than a day, and TimedRow throws outside that. A limit far away (a block on another day,
+            // reached when an edge is dragged) would ask for a block longer than a day, which crashed the app, so such a limit is answered without asking it.
+            if ((until - from).TotalSeconds < 3 || until - from > LedgerEditor.MaxBlock) break;
             if (LedgerEditor.TimedRow(row.Account, from, until, "edited").To <= limit) return delta;
         }
         return limit - row.To;
