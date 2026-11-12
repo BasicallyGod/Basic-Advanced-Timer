@@ -10,6 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 |---|---|---|
+| Fix: dragging a selected block's edge could crash the app. The magnet offered every block in the history as a place to snap to, and for one days away `LastDeltaBefore` asked the ledger for a block longer than a day, which throws. The magnet now only looks at blocks in the day on show, and `LastDeltaBefore` never asks for a block over 24 hours. | pending | `TimelineGestures.cs`, `DragEdgeCrashTests`. |
 | The tall pill: a third style beside Full and Compact (Settings, The pill, Style, `StyleTall`; saved as `pilltall=on`) whose display grows downward with a second row of the same vacuum-fluorescent glass (`LowerDisplay`). Pressing the row steps through the day strip, up next, budgets, the week, both rows and a night bat (`PillLower`, saved as `pilllower=`). The play and pause key is now the same rounded box as the BREAK label, its symbol centred, as the study drew them. | pending | `LowerDisplay.cs`, `TallPillTests`; the board "The tall pill". |
 
 ## 7 November 2026
