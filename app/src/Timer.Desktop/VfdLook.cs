@@ -83,32 +83,3 @@ public sealed class SegmentText : Control
         return text.Length * cw;
     }
 }
-
-/// <summary>
-/// The honeycomb laid over the whole trough: the thin dark lines between the cells, in the trough's own colour, drawn once over everything, so every block,
-/// meeting and tile sits behind one continuous mesh that never drifts between them. It never takes a press.
-/// </summary>
-public sealed class HoneycombOverlay : Control
-{
-    public HoneycombOverlay() { IsHitTestVisible = false; }
-    private static readonly Lazy<IBrush> Lines = new(() =>
-    {
-        // The same lattice as Honeycomb (the pill's mask), as the outlines of its cells: what the mask leaves dark is what this draws.
-        double s = Honeycomb.Cell, w = Math.Sqrt(3) * s, h = 3 * s; var g = new StreamGeometry();
-        using (var c = g.Open())
-            foreach (var (cx, cy) in new[] { (w / 2, s), (0.0, 2.5 * s), (w, 2.5 * s), (0.0, -0.5 * s), (w, -0.5 * s) })
-            {
-                for (var i = 0; i < 6; i++)
-                {
-                    var a = Math.PI / 2 + i * Math.PI / 3; var pt = new Point(cx + s * Math.Cos(a), cy - s * Math.Sin(a));
-                    if (i == 0) c.BeginFigure(pt, false); else c.LineTo(pt);
-                }
-                c.EndFigure(true);
-            }
-        var pen = new Pen(new SolidColorBrush(Color.FromArgb(110, 11, 14, 19)), s * (1 - Honeycomb.Inset) * 2.4);
-        var drawing = new GeometryDrawing { Pen = pen, Geometry = g };
-        var rect = new RelativeRect(0, 0, w, h, RelativeUnit.Absolute);
-        return new DrawingBrush(drawing) { TileMode = TileMode.Tile, SourceRect = rect, DestinationRect = rect, Stretch = Stretch.Fill };
-    });
-    public override void Render(DrawingContext context) => context.FillRectangle(Lines.Value, new Rect(Bounds.Size));
-}

@@ -245,7 +245,7 @@ public static partial class ReviewViews
         FrameMonitor.Bump("timeline builds");
         var day = model.SelectedDate;
         var pixelsPerHour = model.TimelinePixelsPerHour;
-        // The display look (a setting): lit blocks through one honeycomb laid over the whole trough, and sixteen-segment words and figures.
+        // The display look (a setting): lit block fills through the honeycomb, and sixteen-segment words and figures drawn whole over them.
         var vfd = model.DisplayTimeline;
         var glassInk = Color.Parse(model.GlassTheme.Colour("Ink")); var glassQuiet = Color.Parse(model.GlassTheme.Colour("Muted"));
         var planned = model.Notes.MeetingsOn(day);
@@ -382,14 +382,18 @@ public static partial class ReviewViews
             if (marquees.Count > 0) { card.PointerEntered += (_, _) => marquees.ForEach(m => m.Hover(true)); card.PointerExited += (_, _) => marquees.ForEach(m => m.Hover(false)); }
             if (isBreak && vfd) { card.Background = Brushes.Transparent; card.BorderBrush = new SolidColorBrush(Color.Parse("#F5B63A")); card.BorderThickness = new Thickness(1.4); }
             else if (isBreak) { card.Background = Hatch(model.GlassTheme); card.BorderBrush = Brush.Parse(model.GlassTheme.Colour("Line")); card.BorderThickness = new Thickness(1); }
-            else if (vfd) card.Background = new SolidColorBrush(SoftTint.WithAlpha(Color.Parse(look.Fill), .92)); // Lit phosphor: one even colour, which the mesh and glow give its texture.
+            else if (vfd) card.Background = Brushes.Transparent; // The lit fill is a layer of its own under the words, seen through the honeycomb (below).
             else
             {
                 // A gentle gradient from the block's own fill to a slightly deeper shade of it, so a block has body without any text losing its contrast.
                 var deeper = DeeperEnd(look);
                 card.Background = new LinearGradientBrush { StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative), GradientStops = { new GradientStop(Color.Parse(look.Fill), 0), new GradientStop(Color.Parse(deeper), 1) } };
             }
-            var content = new Grid { ClipToBounds = true }; content.Children.Add(text);
+            var content = new Grid { ClipToBounds = true };
+            // On the display only the lit fill goes through the honeycomb, and its glow shows between the cells; the words stay whole on top of it, since the
+            // mesh over small segment letters broke them up on Windows.
+            if (vfd && !isBreak) content.Children.Add(new Border { Name = "BlockPhosphor", Background = new SolidColorBrush(SoftTint.WithAlpha(Color.Parse(look.Fill), .95)), CornerRadius = card.CornerRadius, OpacityMask = Honeycomb.Brush, IsHitTestVisible = false });
+            content.Children.Add(text);
             // The gaps inside a merged block are lighter, and a small link marks it as merged.
             if (interval.Group is { } mergedGroup)
             {
@@ -560,8 +564,7 @@ public static partial class ReviewViews
             _ = new ViewActivity(canvas, active => { if (active) { PlaceNow(); nowTimer.Start(); } else nowTimer.Stop(); });
         }
         TimelineGuide.Attach(canvas, model, origin, pixelsPerHour, TimelineGutter, AxisY, planned.Count > 0 ? meetingTop : bandTop, pinned);
-        // One honeycomb over the whole trough, above everything drawn in it, so the mesh never drifts between blocks.
-        if (vfd) { var mesh = new HoneycombOverlay { Name = "TimelineMesh", Width = canvas.Width, Height = canvas.Height, ZIndex = 40 }; canvas.Children.Add(mesh); }
+
         var add = new MenuItem { Header = "Add time…" }; add.Click += (_, _) => model.OpenGap(clicked);
         var addMeeting = new MenuItem { Header = "Add meeting…", Name = "AddMeetingMenu" }; addMeeting.Click += (_, _) => model.Notes.RequestNewMeeting(clicked);
         // Paste puts the copied blocks with the first at the time that was right-clicked, snapped to five minutes like Add time.
