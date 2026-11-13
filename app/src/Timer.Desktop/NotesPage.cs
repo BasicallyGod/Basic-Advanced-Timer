@@ -596,7 +596,7 @@ public sealed class NotesPage : Grid
         {
             if (answered is { } day) meetingDay = day.Date;
             whenHost.IsOpen = false; whenHost.Child = null; if (editing is not null) Redraw(); else DrawForm();
-        }, () => { whenHost.IsOpen = false; whenHost.Child = null; }, "Meeting day", dayOnly: true), whenHost);
+        }, () => { whenHost.IsOpen = false; whenHost.Child = null; }, "Meeting day"), whenHost);
         whenHost.IsOpen = true;
     }
 

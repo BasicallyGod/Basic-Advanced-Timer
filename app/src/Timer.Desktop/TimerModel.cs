@@ -325,7 +325,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     {
         get
         {
-            var catalogue = Catalogue().ToArray();
+            var catalogue = Catalogue();
             var names = catalogue.Select(a => a.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
             return catalogue.Concat(Engine.Sessions.Select(s => s.Account).Where(names.Add)
                 .Select(name => new TimerAccount(name, "#91B7D5", null))).ToArray();
@@ -839,24 +839,6 @@ public sealed class TimerModel : INotifyPropertyChanged
         foreach (var row in rows) selectedRows.Remove(row);
         foreach (var place in places) if (place < Engine.Sessions.Count) selectedRows.Add(Engine.Sessions[place]);
     }
-    /// <summary>Sets a block's start to where the block before it ends (the latest end of the blocks that begin earlier), closing a gap or an overlap there. The end stays.</summary>
-    public bool FitToPrevious(SessionRow row)
-    {
-        var ends = Engine.Sessions.Where(s => !ReferenceEquals(s, row) && s.Duration > TimeSpan.Zero && CountsOn(s, DayOf(row.From)) && s.From < row.From).Select(s => s.To).ToList();
-        if (ends.Count == 0) { Refuse("No block before"); return false; }
-        var end = ends.Max(); var start = new DateTime(((end.Ticks + TimeSpan.TicksPerSecond - 1) / TimeSpan.TicksPerSecond) * TimeSpan.TicksPerSecond);
-        if (start >= row.To - TimeSpan.FromMinutes(1)) { Refuse("No room before"); return false; }
-        return EditEntry(row, row.Account, start, row.To, Editor.Note(row));
-    }
-    /// <summary>Sets a block's end to where the next block begins (the earliest start of the blocks that begin later). The start stays.</summary>
-    public bool FitToNext(SessionRow row)
-    {
-        var starts = Engine.Sessions.Where(s => !ReferenceEquals(s, row) && s.Duration > TimeSpan.Zero && CountsOn(s, DayOf(row.From)) && s.From > row.From).Select(s => s.From).ToList();
-        if (starts.Count == 0) { Refuse("No block after"); return false; }
-        var next = starts.Min(); var end = new DateTime(next.Ticks - next.Ticks % TimeSpan.TicksPerSecond);
-        if (end <= row.From + TimeSpan.FromMinutes(1)) { Refuse("No room after"); return false; }
-        return EditEntry(row, row.Account, row.From, end, Editor.Note(row));
-    }
     /// <summary>Moves or resizes a block by dragging it. It may land on other blocks and share their hours, so only the block being recorded can refuse it.</summary>
     public bool MoveEntry(SessionRow row, DateTime start, DateTime end)
         => ChangeLog(() => KeepingSelection(new[] { row }, () => Editor.Edit(row, row.Account, start, end, Editor.Note(row), allowOverlap: true)));
@@ -1132,7 +1114,9 @@ public sealed class TimerModel : INotifyPropertyChanged
     // ---- the pill's alerts: what is waiting, how loud it is allowed to be (Peek: a card opens by itself; Light only: the light and the list; Off), and what has been put away
     private const string PillAlertsLine = "pillalerts=";
     /// <summary>What is waiting for the pill, most urgent first (see <see cref="PillAlertItems"/>).</summary>
-    public IReadOnlyList<AlertItem> Alerts => PillAlertItems.Build(this);
+    private int notifying;
+    private IReadOnlyList<AlertItem>? notificationAlerts;
+    public IReadOnlyList<AlertItem> Alerts => notifying > 0 ? notificationAlerts ??= PillAlertItems.Build(this) : PillAlertItems.Build(this);
     public AlertState AlertState { get; } = new();
     /// <summary>"peek" (the default), "light" or "off". Saved as the appearance line pillalerts=light or pillalerts=off; peek has no line.</summary>
     public string PillAlertsMode => AppearanceValue(PillAlertsLine) is { } saved && (saved == "light" || saved == "off") ? saved : "peek";
@@ -1197,7 +1181,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         {
             pausedAlerts = null;
             if (checkpoint) Notify(CheckpointChange);
-            else PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Elapsed)));
+            else Publish(nameof(Elapsed));
         }
         else
         {
@@ -1279,5 +1263,11 @@ public sealed class TimerModel : INotifyPropertyChanged
         Notify(CheckpointChange);
     }
     private void Notify() => Notify(null);
-    private void Notify(string? property) { FrameMonitor.Bump("model changes"); ApplyTheme(); WatchMessages(); PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(property)); }
+    private void Notify(string? property) { FrameMonitor.Bump("model changes"); ApplyTheme(); WatchMessages(); Publish(property); }
+    private void Publish(string? property)
+    {
+        notificationAlerts = null; notifying++;
+        try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(property)); }
+        finally { notifying--; notificationAlerts = null; }
+    }
 }

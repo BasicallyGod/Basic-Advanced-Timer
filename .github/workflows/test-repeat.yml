@@ -37,22 +37,40 @@ jobs:
           $times = [int]('${{ inputs.times }}' -replace '[^0-9]', '')
           if ($times -lt 1) { $times = 8 }
           $seen = @{}
+          $badRuns = @()
           for ($i = 1; $i -le $times; $i++) {
-            $out = dotnet test app/tests/Timer.Desktop.Tests/Timer.Desktop.Tests.csproj --configuration Release --no-build --verbosity minimal 2>&1 | Out-String -Stream
-            $failed = @($out | Select-String -Pattern '^\s*Failed\s+(\S+)\s+\[' | ForEach-Object { $_.Matches[0].Groups[1].Value } | Sort-Object -Unique)
-            $total = ($out | Select-String -Pattern 'Total:\s+(\d+)' | Select-Object -Last 1).Matches[0].Groups[1].Value
-            Write-Host "Run $i of ${times}: $($failed.Count) failed of $total"
+            $results = Join-Path $env:RUNNER_TEMP ("timer-tests-" + [guid]::NewGuid())
+            $out = dotnet test app/tests/Timer.Desktop.Tests/Timer.Desktop.Tests.csproj --configuration Release --no-build --verbosity minimal --logger "trx;LogFileName=results.trx" --results-directory $results 2>&1 | Out-String -Stream
+            $runExit = $LASTEXITCODE
+            $out | ForEach-Object { Write-Host $_ }
+            $failed = @()
+            $total = 0
+            try {
+              [xml]$trx = Get-Content -Raw (Join-Path $results 'results.trx') -ErrorAction Stop
+              $counters = $trx.GetElementsByTagName('Counters') | Select-Object -First 1
+              if ($null -eq $counters -or [int]$counters.total -le 0) { throw 'No tests were reported.' }
+              $total = [int]$counters.total
+              $failed = @($trx.GetElementsByTagName('UnitTestResult') | Where-Object outcome -eq 'Failed' | ForEach-Object testName | Sort-Object -Unique)
+              if ([int]$counters.failed -gt 0 -or [int]$counters.error -gt 0 -or [int]$counters.executed -eq 0 -or $failed.Count -gt 0) { $runExit = 1 }
+            }
+            catch {
+              Write-Host "Run ${i}: invalid or missing test results: $($_.Exception.Message)"
+              $runExit = 1
+            }
+            if ($runExit -ne 0) { $badRuns += $i }
+            Write-Host "Run $i of ${times}: exit $runExit, $($failed.Count) failed of $total"
             foreach ($name in $failed) {
               if (-not $seen.ContainsKey($name)) { $seen[$name] = @() }
               $seen[$name] += $i
-              Write-Host "::group::Run $i, $name"
-              $out | Select-String -Pattern ('Failed\s+' + [regex]::Escape($name)) -Context 0,8 | Select-Object -First 1 | ForEach-Object { $_.Context.PostContext | ForEach-Object { Write-Host $_ } }
-              Write-Host '::endgroup::'
             }
           }
           $summary = "## Test repeat: $times runs`n"
-          if ($seen.Count -eq 0) { $summary += "`nEvery run passed.`n" }
-          else { foreach ($name in $seen.Keys | Sort-Object) { $summary += "`n- ``$name`` failed in run(s) $($seen[$name] -join ', ') of $times" } }
+          if ($badRuns.Count -eq 0) { $summary += "`nEvery run passed.`n" }
+          else {
+            $summary += "`nFailed or incomplete runs: $($badRuns -join ', ').`n"
+            foreach ($name in $seen.Keys | Sort-Object) { $summary += "`n- ``$name`` failed in run(s) $($seen[$name] -join ', ') of $times" }
+          }
           Write-Host $summary
           $summary | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
-          if ($seen.Count -gt 0) { exit 1 }
+          if ($badRuns.Count -gt 0) { exit 1 }
+          exit 0

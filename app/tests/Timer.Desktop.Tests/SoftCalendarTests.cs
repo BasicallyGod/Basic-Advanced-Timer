@@ -30,7 +30,7 @@ public class SoftCalendarTests
     [AvaloniaFact]
     public void TheMeetingDayCardsDateAndSetShareOneLine()
     {
-        var card = new ReminderPopup(() => new DateTime(2026, 11, 7, 12, 0, 0), "New meeting", new DateTime(2026, 11, 18), _ => { }, () => { }, "Meeting day", dayOnly: true) { HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top };
+        var card = new ReminderPopup(() => new DateTime(2026, 11, 7, 12, 0, 0), "New meeting", new DateTime(2026, 11, 18), _ => { }, () => { }, "Meeting day") { HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top };
         var window = new Window { Width = 320, Height = 440, Content = card }; window.Show();
         try
         {

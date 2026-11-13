@@ -117,7 +117,7 @@ public sealed class PillWindow : Window
             else if (e.Key == Avalonia.Input.Key.Escape && PanelOpen) { CloseFlyouts(); e.Handled = true; }
         };
         peeked.UnionWith(model.Alerts.Select(a => a.Key)); // What was already waiting when the pill came up is not shown again by itself.
-        model.PropertyChanged += Changed; PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) ShowToast(); };
+        model.PropertyChanged += Changed; PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) { if (IsVisible) Refresh(); ShowToast(); } };
         ActualThemeVariantChanged += (_, _) => { lastShadow = null; Refresh(); };
         Closed += (_, _) => model.PropertyChanged -= Changed;
         Refresh();
@@ -385,7 +385,8 @@ public sealed class PillWindow : Window
         // A new pill size from settings takes effect straight away, even while the pill is hidden behind the dashboard.
         if (model.PillScalePercent != appliedChoice) FitToScreen(Screens.ScreenFromWindow(this));
         if (Shape != ShapeApplied) ApplyShape();
-        Refresh(); PeekAtNewAlerts();
+        if (IsVisible) Refresh();
+        PeekAtNewAlerts();
     }
     /// <summary>The first letters of up to two words, so Account three reads AT, Northwind Traders reads NT and Client 7 reads C7.</summary>
     public static string Initials(string name)

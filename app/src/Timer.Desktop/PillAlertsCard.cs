@@ -66,7 +66,7 @@ public sealed class PillAlertsCard : Border
         Index = (Index + by + items.Count) % items.Count; ForgetPicker(); Sync(true);
     }
 
-    private string Signature() => Index + "|" + string.Join(";", items.Select(i => i.Key + "," + i.Detail + "," + i.Caption));
+    private string Signature() => Index + "|" + string.Join(";", items.Select(i => i.ToString()));
     /// <summary>Works out what is waiting again and redraws when it changed, or when asked to.</summary>
     public void Sync(bool force)
     {

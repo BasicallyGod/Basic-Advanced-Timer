@@ -316,6 +316,7 @@ public static partial class ReviewViews
             var named = Ui.Text(midnight.ToString("ddd", CultureInfo.GetCultureInfo("en-GB")), 11, "muted"); named.FontWeight = FontWeight.Bold; named.Name = "TimelineMidnightLabel"; named.IsHitTestVisible = false;
             Canvas.SetLeft(named, mx + 4); Canvas.SetTop(named, LabelRow + 6); canvas.Children.Add(named);
         }
+        var catalogue = model.ReviewAccounts;
         var intervals = IntervalsOn(model, day);
         // Three or more blocks at one moment are one tile for the whole stretch (see StackFrom); one or two keep their lanes. The block recording now is never in a tile: over
         // one it takes a lane of its own above the tile, and the tile is slimmer to make room.
@@ -333,7 +334,7 @@ public static partial class ReviewViews
             var onStack = liveOverStack && recordingNow;
             var (lane, laneCount) = onStack ? (0, 3) : placement[interval];
             var detail = DetailFor(laneCount);
-            var colour = model.ReviewAccounts.FirstOrDefault(a => a.Name.Equals(interval.Account, StringComparison.OrdinalIgnoreCase))?.Colour ?? "#91B7D5";
+            var colour = catalogue.FirstOrDefault(a => a.Name.Equals(interval.Account, StringComparison.OrdinalIgnoreCase))?.Colour ?? "#91B7D5";
             var look = model.BlockLook(colour);
             var isBreak = BreakAccount.Is(interval.Account);
             var drawStart = interval.Start < origin ? origin : interval.Start; // A block that began before the day is drawn from its edge.
@@ -477,7 +478,7 @@ public static partial class ReviewViews
             }
             if (!addedEarly) { Canvas.SetLeft(card, X(interval.Start) + BlockInset); Canvas.SetTop(card, cardTop); canvas.Children.Add(card); }
         }
-        foreach (var stack in stacks) AddBlockTile(canvas, model, stack, liveStacks.Contains(stack), bandTop, bandHeight, pixelsPerHour, X);
+        foreach (var stack in stacks) AddBlockTile(canvas, model, stack, liveStacks.Contains(stack), bandTop, bandHeight, pixelsPerHour, X, catalogue);
         // Planned meetings sit in the row above the blocks as dashed cards, and a click on a free place in that row starts a new one. A meeting is planned time:
         // it is never counted as tracked time, and a block under it is not affected.
         {

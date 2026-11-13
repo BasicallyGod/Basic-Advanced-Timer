@@ -8,6 +8,13 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 ## 13 November 2026
 
+| Audit follow-up | Details |
+|---|---|
+| Reminder boundaries and stale UI | Preserve distant and final-minute reminders; refresh alert wording and note swatches; calculate break alerts for the working day. |
+| Reduced repeated work | Share alerts during notifications, reuse account catalogues during rendering, retain ticker content between animation frames, and suspend hidden display animation. |
+| Cleanup and test reporting | Remove unused fit helpers and retired reminder time-wheel UI; share segment definitions; use exit codes and TRX results for repeat-test failures. |
+
+
 | Change | Commit | Details |
 |---|---|---|
 | Reminder picker reaches any time of day: the strip shows the whole day with the working hours shaded, a press zooms it to the hour round the pin (five-minute ticks) while you drag, holding near an end pans, and letting go sets the time and shows the whole day again. Page Up and Page Down move an hour. | pending | `RescheduleTests`. |

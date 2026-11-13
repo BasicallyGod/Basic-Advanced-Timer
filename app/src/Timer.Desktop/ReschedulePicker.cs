@@ -39,7 +39,7 @@ public sealed class ReschedulePicker : StackPanel
         Children.Add(line); Children.Add(days); Children.Add(Strip);
         // Start on the reminder's own day and time when it is still to come; otherwise half an hour from now, to the five minutes.
         var now = model.Engine.Now; var today = model.TodayKey;
-        var start = current is { } c && c > now && model.DayOf(c) < today.AddDays(28) ? c : RoundUp(now.AddMinutes(30));
+        var start = current is { } c && c > now ? c : RoundUp(now.AddMinutes(30));
         Day = model.DayOf(start); week = Math.Max(0, (int)Math.Floor((Day - today).TotalDays / 7));
         Strip.Show(Day, start); Draw();
     }
@@ -133,7 +133,12 @@ public sealed class RescheduleStrip : Control
     private DateTime Clamp(DateTime t, bool snap = true)
     {
         var whole = new DateTime(t.Year, t.Month, t.Day, t.Hour, t.Minute, 0); if (snap) whole = whole.AddMinutes(Math.Round(whole.Minute / 5.0) * 5 - whole.Minute);
-        if (whole > Latest) whole = Latest; if (whole < Floor) whole = Floor; return whole;
+        // Existing reminders retain their exact minute, including the end of the day.
+        var latest = snap ? Latest : until.AddMinutes(-1);
+        if (whole > latest) whole = latest;
+        var earliest = snap ? Floor : (model.Engine.Now > from ? model.Engine.Now : from);
+        if (whole < earliest) whole = Floor;
+        return whole;
     }
     /// <summary>Whether the pin can be anywhere on this day (false for a day already over).</summary>
     public bool Open => Floor <= Latest;
@@ -168,11 +173,12 @@ public sealed class RescheduleStrip : Control
     /// <summary>Lets go of the pin: back to the whole day, and the time is set.</summary>
     public void Release() { pan.Stop(); ZoomFrom = null; InvalidateVisual(); Commit(); }
     /// <summary>Sets the reminder to where the pin is.</summary>
+    private bool ValidPin => Pin >= from && Pin < until && Pin >= model.Engine.Now;
     public void Commit()
     {
         // The card can stand open while the clock passes the pin (14:30 chosen, Enter pressed at 14:31), so the pin is checked against the clock as it is now, not as it
         // was when it was placed. One left behind moves to the earliest time it can be and nothing is saved, so what is set is always what the strip shows.
-        if (!Open || Pin < model.Engine.Now) { if (Open) Pin = Clamp(Pin); Describe(); InvalidateVisual(); return; }
+        if (!ValidPin) { if (Open) Pin = Clamp(Pin); Describe(); InvalidateVisual(); return; }
         set(Pin);
     }
 
@@ -254,7 +260,7 @@ public sealed class RescheduleStrip : Control
         {
             var x = X(now); context.DrawRectangle(new SolidColorBrush(SoftTint.WithAlpha(C("Live", "#1F9D5A"), .75)), null, new Rect(x - 1, laneTop, 2, h - footRoom - laneTop));
         }
-        if (!Open || Pin < viewFrom || Pin > viewTo) return;
+        if ((!Open && !ValidPin) || Pin < viewFrom || Pin > viewTo) return;
         // The pin: a stem, a dot with a ring of the card's colour, and the time in an accent chip at the top, held inside the strip near either end.
         var px = X(Pin);
         context.DrawRectangle(new SolidColorBrush(accent), null, new Rect(px - 1, 20, 2, h - footRoom - 20));

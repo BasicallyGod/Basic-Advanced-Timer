@@ -60,7 +60,7 @@ public sealed class NotesCard : Border
     // ---- The list ----
 
     private string Signature() => string.Join("|", Notes.ForDay(model.SelectedDate).Select(n => $"{n.Id};{n.Day:yyyyMMdd};{n.At};{n.End};{n.Text};{n.Done};{n.SeriesId};{n.HasDate}"))
-        + $"#{model.NotesCardShowsMeetings}#{model.SelectedMeetingId}#{model.SelectedNoteId}#{model.SelectedDate:yyyyMMdd}#{(Notes.All.Any(n => Notes.IsLate(n)) ? model.Engine.Now.ToString("HHmm") : "")}#{model.ReviewAccounts.Count}";
+        + $"#{model.NotesCardShowsMeetings}#{model.SelectedMeetingId}#{model.SelectedNoteId}#{model.SelectedDate:yyyyMMdd}#{(Notes.All.Any(n => Notes.IsLate(n)) ? model.Engine.Now.ToString("HHmm") : "")}#{string.Join(";", model.ReviewAccounts.Select(a => $"{a.Name}/{a.Display}/{a.Colour}"))}";
 
     /// <summary>Redraws the list if what it shows has changed.</summary>
     public void Sync()
@@ -308,7 +308,7 @@ public sealed class NotesCard : Border
     {
         scope = null; reminderHost.PlacementTarget = anchor;
         var label = string.IsNullOrWhiteSpace(draft) ? "New meeting" : draft;
-        var content = new ReminderPopup(() => model.Engine.Now, label, formDay, answered => { if (answered is { } picked) formDay = picked.Date; CloseReminder(); DrawForm(true); }, CloseReminder, "Meeting day", dayOnly: true);
+        var content = new ReminderPopup(() => model.Engine.Now, label, formDay, answered => { if (answered is { } picked) formDay = picked.Date; CloseReminder(); DrawForm(true); }, CloseReminder, "Meeting day");
         reminderHost.Child = ReminderPopup.Roomy(content, reminderHost); reminderHost.IsOpen = true;
     }
     private void CloseReminder() { reminderHost.IsOpen = false; reminderHost.Child = null; reminderHost.PlacementTarget = title; }

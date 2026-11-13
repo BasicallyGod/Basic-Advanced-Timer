@@ -123,17 +123,6 @@ public sealed class TimelineMagnetTests
         model.ClearSelection(); Assert.Equal(Day.AddHours(9), model.DefaultPasteTime());
     }
 
-    [Fact]
-    public void FitToPreviousAndNextClosesGapsAndOverlapsFromDetails()
-    {
-        var model = Setup(out var a, out var b, out _);
-        Assert.True(model.FitToPrevious(b)); b = model.Engine.Sessions.Single(s => s.Account == "Account two");
-        Assert.Equal(a.To, b.From); Assert.Equal(Day.AddHours(10.5), b.To); // Start moved to A's end, end kept.
-        Assert.True(model.FitToNext(a)); a = model.Engine.Sessions.Single(s => s.Account == "Account one");
-        Assert.Equal(b.From, a.To); // A now ends where B starts: they share nothing.
-        Assert.False(model.FitToPrevious(a)); Assert.NotNull(model.EditError); // Nothing before A.
-    }
-
     [AvaloniaFact]
     public void EveryTimelineMenuOffersAddTimeHereAndPasteHere_AndCopiedBlocksPreviewAtThePointer()
     {

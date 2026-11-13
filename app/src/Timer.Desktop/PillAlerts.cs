@@ -45,16 +45,18 @@ public static class PillAlertItems
         }
         foreach (var account in model.Accounts)
         {
-            if (account.Budget is not { } target || target <= TimeSpan.Zero || BreakAccount.Is(account.Name) || model.BudgetRatio(account) is not { } ratio || ratio < .8) continue;
+            if (account.Budget is not { } target || target <= TimeSpan.Zero || BreakAccount.Is(account.Name)) continue;
+            var used = model.BudgetUsed(account); var ratio = used.TotalSeconds / target.TotalSeconds;
+            if (ratio < .8) continue;
             var spent = ratio >= 1; var window = model.BudgetWindowAt(account, now).Start;
-            var used = model.BudgetUsed(account); var left = target - used;
+            var left = target - used;
             var key = $"budget:{account.Name}:{(spent ? "spent" : "80")}:{window:yyyyMMdd}";
             var period = account.Period == "week" ? "" : " this " + account.Period;
             items.Add(new AlertItem(key, spent ? AlertKind.BudgetSpent : AlertKind.Budget, spent ? 1 : 3, window, "Budget", spent ? "Spent" : "80 per cent used", account.Name, account.Name, null, null,
                 spent ? $"{model.FormatCompact(used)} of {model.FormatCompact(target)}{period}" : $"{model.FormatCompact(used)} of {model.FormatCompact(target)}{period} · {model.FormatCompact(left)} left", ratio));
         }
         var allowance = model.BreakAllowance;
-        if (model.IsOnBreak && allowance > TimeSpan.Zero && model.Engine.Active is { } active && model.BreakTimeOn(now.Date) > allowance)
+        if (model.IsOnBreak && allowance > TimeSpan.Zero && model.Engine.Active is { } active && model.BreakTimeOn(model.TodayKey) > allowance)
         {
             var back = model.ResumeAccount;
             items.Add(new AlertItem("break:" + active.Start.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture), AlertKind.Break, 4, active.Start, "Break",

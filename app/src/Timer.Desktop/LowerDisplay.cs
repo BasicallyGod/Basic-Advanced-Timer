@@ -28,6 +28,8 @@ public sealed class LowerDisplay : SteppedControl
     private readonly TimerModel model;
     private PillLower shown;
     private double elapsed;
+    private IReadOnlyList<TimerAccount>? frameAccounts;
+    private IReadOnlyList<(string Words, string Role)>? tickerParts;
     /// <summary>Seconds of motion so far; tests set it to see the ticker and the bat at a known moment.</summary>
     public double Seconds { get => elapsed / 1000; set { elapsed = value * 1000; InvalidateVisual(); } }
     public PillLower Shown => shown;
@@ -39,6 +41,7 @@ public sealed class LowerDisplay : SteppedControl
     public void Show(PillLower what)
     {
         if (shown != what) { shown = what; Height = HeightFor(what); }
+        tickerParts = null;
         InvalidateVisual(); Wake();
     }
     protected override int IntervalMilliseconds => 100;
@@ -68,7 +71,7 @@ public sealed class LowerDisplay : SteppedControl
                 // A colon in running text is two leaning dots, as the clock draws it, not the name's tall pair of bars.
                 if (ch == ':') { foreach (var f in new[] { .3, .7 }) Dot(P(.5, f), th * .62, c, true); continue; }
                 var on = SegmentName.Font.TryGetValue(ch, out var lit) ? lit : "";
-                foreach (var (id, ax, ay, bx, by) in Bars)
+                foreach (var (id, ax, ay, bx, by) in SegmentName.Bars)
                 {
                     var isOn = on.Contains(id); if (!isOn && !ghosts) continue;
                     var a = P(ax, ay); var b = P(bx, by); var d = b - a; var len = Math.Sqrt(d.X * d.X + d.Y * d.Y); var trim = Math.Min(trimMax, len / 4); var u = d / len;
@@ -78,12 +81,6 @@ public sealed class LowerDisplay : SteppedControl
             return text.Length * cw;
         }
     }
-    private static readonly (char Id, double X1, double Y1, double X2, double Y2)[] Bars =
-    {
-        ('a', 0, 0, .5, 0), ('A', .5, 0, 1, 0), ('d', 0, 1, .5, 1), ('D', .5, 1, 1, 1), ('g', 0, .5, .5, .5), ('G', .5, .5, 1, .5),
-        ('f', 0, 0, 0, .5), ('e', 0, .5, 0, 1), ('b', 1, 0, 1, .5), ('c', 1, .5, 1, 1), ('i', .5, 0, .5, .5), ('l', .5, .5, .5, 1),
-        ('h', 0, 0, .5, .5), ('j', 1, 0, .5, .5), ('k', 0, 1, .5, .5), ('m', 1, 1, .5, .5),
-    };
     /// <summary>Whether the display has a letter for this character (a colon is drawn as two dots).</summary>
     public static bool CanDraw(char ch) => ch == ':' || SegmentName.Font.ContainsKey(ch);
     /// <summary>Words as the display can draw them: upper case, accents stripped, anything it has no letter for a space.</summary>
@@ -101,13 +98,14 @@ public sealed class LowerDisplay : SteppedControl
     private Color C(string key, string fallback) => Ui.ThemeColour(this, key, Color.Parse(fallback));
     private Color AccountColour(string name)
     {
-        var account = model.ReviewAccounts.FirstOrDefault(a => a.Name == name);
+        var account = (frameAccounts ?? model.ReviewAccounts).FirstOrDefault(a => a.Name == name);
         return account is null ? C("Muted", "#8A8F98") : Color.Parse(model.ChartColour(account.Colour));
     }
 
     public override void Render(DrawingContext context)
     {
         FrameMonitor.Bump("draw LowerDisplay");
+        frameAccounts = shown is PillLower.Strip or PillLower.Both or PillLower.Budgets ? model.ReviewAccounts : null;
         var dark = SoftTint.IsDark(this);
         var p = new Painter { Ghost = SoftTint.WithAlpha(C("Ink", "#18233A"), dark ? .085 : .09) };
         switch (shown)
@@ -129,6 +127,7 @@ public sealed class LowerDisplay : SteppedControl
                 if (op.Filled) context.DrawGeometry(brush, null, op.Shape);
                 else context.DrawGeometry(null, new Pen(brush, op.Width, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), op.Shape);
             }
+        frameAccounts = null;
     }
 
     // ---------- the day strip ----------
@@ -182,13 +181,15 @@ public sealed class LowerDisplay : SteppedControl
     {
         var now = model.Engine.Now; var day = model.TodayKey; var parts = new List<(string, string)>();
         string In(DateTime t) { var m = (int)Math.Ceiling((t - now).TotalMinutes); return m < 60 ? $"IN {m} MIN" : $"IN {m / 60}H {m % 60:00}"; }
-        var meeting = model.Notes.MeetingsOn(day).Concat(model.Notes.MeetingsOn(day.AddDays(1))).FirstOrDefault(m => ReviewViews.MeetingStart(m) >= now);
-        var going = model.Notes.MeetingsOn(day).FirstOrDefault(m => ReviewViews.MeetingStart(m) < now && ReviewViews.MeetingEnd(m) > now);
+        var todayMeetings = model.Notes.MeetingsOn(day);
+        var meeting = todayMeetings.Concat(model.Notes.MeetingsOn(day.AddDays(1))).FirstOrDefault(m => ReviewViews.MeetingStart(m) >= now);
+        var going = todayMeetings.FirstOrDefault(m => ReviewViews.MeetingStart(m) < now && ReviewViews.MeetingEnd(m) > now);
         if (going is not null) parts.AddRange(new[] { ("NOW ", "quiet"), ($"{Drawable(model.Notes.Text(going))} TILL {ReviewViews.MeetingEnd(going):HH:mm}", "ink"), ("   ", "ink") });
         if (meeting is not null) parts.AddRange(new[] { ("NEXT ", "quiet"), ($"{ReviewViews.MeetingStart(meeting):HH:mm} {Drawable(model.Notes.Text(meeting))}", "ink"), (" " + In(ReviewViews.MeetingStart(meeting)), "accent"), ("   ", "ink") });
         var reminder = model.Notes.PinnedOn(day).FirstOrDefault(n => NotesModel.ReminderOf(n) >= now);
         if (reminder is not null && NotesModel.ReminderOf(reminder) is { } due) parts.AddRange(new[] { ("REMIND ", "quiet"), ($"{due:HH:mm} {Drawable(model.Notes.Text(reminder))}", "ink"), ("   ", "ink") });
-        if (model.Notes.Overdue.Count > 0) parts.AddRange(new[] { ("LATE ", "red"), (Drawable(model.Notes.Text(model.Notes.Overdue[0])), "ink"), ("   ", "ink") });
+        var overdue = model.Notes.Overdue;
+        if (overdue.Count > 0) parts.AddRange(new[] { ("LATE ", "red"), (Drawable(model.Notes.Text(overdue[0])), "ink"), ("   ", "ink") });
         if (parts.Count == 0) parts.Add(("NOTHING COMING UP TODAY", "quiet"));
         return parts;
     }
@@ -199,7 +200,7 @@ public sealed class LowerDisplay : SteppedControl
         p.Outline(new Rect(11, y0 + 8, 13, 13), 3, 1.3, accent, true); p.Line(new Point(11.5, y0 + 12), new Point(23.5, y0 + 12), 1.3, accent, true); p.Box(new Rect(14, y0 + 15, 2.4, 2.4), .6, accent, true);
         var roles = new Dictionary<string, Color> { ["quiet"] = C("Muted", "#8A8F98"), ["ink"] = C("Ink", "#18233A"), ["accent"] = accent, ["red"] = C("Overtime", "#E5484D") };
         var chars = new List<(char, Color)>();
-        foreach (var (words, role) in UpNext()) foreach (var ch in words) chars.Add((ch, roles[role]));
+        foreach (var (words, role) in tickerParts ??= UpNext()) foreach (var ch in words) chars.Add((ch, roles[role]));
         Ribbon = new string(chars.Select(c => c.Item1).ToArray());
         var cells = TickerCells; var text = new char[cells]; var colours = new Color[cells];
         // A ribbon that fits stands still; a longer one loops a cell at a time with a gap, as the account name does.

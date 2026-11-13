@@ -281,7 +281,6 @@ public sealed class StatusFace : Grid
         selectorChevron.Expanded = open; selectorChevron.InvalidateVisual();
     }
     /// <summary>How much of the blue wash the accounts button wears, 0 to 1, while the dashboard's panel eases out or away, so the button and the panel move as one.</summary>
-    public void SetAccountsAmount(double amount) { accountsAmount = Math.Clamp(amount, 0, 1); PaintAccountsTile(); }
     // Bare on the well at rest, the theme's hover under the pointer, and a blue wash while the list is open.
     private void PaintAccountsTile()
     {

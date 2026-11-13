@@ -65,7 +65,7 @@ public sealed partial class SelectedBlockCard
             {
                 popup.IsOpen = false;
                 if (answered is { } picked && picked.Date != f.Day) { f.Day = picked.Date; f.DayWords.Text = NoteDates.Day(f.Day, model.Engine.Now); Apply(f, "day"); }
-            }, () => popup.IsOpen = false, "Meeting day", dayOnly: true);
+            }, () => popup.IsOpen = false, "Meeting day");
             popup.PlacementTarget = dayButton; popup.Child = ReminderPopup.Roomy(content, popup); popup.IsOpen = true;
         });
         dayButton.Width = double.NaN; dayButton.Height = 38; dayButton.Padding = new Thickness(12, 0); dayButton.Content = Ui.Horizontal(new IconGlyph(IconKind.Today), f.DayWords);

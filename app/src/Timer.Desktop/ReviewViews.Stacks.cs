@@ -102,18 +102,18 @@ public static partial class ReviewViews
     }
 
     // A line's colour in a tile: the account's deeper edge colour, taken towards the text colour until it holds 3 to 1 on the tile's fill, so it reads on Light as well as on Dark.
-    private static Color LineColour(TimerModel model, string account)
+    private static Color LineColour(TimerModel model, string account, IReadOnlyList<TimerAccount> catalogue)
     {
         var tileFill = model.GlassTheme.Colour("Hover"); var ink = model.GlassTheme.Colour("Ink");
         if (BreakAccount.Is(account)) return Color.Parse(model.GlassTheme.Colour("Muted"));
-        var colour = model.ReviewAccounts.FirstOrDefault(a => a.Name.Equals(account, StringComparison.OrdinalIgnoreCase))?.Colour ?? "#91B7D5";
+        var colour = catalogue.FirstOrDefault(a => a.Name.Equals(account, StringComparison.OrdinalIgnoreCase))?.Colour ?? "#91B7D5";
         var shade = model.BlockLook(colour).Edge;
         for (var amount = 0.0; amount < 1 && ThemeColours.Contrast(shade, tileFill) < 3; amount += .1) shade = ThemeColours.Mix(model.BlockLook(colour).Edge, ink, amount + .1);
         return Color.Parse(shade);
     }
 
     // A tile for a stack of blocks. With the recording block over it (compact), the tile is slimmer and sits under that block's lane.
-    private static void AddBlockTile(Canvas canvas, TimerModel model, List<Interval> members, bool compact, double bandTop, double bandHeight, double pixelsPerHour, Func<DateTime, double> X)
+    private static void AddBlockTile(Canvas canvas, TimerModel model, List<Interval> members, bool compact, double bandTop, double bandHeight, double pixelsPerHour, Func<DateTime, double> X, IReadOnlyList<TimerAccount> catalogue)
     {
         var begin = model.DayBegins(model.SelectedDate); var start = members.Min(i => i.Start); if (start < begin) start = begin; var end = members.Max(i => i.End); if (end > begin.AddDays(1)) end = begin.AddDays(1);
         var width = Math.Max(MinimumBlockWidth, (end - start).TotalHours * pixelsPerHour - BlockGap);
@@ -124,7 +124,7 @@ public static partial class ReviewViews
         var lines = members.Select(i =>
         {
             var lit = selectedIn && SourcesOf(i).Count > 0 && model.IsSelected(SourcesOf(i));
-            return new StackLines.Line(Math.Max(6, (i.Start - start).TotalHours * pixelsPerHour - BlockInset), Math.Min(width - 6, ((i.End < end ? i.End : end) - start).TotalHours * pixelsPerHour - BlockInset), placed[i].Lane, LineColour(model, i.Account), lit, selectedIn && !lit);
+            return new StackLines.Line(Math.Max(6, (i.Start - start).TotalHours * pixelsPerHour - BlockInset), Math.Min(width - 6, ((i.End < end ? i.End : end) - start).TotalHours * pixelsPerHour - BlockInset), placed[i].Lane, LineColour(model, i.Account, catalogue), lit, selectedIn && !lit);
         }).ToList();
         var title = Words(members.Count, "block", "blocks") + " · " + model.Format(total);
         var card = new Border { Name = "TimelineStack" + start.ToString("HHmmss"), Width = width, Height = height, CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1.5), Tag = new StackTag(members.Count), Cursor = new Cursor(StandardCursorType.Hand) };

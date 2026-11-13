@@ -47,6 +47,11 @@ public static class Honeycomb
 public abstract class SteppedControl : Control
 {
     private DispatcherTimer? timer; private long last;
+    private readonly ViewActivity activity;
+    protected SteppedControl()
+    {
+        activity = new ViewActivity(this, active => { if (active) Wake(); else StopTimer(); });
+    }
     protected abstract bool Animating { get; }
     protected abstract void Advance(double milliseconds);
     protected virtual int IntervalMilliseconds => 33;
@@ -54,7 +59,7 @@ public abstract class SteppedControl : Control
     public void Step(double milliseconds) { Advance(milliseconds); InvalidateVisual(); if (!Animating) StopTimer(); }
     protected void Wake()
     {
-        if (!Animating || !this.IsAttachedToVisualTree() || timer is not null) return;
+        if (!Animating || !activity.Active || timer is not null) return;
         last = Environment.TickCount64;
         timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(IntervalMilliseconds) };
         timer.Tick += (_, _) => { var now = Environment.TickCount64; var dt = now - last; last = now; Step(dt); };
@@ -372,16 +377,17 @@ public sealed class SegmentName : SteppedControl
         var y = inset + fy * h; var x = x0 + fx * w;
         return new Point(x + (CellHeight - y) * Slant, y);
     }
+    internal static readonly (char Id, double X1, double Y1, double X2, double Y2)[] Bars =
+    {
+        ('a', 0, 0, .5, 0), ('A', .5, 0, 1, 0), ('d', 0, 1, .5, 1), ('D', .5, 1, 1, 1), ('g', 0, .5, .5, .5), ('G', .5, .5, 1, .5),
+        ('f', 0, 0, 0, .5), ('e', 0, .5, 0, 1), ('b', 1, 0, 1, .5), ('c', 1, .5, 1, 1), ('i', .5, 0, .5, .5), ('l', .5, .5, .5, 1),
+        ('h', 0, 0, .5, .5), ('j', 1, 0, .5, .5), ('k', 0, 1, .5, .5), ('m', 1, 1, .5, .5),
+    };
+
     private static void DrawCell(DrawingContext context, double x0, string on, Pen unlit, Pen lit, Pen? glow, bool glowPass)
     {
         // The ends of each bar are pulled in a hair so neighbouring segments leave a gap, as on the real thing.
-        (char Id, double X1, double Y1, double X2, double Y2)[] bars =
-        {
-            ('a', 0, 0, .5, 0), ('A', .5, 0, 1, 0), ('d', 0, 1, .5, 1), ('D', .5, 1, 1, 1), ('g', 0, .5, .5, .5), ('G', .5, .5, 1, .5),
-            ('f', 0, 0, 0, .5), ('e', 0, .5, 0, 1), ('b', 1, 0, 1, .5), ('c', 1, .5, 1, 1), ('i', .5, 0, .5, .5), ('l', .5, .5, .5, 1),
-            ('h', 0, 0, .5, .5), ('j', 1, 0, .5, .5), ('k', 0, 1, .5, .5), ('m', 1, 1, .5, .5),
-        };
-        foreach (var (id, ax, ay, bx, by) in bars)
+        foreach (var (id, ax, ay, bx, by) in Bars)
         {
             var a = P(x0, ax, ay); var b = P(x0, bx, by);
             var dx = b.X - a.X; var dy = b.Y - a.Y; var len = Math.Sqrt(dx * dx + dy * dy); var trim = Math.Min(1.1, len / 4);

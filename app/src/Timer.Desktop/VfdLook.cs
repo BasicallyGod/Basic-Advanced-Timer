@@ -51,12 +51,6 @@ public sealed class SegmentText : Control
     public static bool Fits(string text, double height, double room) => WidthOf(text.Length, height) <= room;
     protected override Size MeasureOverride(Size availableSize) => new(WidthOf(Text.Length, CellHeight), CellHeight);
 
-    private static readonly (char Id, double X1, double Y1, double X2, double Y2)[] Bars =
-    {
-        ('a', 0, 0, .5, 0), ('A', .5, 0, 1, 0), ('d', 0, 1, .5, 1), ('D', .5, 1, 1, 1), ('g', 0, .5, .5, .5), ('G', .5, .5, 1, .5),
-        ('f', 0, 0, 0, .5), ('e', 0, .5, 0, 1), ('b', 1, 0, 1, .5), ('c', 1, .5, 1, 1), ('i', .5, 0, .5, .5), ('l', .5, .5, .5, 1),
-        ('h', 0, 0, .5, .5), ('j', 1, 0, .5, .5), ('k', 0, 1, .5, .5), ('m', 1, 1, .5, .5),
-    };
     public override void Render(DrawingContext context) => Draw(context, Text, 0, 0, CellHeight, Colour, Ghosts, Weight);
     /// <summary>Draws <paramref name="text"/> in segment cells with its top left at (<paramref name="x"/>, <paramref name="y"/>); returns its width. Used by drawn panels too.</summary>
     public static double Draw(DrawingContext context, string text, double x, double y, double h, Color colour, bool ghosts = false, double weight = 1)
@@ -73,7 +67,7 @@ public sealed class SegmentText : Control
             // A colon is two leaning dots, as the clock draws it, not the name's tall pair of bars.
             if (ch == ':') { foreach (var f in new[] { .3, .7 }) context.DrawEllipse(lit.Brush, null, P(.5, f), th * .62, th * .62); continue; }
             var on = SegmentName.Font.TryGetValue(ch, out var segments) ? segments : "";
-            foreach (var (id, ax, ay, bx, by) in Bars)
+            foreach (var (id, ax, ay, bx, by) in SegmentName.Bars)
             {
                 var isOn = on.Contains(id); if (!isOn && ghost is null) continue;
                 var a = P(ax, ay); var b = P(bx, by); var d = b - a; var len = Math.Sqrt(d.X * d.X + d.Y * d.Y); var trim = Math.Min(trimMax, len / 4); var u = d / len;
