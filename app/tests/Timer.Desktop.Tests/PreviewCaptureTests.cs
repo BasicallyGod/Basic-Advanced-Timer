@@ -67,7 +67,7 @@ public sealed class PreviewCaptureTests
             Press("TimelineTab"); Shot("long-list");
             Press("CardKindNotes");
             window.GetVisualDescendants().OfType<TextBox>().First(t => t.Name == "NoteField").Text = "Send the invoice batch #Accountone"; Dispatcher.UIThread.RunJobs();
-            Press("Suggest_Accountoneoneoneoneoneon"); Press("FormBell"); Press("ReminderSet"); Shot("long-form");
+            Press("Suggest_Accountoneoneoneoneoneon"); Press("FormBell"); window.GetVisualDescendants().OfType<RescheduleStrip>().First().Commit(); Dispatcher.UIThread.RunJobs(); Shot("long-form");
         }
         finally { window.Close(); }
     }
@@ -153,7 +153,7 @@ public sealed class PreviewCaptureTests
                 window.GetVisualDescendants().OfType<TextBox>().First(t => t.Name == "NoteField").Text = "Follow #Accountt"; Dispatcher.UIThread.RunJobs();
                 Press("Suggest_Accounttwo");
                 window.GetVisualDescendants().OfType<TextBox>().First(t => t.Name == "NoteField").Text = "Follow up on the new brief"; Dispatcher.UIThread.RunJobs();
-                Press("FormBell"); Press("ReminderSet"); Shot("note-form");
+                Press("FormBell"); window.GetVisualDescendants().OfType<RescheduleStrip>().First().Commit(); Dispatcher.UIThread.RunJobs(); Shot("note-form");
                 Press("CardKindMeetings"); Shot("meeting-form");
                 Press("NotesTab"); Shot("notes"); window.GetVisualDescendants().OfType<NotesPage>().Single().SetKind(true); Dispatcher.UIThread.RunJobs(); Shot("notes-meeting");
                 Press("WeekOverviewTab"); Shot("week");
