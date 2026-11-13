@@ -227,7 +227,7 @@ Dispatcher.UIThread.RunJobs(); using var accountsFrame = dashboard.CaptureRender
             Assert.NotNull(window.ContextMenu);
             window.OpenSettings();
             var tiles = window.GetVisualDescendants().OfType<Button>().Where(b => b.Name is "ThemeSystem" or "ThemeLight" or "ThemeDark").Select(b => b.Name!).ToList();
-            Assert.Equal(new[] { "ThemeSystem", "ThemeLight", "ThemeDark" }, tiles); // System, Light and Dark, as three small pictures.
+            Assert.Equal(new[] { "ThemeDark", "ThemeLight", "ThemeSystem" }, tiles); // Dark, Light and System as small pictures, Dark first as the default.
             var elapsed = model.Elapsed;
             window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "ThemeDark").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
             Assert.Equal("Dark", model.Theme);

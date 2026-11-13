@@ -85,11 +85,11 @@ public sealed class SettingsView : Grid
     {
         var stack = new StackPanel { Spacing = 0 };
         stack.Children.Add(SectionLabel("Theme"));
-        // System follows the computer's light or dark setting. Each tile is a small picture of the dashboard in that theme.
+        // Dark first, as it is the default, then Light, then System (which follows the computer's light or dark setting) and Sunset. Each tile is a small picture of the dashboard in that theme.
         // Four equal tiles that share the card's width up to their own 172, so with the card narrower they narrow too, side by side, instead of running past the card's edge.
         var tiles = new Avalonia.Controls.Primitives.UniformGrid { Rows = 1, Columns = 4, Margin = new Thickness(0, 6, 0, 10), HorizontalAlignment = HorizontalAlignment.Left, MaxWidth = 4 * 172 + 36 };
         var buttons = new Dictionary<string, Button>();
-        foreach (var (choice, words) in new[] { (ThemeLibrary.System, "System"), (AppThemes.Light.Name, "Light"), (AppThemes.Dark.Name, "Dark"), (AppThemes.Sun, "Sunset") })
+        foreach (var (choice, words) in new[] { (AppThemes.Dark.Name, "Dark"), (AppThemes.Light.Name, "Light"), (ThemeLibrary.System, "System"), (AppThemes.Sun, "Sunset") })
         {
             var tile = new Button { Name = "Theme" + words, BorderThickness = new Thickness(2), MaxWidth = 172, HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 0, 12, 0), HorizontalContentAlignment = HorizontalAlignment.Stretch }; tile.Classes.Add("choiceTile"); tile.Classes.Add("themeTile"); tile.Padding = new Thickness(8);
             var caption = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(2, 8, 0, 0) };
@@ -105,9 +105,6 @@ public sealed class SettingsView : Grid
         stack.Children.Add(tiles);
         stack.Children.Add(BuildSunOptions());
 
-        stack.Children.Add(Section("Window shadows", Choices(
-            Choice("ShadowsOn", "On", "Soft shadows under the pill and the dashboard", SettingsPictures.Shadows(true), () => model.Shadows, () => model.SetShadows(true)),
-            Choice("ShadowsOff", "Off", "Flat, with a hairline", SettingsPictures.Shadows(false), () => !model.Shadows, () => model.SetShadows(false)))));
         stack.Children.Add(Section("Hints", Toggle("Show tooltips", "Short hints on hover. With them off, budget percentages are still in Week overview.", "ShowTooltips", () => model.Tooltips, v => model.SetTooltips(v))));
         stack.Children.Add(Section("Timeline", Toggle("Display timeline", "Draw the timeline as the pill's display: lit blocks through the honeycomb and segment figures.", "DisplayTimeline", () => model.DisplayTimeline, v => model.SetDisplayTimeline(v))));
         stack.Children.Add(Section("Seasonal", Toggle("Seasonal decorations", "A wreath and lights round the pill at Christmas, 1 December to 6 January. Off by default.", "SeasonalDecorations", () => model.SeasonalDecorations, v => model.SetSeasonalDecorations(v))));

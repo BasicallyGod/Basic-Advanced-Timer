@@ -38,7 +38,6 @@ public sealed class ShadowClipTests
             if (left + right + top + bottom == 0) continue;
             foreach (var a in v.GetVisualAncestors().Where(Clips))
             {
-                if (v.GetVisualAncestors().OfType<Control>().Any(x => x.Name is "ShadowsOn" or "ShadowsOff")) continue; // A picture of a shadow, drawn inside its frame on purpose.
                 if (a is Border { Name: "DashboardSurface" }) continue; // The window's own edge: a card against it is meant to end there.
                 if (v.TranslatePoint(default, a) is not { } origin) continue;
                 var outer = new Rect(origin.X - left, origin.Y - top, v.Bounds.Width + left + right, v.Bounds.Height + top + bottom);

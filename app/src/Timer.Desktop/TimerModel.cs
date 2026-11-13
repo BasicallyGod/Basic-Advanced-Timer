@@ -276,11 +276,14 @@ public sealed class TimerModel : INotifyPropertyChanged
         Notes.NoteIdChanged += (previous, current) => { if (SelectedMeetingId == previous) SelectedMeetingId = current; if (SelectedNoteId == previous) SelectedNoteId = current; };
         Engine.CanReopen = row => !InGroup(row); // A block in a group is never taken out of it to be carried on.
         this.preferences = this.preferences with { Accounts = WithColours(this.preferences.Accounts) };
-        // A new timer starts with window shadows off (the choice stays in Settings). The shared package defaults them on, so the first run turns them off once and marks it,
-        // which leaves an existing timer, and a choice made since, alone.
-        if (store is not null && !this.preferences.SetupDone && this.preferences.Extras?.AppearanceLines.Contains(ShadowsDefaultLine) != true)
+        // Window shadows are gone as a choice: the pill and the dashboard are always drawn flat with a hairline. The shared package still defaults them on and an older
+        // timer may have them saved on, so they are turned off here; the next save writes that back, so the settings file says what the app does.
+        if (this.preferences.Shadows) this.preferences = this.preferences with { Shadows = false };
+        // A new timer starts in Dark. The shared package's default is System, so the first run of a database sets Dark once and marks it; a timer that already
+        // existed, and any theme chosen since, is left alone.
+        if (store is not null && !this.preferences.SetupDone && this.preferences.Extras?.AppearanceLines.Contains(DarkDefaultLine) != true)
         {
-            this.preferences = this.preferences with { Shadows = false }; SetAppearanceFlag("shadowsdefault=", "applied", true); Save();
+            this.preferences = this.preferences with { Theme = AppThemes.Dark.Name }; SetAppearanceFlag("darkdefault=", "applied", true); Save();
         }
         SelectedAccount = Engine.Active?.Account ?? this.preferences.Accounts.FirstOrDefault(a => !a.Hidden)?.Name;
         Engine.DayStart = DayStart; Notes.DayStart = DayStart; SelectedDate = TodayKey; lastToday = SelectedDate;
@@ -1013,7 +1016,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     public bool DashboardOnTop => preferences.DashboardOnTop;
     public void SetPillOnTop(bool on) { preferences = preferences with { PillOnTop = on }; Save(); Notify(PresentationChange); }
     public void SetDashboardOnTop(bool on) { preferences = preferences with { DashboardOnTop = on }; Save(); Notify(); }
-    private const string ShadowsDefaultLine = "shadowsdefault=applied";
+    private const string DarkDefaultLine = "darkdefault=applied";
     private void SetAppearanceFlag(string prefix, string? value, bool changed)
     {
         if (!changed) return;
@@ -1154,8 +1157,8 @@ public sealed class TimerModel : INotifyPropertyChanged
     public void SetDecimalHours(bool on) { if (preferences.DecimalHours == on) return; preferences = preferences with { DecimalHours = on }; Save(); Notify(); }
     public DayOfWeek WeekStartsOn => preferences.WeekStart;
     public void SetWeekStart(DayOfWeek day) { if (preferences.WeekStart == day) return; preferences = preferences with { WeekStart = day }; DropSelection(); TimelineOffset = null; Save(); Notify(); }
-    public bool Shadows => preferences.Shadows;
-    public void SetShadows(bool on) { preferences = preferences with { Shadows = on }; Save(); Notify(); }
+    /// <summary>Always false: window shadows are no longer a choice, and the pill and the dashboard are drawn flat with a hairline.</summary>
+    public bool Shadows => false;
     /// <summary>Whether the timer has a taskbar button. Turn it off to run from the notification area alone.</summary>
     public bool TaskbarButton => preferences.TaskbarButton;
     /// <summary>Set once the tray icon exists. Without a tray there would be no way back to a hidden timer, so the taskbar button is then always on.</summary>

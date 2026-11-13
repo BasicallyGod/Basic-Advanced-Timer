@@ -15,7 +15,6 @@ internal static class SettingsPictures
 {
     private static void Fill(Shape shape, string key) => shape.Bind(Shape.FillProperty, shape.GetResourceObservable(key));
     private static void Fill(Border border, string key) => border.Bind(Border.BackgroundProperty, border.GetResourceObservable(key));
-    private static void Shadow(Border border, string key) => border.Bind(Border.BoxShadowProperty, border.GetResourceObservable(key));
     private static void Edge(Border border, string key) { border.BorderThickness = new Thickness(1); border.Bind(Border.BorderBrushProperty, border.GetResourceObservable(key)); }
 
     // ---- a seven-segment digit, drawn from seven small bars (lit ones in the ink, the rest faint, as on the real display)
@@ -117,12 +116,4 @@ internal static class SettingsPictures
         return stack;
     }
 
-    /// <summary>A card standing off the page on a shadow, or lying flat with only a hairline.</summary>
-    public static Control Shadows(bool on)
-    {
-        var card = new Border { Width = 70, Height = 34, CornerRadius = new CornerRadius(11), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, IsHitTestVisible = false };
-        Fill(card, "Panel");
-        if (on) Shadow(card, "ShadowCard"); else Edge(card, "Line");
-        return card;
-    }
 }

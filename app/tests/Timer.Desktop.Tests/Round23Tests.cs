@@ -12,32 +12,33 @@ namespace Timer.Desktop.Tests;
 public sealed class Round23Tests
 {
     [Fact]
-    public void ANewDatabaseStartsWithWindowShadowsOffAndAChoiceMadeAfterwardsIsKept()
+    public void ANewDatabaseStartsInDarkWithNoShadows_AndAThemeChosenAfterwardsIsKept()
     {
-        var folder = Path.Combine(Path.GetTempPath(), "timer-shadows-" + Guid.NewGuid());
+        var folder = Path.Combine(Path.GetTempPath(), "timer-defaults-" + Guid.NewGuid());
         try
         {
             using (var store = new TimerStore(folder))
             {
                 var engine = new TrackingEngine(); var model = new TimerModel(engine, store.Load(engine), store);
-                Assert.False(model.Shadows); // The first run turns them off...
-                model.SetShadows(true); // ...and the setting still works.
+                Assert.Equal("Dark", model.Theme); Assert.False(model.Shadows); // The first run sets Dark...
+                model.SetTheme("Light"); // ...and a choice made afterwards...
             }
             using (var store = new TimerStore(folder))
             {
-                var engine = new TrackingEngine(); var model = new TimerModel(engine, store.Load(engine), store);
-                Assert.True(model.Shadows); // A choice is not undone the next time it opens.
+                var engine = new TrackingEngine(); var prefs = store.Load(engine); var model = new TimerModel(engine, prefs, store);
+                Assert.Equal("Light", model.Theme); // ...is not undone the next time it opens.
+                Assert.False(prefs.Shadows); // The file says shadows are off, as the app draws them.
             }
         }
         finally { try { Directory.Delete(folder, true); } catch (IOException) { } }
     }
 
     [Fact]
-    public void ADatabaseThatWasAlreadySetUpKeepsItsShadows()
+    public void ATimerThatWasAlreadySetUpKeepsItsThemeButLosesItsShadows()
     {
         var engine = new TrackingEngine();
-        var model = new TimerModel(engine, new StoreSettings(new() { new("Account one") }, false, "Light", DayOfWeek.Monday, SetupDone: true), null);
-        Assert.True(model.Shadows);
+        var model = new TimerModel(engine, new StoreSettings(new() { new("Account one") }, false, "Light", DayOfWeek.Monday, Shadows: true, SetupDone: true), null);
+        Assert.Equal("Light", model.Theme); Assert.False(model.Shadows);
     }
 
     [Fact]
