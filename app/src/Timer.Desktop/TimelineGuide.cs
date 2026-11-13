@@ -293,12 +293,31 @@ public sealed class VfdReadout
     public int Turn => turn;
     public VfdReadout(Canvas canvas, TimerModel model, double axisY)
     {
-        this.canvas = canvas; this.model = model; this.axisY = axisY;
+        this.canvas = canvas; this.model = model; this.axisY = axisY; ByCanvas.AddOrUpdate(canvas, this);
         // The readout and the hour digits cross-fade (none with less motion asked for), so the ruler changes its words rather than flicking between them.
         row.Opacity = track.Opacity = 0; Fades(row); Fades(track); canvas.Children.Add(row); canvas.Children.Add(track);
         foreach (var label in canvas.Children.OfType<Control>().Where(c => c.Name?.StartsWith("TimelineHour_", StringComparison.Ordinal) == true || c.Name?.StartsWith("TimelinePin_", StringComparison.Ordinal) == true)) Fades(label);
         timer.Tick += (_, _) => { if (showing is { Count: > 1 } notes) { turn = (turn + 1) % notes.Count; Draw(); } };
         canvas.DetachedFromVisualTree += (_, _) => timer.Stop();
+    }
+    // Which readout a timeline canvas carries, so the timeline's scroll can hand it the wheel first.
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Canvas, VfdReadout> ByCanvas = new();
+    /// <summary>The readout of the timeline that <paramref name="source"/> sits in, if it has one.</summary>
+    public static VfdReadout? Under(Visual? source)
+    {
+        for (var v = source; v is not null; v = v.GetVisualParent()) if (v is Canvas c && ByCanvas.TryGetValue(c, out var r)) return r;
+        return null;
+    }
+    /// <summary>
+    /// Steps through the reminders at the tag being read, one a notch (towards earlier on a notch up, as a list scrolls), wrapping at the ends; true when it took the
+    /// wheel, so the timeline does not slide under the pointer while it reads. The turn timer starts again, so the one stepped to is read for its full time.
+    /// </summary>
+    public bool Step(int direction)
+    {
+        if (showing is not { Count: > 1 } notes || direction == 0) return false;
+        turn = ((turn + Math.Sign(direction)) % notes.Count + notes.Count) % notes.Count; Draw();
+        if (timer.IsEnabled) { timer.Stop(); timer.Start(); }
+        return true;
     }
     /// <summary>How long the ruler takes to change its words.</summary>
     public const int FadeMilliseconds = 180;

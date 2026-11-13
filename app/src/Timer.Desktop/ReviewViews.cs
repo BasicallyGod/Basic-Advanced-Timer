@@ -642,6 +642,8 @@ public static partial class ReviewViews
         scroll.AddHandler(InputElement.PointerWheelChangedEvent, (_, e) =>
         {
             e.Handled = true;
+            // While the ruler reads a tag holding several reminders, the wheel steps through them and the day stays where it is.
+            if (!e.KeyModifiers.HasFlag(KeyModifiers.Control) && VfdReadout.Under(e.Source as Visual) is { } reading && reading.Step(e.Delta.Y > 0 ? -1 : e.Delta.Y < 0 ? 1 : 0)) return;
             // Ctrl and the wheel zoom about the pointer; the wheel alone slides along the day.
             if (e.KeyModifiers.HasFlag(KeyModifiers.Control)) model.ZoomTimeline(e.Delta.Y, e.GetPosition(scroll).X, scroll.Offset.X);
             else scroll.Offset = new Vector(Math.Clamp(scroll.Offset.X - (Math.Abs(e.Delta.X) > Math.Abs(e.Delta.Y) ? e.Delta.X : e.Delta.Y) * 60, 0, Math.Max(0, scroll.Extent.Width - scroll.Viewport.Width)), 0);

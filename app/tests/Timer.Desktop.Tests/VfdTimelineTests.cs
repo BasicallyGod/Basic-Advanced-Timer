@@ -79,7 +79,17 @@ public sealed class VfdTimelineTests
             Assert.InRange(pieces, 2, VfdReadout.TrackPieces);
             var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR");
             if (folder is not null) { Directory.CreateDirectory(folder); using var frame = window.CaptureRenderedFrame(); frame?.Save(Path.Combine(folder, "vfd-timeline-readout.png")); }
-            // Pressing a shared tag opens the reminder the ruler is reading, with no list.
+            // The wheel steps through the tag's reminders and the day does not slide under it; a notch up goes back, wrapping at the ends.
+            var scroll = window.GetVisualDescendants().OfType<ScrollViewer>().Single(c => c.Name == "TimelineScroll"); var offset = scroll.Offset.X;
+            string Count() => canvas.Children.OfType<StackPanel>().Single(c => c.Name == "TimelineReadout").Children.OfType<SegmentText>().First().Text;
+            var total = Count().Split('/')[1];
+            window.MouseWheel(at, new Vector(0, -1)); Settle(window);
+            Assert.Equal("2/" + total, Count()); Assert.Equal(offset, scroll.Offset.X);
+            window.MouseWheel(at, new Vector(0, 1)); window.MouseWheel(at, new Vector(0, 1)); Settle(window);
+            Assert.Equal(total + "/" + total, Count()); Assert.Equal(offset, scroll.Offset.X);
+            window.MouseWheel(at, new Vector(0, -1)); Settle(window);
+            Assert.Equal("1/" + total, Count());
+                        // Pressing a shared tag opens the reminder the ruler is reading, with no list.
             window.MouseDown(at, MouseButton.Left); window.MouseUp(at, MouseButton.Left); Settle(window);
             Assert.DoesNotContain(canvas.Children.OfType<Border>(), b => b.Name == "TimelineReminderList");
             Assert.NotNull(model.SelectedNoteId);

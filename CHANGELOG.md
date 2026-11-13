@@ -10,6 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 |---|---|---|
+| Display timeline: while the ruler reads a reminder tag holding several, the mouse wheel steps through them instead of sliding the day (Ctrl and the wheel still zoom). | pending | `VfdTimelineTests`. |
 | Display timeline, Windows feedback: the honeycomb now covers only the lit fills, so segment words, figures and hours are whole and readable (the mesh over everything broke them up); the ruler's readout and the hour digits cross-fade instead of swapping; pressing a shared reminder tag opens the reminder the ruler is reading, with no list. | [2a93600](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/2a93600) | `VfdTimelineTests`. |
 
 ## 12 November 2026
