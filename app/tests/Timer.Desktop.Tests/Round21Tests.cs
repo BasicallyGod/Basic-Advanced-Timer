@@ -55,8 +55,10 @@ public sealed class Round21Tests
         try
         {
             var id = model.Notes.All.Single().Id; model.SelectNote(id); Settle(window); Click(window, "DetailsNoteReminder");
-            Assert.Equal("31", Find<TextBox>(window, "ReminderMinute").Text); Assert.Equal("14", Find<TextBox>(window, "ReminderHour").Text); // Not 30.
-            Assert.Contains("14:31", Find<TextBlock>(window, "ReminderSummary").Text);
+            var strip = Find<ReminderPickerCard>(window, "ReminderPicker").Picker.Strip;
+            Assert.Equal(Day.AddHours(14).AddMinutes(31), strip.Pin); // Not 30: opening the card leaves the reminder's own minute alone.
+            strip.PinAt(strip.Pin.AddMinutes(5)); // A move lands on the five minutes (the keys are covered in RescheduleTests; headless, the dashboard's own arrow keys come first).
+            Assert.Equal(Day.AddHours(14).AddMinutes(35), strip.Pin);
         }
         finally { window.Close(); }
     }
@@ -88,7 +90,7 @@ public sealed class Round21Tests
             Click(window, "CardKindNotes");
             Find<TextBox>(window, "NoteField").Text = "#Accountt"; Settle(window); Click(window, "Suggest_Accounttwo");
             Find<TextBox>(window, "NoteField").Text = "!! What if we put a really long reminder in here that ends up breaking the limit"; Settle(window);
-            Click(window, "FormBell"); Click(window, "ReminderSet");
+            Click(window, "FormBell"); Find<ReminderPickerCard>(window, "ReminderPicker").Picker.Strip.Commit(); Settle(window);
             var frame = Find<TextBox>(window, "NoteField").GetVisualAncestors().OfType<Border>().First(b => b.Classes.Contains("composer"));
             var field = Find<TextBox>(window, "NoteField"); var account = Find<Button>(window, "FormAccountChip"); var reminder = Find<Button>(window, "FormReminder");
             Rect In(Control c) => new(c.TranslatePoint(new Point(0, 0), window)!.Value, c.Bounds.Size);

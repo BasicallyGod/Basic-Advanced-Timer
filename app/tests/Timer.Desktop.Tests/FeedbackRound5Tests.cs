@@ -112,18 +112,4 @@ public sealed class FeedbackRound5Tests
         finally { window.Close(); }
     }
 
-    [AvaloniaFact]
-    public void ThePopupHasNoDayShortcutsAndItsWheelColumnsSitUnderTheirNumbers()
-    {
-        var model = Model(out _); var window = new DashboardWindow(model); window.Show(); Settle(window);
-        try
-        {
-            Click(window, "CardKindNotes"); Click(window, "FormBell");
-            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => b.Name?.StartsWith("ReminderDay") == true);
-            Click(window, "ReminderWheelToggle");
-            var box = Find<TextBox>(window, "ReminderHour"); Assert.True(box.FontSize <= 14);
-            Assert.Equal(54, Find<Button>(window, "WheelHourChosen").Bounds.Width); Assert.Equal(54, Find<Button>(window, "WheelMinuteChosen").Bounds.Width); // The two columns are one width.
-        }
-        finally { window.Close(); }
-    }
 }

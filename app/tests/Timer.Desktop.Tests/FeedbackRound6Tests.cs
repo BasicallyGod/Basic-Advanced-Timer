@@ -84,17 +84,18 @@ public sealed class FeedbackRound6Tests
     }
 
     [AvaloniaFact]
-    public void TheReminderPopupIsIosRowsWithAThreeRowWheelUnderTheTimeRow()
+    public void TheReminderCardIsTheWeeksDaysOverAStripOfTheDayWithNoWheelOrSet()
     {
         var model = Model(false); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
             Click(window, "CardKindNotes"); Click(window, "FormBell");
-            Assert.NotNull(Find<Button>(window, "ReminderDateField")); Assert.NotNull(Find<StackPanel>(window, "ReminderMonthPanel"));
-            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => b.Name?.StartsWith("ReminderTime") == true); // No quick times.
-            Assert.False(Find<Border>(window, "TimeWheel").IsVisible); Click(window, "ReminderWheelToggle"); Assert.True(Find<Border>(window, "TimeWheel").IsVisible);
-            foreach (var name in new[] { "WheelHourBefore", "WheelHourChosen", "WheelHourAfter", "WheelMinuteBefore", "WheelMinuteChosen", "WheelMinuteAfter" }) Assert.NotNull(Find<Button>(window, name));
-            Assert.Equal(ReminderPopup.Wide, Find<ReminderPopup>(window, "ReminderPopup").Width);
+            // The same days and strip as Reschedule in the alerts card: no month, time boxes, wheel or Set, and no Remove while there is nothing to remove.
+            var card = Find<ReminderPickerCard>(window, "ReminderPicker"); Assert.Equal(ReminderPickerCard.CardWidth, card.Width);
+            Assert.Equal(7, card.GetVisualDescendants().OfType<Button>().Count(b => b.Name?.StartsWith("RescheduleDay_") == true));
+            Assert.NotNull(Find<RescheduleStrip>(window, "RescheduleStrip"));
+            foreach (var gone in new[] { "ReminderMonthPanel", "ReminderHour", "ReminderWheelToggle", "TimeWheel", "ReminderSet", "ReminderRemove" }) Assert.DoesNotContain(window.GetVisualDescendants().OfType<Control>(), c => c.Name == gone);
+            Assert.NotNull(Find<Button>(window, "ReminderCancel"));
         }
         finally { window.Close(); }
     }

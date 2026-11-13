@@ -99,7 +99,7 @@ public sealed class ReminderPopup : Border
     /// Sets the card in a pop-up with room round it for its whole shadow, and lifts the pop-up by that room so the card still sits where it did. A pop-up's window
     /// clips anything drawn past its edge, so a shadow with no room showed as flat grey corners beyond the card's rounded ones.
     /// </summary>
-    public static ReminderPopup Roomy(ReminderPopup card, Avalonia.Controls.Primitives.Popup host)
+    public static T Roomy<T>(T card, Avalonia.Controls.Primitives.Popup host) where T : Border
     {
         card.Margin = HangingCard.Room; card.BoxShadow = HangingCard.Shadow;
         host.VerticalOffset = -HangingCard.Room.Top; host.HorizontalOffset = 0;

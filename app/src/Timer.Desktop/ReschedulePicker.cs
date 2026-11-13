@@ -115,13 +115,14 @@ public sealed class RescheduleStrip : Control
         from = begins.AddHours(8); until = begins.AddHours(18);
         if (plan.Working) { if (plan.Start < from) from = Hour(plan.Start); if (plan.End > until) until = Hour(plan.End, up: true); }
         if (from < begins) from = begins; if (until > begins.AddDays(1)) until = begins.AddDays(1);
-        Pin = Clamp(pin); Describe(); InvalidateVisual();
+        Pin = Clamp(pin, snap: false); Describe(); InvalidateVisual();
     }
     private static DateTime Hour(DateTime t, bool up = false) { var h = new DateTime(t.Year, t.Month, t.Day, t.Hour, 0, 0); return up && h < t ? h.AddHours(1) : h; }
     private DateTime Floor => model.Engine.Now > from ? ReschedulePicker.RoundUp(model.Engine.Now) : from;
-    private DateTime Clamp(DateTime t)
+    // A pin the person moves lands on the five minutes; one the card opens on keeps a reminder's own minute (14:31 stays 14:31), as the old card did.
+    private DateTime Clamp(DateTime t, bool snap = true)
     {
-        var whole = new DateTime(t.Year, t.Month, t.Day, t.Hour, t.Minute, 0); whole = whole.AddMinutes(Math.Round(whole.Minute / 5.0) * 5 - whole.Minute);
+        var whole = new DateTime(t.Year, t.Month, t.Day, t.Hour, t.Minute, 0); if (snap) whole = whole.AddMinutes(Math.Round(whole.Minute / 5.0) * 5 - whole.Minute);
         if (whole > until) whole = until; if (whole < Floor) whole = Floor; return whole;
     }
     /// <summary>Whether the pin can be anywhere on this day (false for a day already over).</summary>
@@ -133,6 +134,8 @@ public sealed class RescheduleStrip : Control
 
     /// <summary>Moves the pin to the time under <paramref name="x"/>; used by the pointer and by tests.</summary>
     public void MoveTo(double x) { Pin = At(x); Describe(); InvalidateVisual(); }
+    /// <summary>Puts the pin at <paramref name="t"/> on the day showing, to the five minutes; used by tests in place of a drag.</summary>
+    public void PinAt(DateTime t) { Pin = Clamp(t); Describe(); InvalidateVisual(); }
     /// <summary>Sets the reminder to where the pin is.</summary>
     public void Commit() { if (Open) set(Pin); }
 
@@ -209,5 +212,38 @@ public sealed class RescheduleStrip : Control
         var cw = chip.Width + 12; var cx = Math.Clamp(px - cw / 2, 2, w - cw - 2);
         context.DrawRectangle(new SolidColorBrush(C("Accent", "#D3B0EA")), null, new Rect(cx, 1, cw, 15), 6, 6);
         context.DrawText(chip, new Point(cx + 6, 1 + (15 - chip.Height) / 2));
+    }
+}
+
+/// <summary>
+/// The card a reminder is set in everywhere it hangs under a button (Details, the Notes card's bell, the Notes page): its heading and what it is for, the same days and
+/// strip as Reschedule, and under them Remove (only while there is a reminder to take off) and Cancel. Letting go of the pin is the answer, so there is no Set; the
+/// caller decides whether that saves at once (Details) or is kept for a note still being typed (the add lines). The meeting's day keeps <see cref="ReminderPopup"/>'s
+/// day-only month, since it has no time to pick.
+/// </summary>
+public sealed class ReminderPickerCard : Border
+{
+    public const double CardWidth = 300;
+    /// <summary>The days and the strip.</summary>
+    public ReschedulePicker Picker { get; }
+
+    public ReminderPickerCard(TimerModel model, string forText, DateTime? current, Action<DateTime?> answer, Action close)
+    {
+        Name = "ReminderPicker"; CornerRadius = new CornerRadius(18); BorderThickness = new Thickness(1); Padding = new Thickness(12); Width = CardWidth;
+        Classes.Add("surface"); Classes.Add("flyoutCard"); BoxShadow = BoxShadows.Parse("0 10 28 0 #29141E46");
+        var column = new StackPanel { Spacing = 10 };
+        var title = Ui.Grid("Auto,*,Auto"); title.ColumnSpacing = 8;
+        Ui.Put(title, new TextBlock { Text = "Reminder", FontSize = 13, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+        var who = new TextBlock { Text = forText, FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center }; who.Classes.Add("muted"); Ui.Put(title, who, 1);
+        var cross = Ui.IconButton(IconKind.Close, "Close", "ReminderClose", close); cross.Width = 24; cross.Height = 24; Ui.Put(title, cross, 2);
+        Picker = new ReschedulePicker(model, current, at => answer(at));
+        // Remove only when there is something to remove, at the left; Cancel at the right, where Reschedule's is.
+        var foot = Ui.Grid("Auto,*,Auto");
+        if (current is not null) { var remove = Ui.Ctl("ReminderRemove", "Remove", null, "Remove", () => answer(null), small: true); remove.Padding = new Thickness(14, 0); Ui.Put(foot, remove); }
+        var cancel = Ui.Button("", close, "ReminderCancel"); cancel.Classes.Add("pillBare"); cancel.Padding = new Thickness(4, 2);
+        var words = NoteParts.Ink("Cancel", "Muted", 12.5); words.FontWeight = FontWeight.SemiBold; cancel.Content = words; cancel.VerticalAlignment = VerticalAlignment.Center;
+        Avalonia.Automation.AutomationProperties.SetName(cancel, "Cancel"); Ui.Put(foot, cancel, 2);
+        column.Children.Add(title); column.Children.Add(Picker); column.Children.Add(foot);
+        Child = column;
     }
 }

@@ -32,7 +32,7 @@ public sealed class Round20Tests
             Click(window, "CardKindNotes");
             Find<TextBox>(window, "NoteField").Text = "Follow #Accountt"; Settle(window);
             Click(window, "Suggest_Accounttwo");
-            Click(window, "FormBell"); Click(window, "ReminderSet");
+            Click(window, "FormBell"); Find<ReminderPickerCard>(window, "ReminderPicker").Picker.Strip.Commit(); Settle(window);
             Find<TextBox>(window, "NoteField").Text = "Follow up on the new brief"; Settle(window);
             var field = Find<TextBox>(window, "NoteField"); var account = Find<Button>(window, "FormAccountChip"); var reminder = Find<Button>(window, "FormReminder");
             Rect In(Control c) => new(c.TranslatePoint(new Point(0, 0), window)!.Value, c.Bounds.Size);
