@@ -71,13 +71,16 @@ public sealed class SettingsRedesignTests
     }
 
     [AvaloniaFact]
-    public void WindowShadowsAreTwoPicturesAndTooltipsAreAPlainTick()
+    public void ThemesRunDarkLightSystemSunset_ThereIsNoWindowShadowsChoice_AndTooltipsAreAPlainTick()
     {
         var (window, view, model) = Open();
         try
         {
-            Press(view, "ShadowsOff"); Assert.False(model.Shadows); Assert.Contains("selected", Find<Button>(view, "ShadowsOff").Classes);
-            Press(view, "ShadowsOn"); Assert.True(model.Shadows); Assert.Contains("selected", Find<Button>(view, "ShadowsOn").Classes);
+            // Dark first, as it is the default for a new timer, then Light, System and Sunset.
+            var themes = view.GetVisualDescendants().OfType<Button>().Where(b => b.Name is "ThemeDark" or "ThemeLight" or "ThemeSystem" or "ThemeSunset").Select(b => b.Name).ToList();
+            Assert.Equal(new[] { "ThemeDark", "ThemeLight", "ThemeSystem", "ThemeSunset" }, themes);
+            Assert.DoesNotContain(view.GetVisualDescendants().OfType<Button>(), b => b.Name is "ShadowsOn" or "ShadowsOff");
+            Assert.False(model.Shadows);
             Assert.NotNull(Find<CheckBox>(view, "ShowTooltips"));
         }
         finally { window.Close(); }
