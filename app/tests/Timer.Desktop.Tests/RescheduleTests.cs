@@ -91,6 +91,26 @@ public sealed class RescheduleTests
     }
 
     [AvaloniaFact]
+    public void APinTheClockHasPassedIsNotSaved_ItMovesOnInstead()
+    {
+        // The card left open while the minute turns: the pin was fine when placed, but committing it now would set a reminder in the past.
+        var now = DemoNow; var model = TimerModel.CreateDemo(() => now); model.CompleteSetup();
+        var saved = new List<DateTime>();
+        var picker = new ReschedulePicker(model, null, at => saved.Add(at));
+        var window = new Window { Width = 360, Height = 300, Content = picker }; window.Show(); Settle(window);
+        try
+        {
+            var strip = picker.Strip; strip.PinAt(now); Assert.Equal(now, strip.Pin); // 14:15, on the minute: allowed while it is still 14:15.
+            now = DemoNow.AddMinutes(1);
+            strip.Commit();
+            Assert.Empty(saved); // Not saved in the past...
+            Assert.Equal(DemoNow.AddMinutes(5), strip.Pin); // ...the pin moved on to the next five minutes instead...
+            strip.Commit(); Assert.Equal(new[] { DemoNow.AddMinutes(5) }, saved); // ...and that can be set.
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public void TheWeekKeysMoveAWeekAndCancelOrEscapeGiveTheButtonsBack()
     {
         var (window, card, model, id) = Open();

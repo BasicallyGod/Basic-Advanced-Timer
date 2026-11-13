@@ -137,7 +137,13 @@ public sealed class RescheduleStrip : Control
     /// <summary>Puts the pin at <paramref name="t"/> on the day showing, to the five minutes; used by tests in place of a drag.</summary>
     public void PinAt(DateTime t) { Pin = Clamp(t); Describe(); InvalidateVisual(); }
     /// <summary>Sets the reminder to where the pin is.</summary>
-    public void Commit() { if (Open) set(Pin); }
+    public void Commit()
+    {
+        // The card can stand open while the clock passes the pin (14:30 chosen, Enter pressed at 14:31), so the pin is checked against the clock as it is now, not as it
+        // was when it was placed. One left behind moves to the earliest time it can be and nothing is saved, so what is set is always what the strip shows.
+        if (!Open || Pin < model.Engine.Now) { if (Open) Pin = Clamp(Pin); Describe(); InvalidateVisual(); return; }
+        set(Pin);
+    }
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
