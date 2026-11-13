@@ -10,6 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 |---|---|---|
+| Reminder picker reaches any time of day: the strip shows the whole day with the working hours shaded, a press zooms it to the hour round the pin (five-minute ticks) while you drag, holding near an end pans, and letting go sets the time and shows the whole day again. Page Up and Page Down move an hour. | pending | `RescheduleTests`. |
 | Reminder picker: a pin the clock has passed while the card stood open is no longer saved in the past; it moves on to the next five minutes and waits to be set. | pending | `RescheduleTests`. |
 | Window shadows are no longer a choice: the pill and dashboard are always flat with a hairline, and a timer saved with shadows on is turned off. A new timer starts in Dark, and the theme pictures run Dark, Light, System, Sunset. | pending | `Round23Tests`, `SettingsRedesignTests`, `ShellTests`. |
 | Every reminder is set with the same days and strip: Details' Reminder, the Notes card's bell and the Notes page's bell and row reminder hang it in a card with Remove and Cancel. The calendar, time boxes, wheel and Set are gone from reminders; a meeting's day keeps its month. A reminder's own minute is kept until the pin is moved. | pending | `FeedbackRound6Tests`, `NotesTests`, `Round21Tests`. |

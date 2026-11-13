@@ -84,8 +84,56 @@ public sealed class RescheduleTests
             strip.MoveTo(0); Assert.True(strip.Pin >= model.Engine.Now, $"the pin is at {strip.Pin} before now"); Assert.Equal(0, strip.Pin.Minute % 5);
             var before = strip.Pin; strip.Focus();
             strip.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Right }); Assert.Equal(before.AddMinutes(5), strip.Pin);
+            strip.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.PageDown }); Assert.Equal(before.AddMinutes(65), strip.Pin); // Page keys move an hour.
+            strip.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.PageUp }); Assert.Equal(before.AddMinutes(5), strip.Pin);
             strip.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter }); Settle(window);
             Assert.Equal(before.AddMinutes(5), NotesModel.ReminderOf(model.Notes.Find(id)!));
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheStripIsTheWholeDay_APressZoomsToTheHourRoundIt_AndLettingGoSetsTheTimeAndShowsTheWholeDayAgain()
+    {
+        var (window, card, model, id) = Open();
+        try
+        {
+            var strip = card.Picker!.Strip; var day = model.TodayKey;
+            Assert.Equal(model.DayBegins(day), strip.From); Assert.Equal(model.DayBegins(day).AddDays(1), strip.Until); Assert.Null(strip.ZoomFrom); // At rest, 00:00 to 24:00.
+            var width = strip.Bounds.Width; var evening = day.AddHours(20).AddMinutes(30);
+            // Pressing where 20:30 falls on the whole day puts the pin there and zooms to the hour round it, the pin still under the pointer.
+            var x = (evening - strip.From).TotalMinutes / 1440 * width;
+            strip.Hold(x);
+            Assert.Equal(evening, strip.Pin);
+            var zoom = Assert.IsType<DateTime>(strip.ZoomFrom); Assert.InRange(strip.Pin, zoom, zoom.AddMinutes(RescheduleStrip.ZoomMinutes));
+            Assert.Equal((evening - zoom).TotalMinutes / RescheduleStrip.ZoomMinutes, x / width, 2);
+            // Zoomed, a twelfth of the strip is five minutes, so the exact minute is easy to reach.
+            strip.MoveTo(x + width / 12); Assert.Equal(evening.AddMinutes(5), strip.Pin);
+            // Holding near the right end pans the hour along the day.
+            strip.PanAt(width * .98); Assert.Equal(zoom.AddMinutes(2), strip.ZoomFrom);
+            var chosen = strip.Pin;
+            strip.Release(); Settle(window);
+            Assert.Null(strip.ZoomFrom); // Back to the whole day...
+            Assert.Equal(chosen, NotesModel.ReminderOf(model.Notes.Find(id)!)); // ...and the time is set, here in the evening, outside the working day.
+            Assert.True(chosen.Hour >= 20);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void ThePointerPressesDragsAndLetsGo_ThroughTheSameSteps()
+    {
+        var (window, card, model, id) = Open();
+        try
+        {
+            var strip = card.Picker!.Strip; var day = model.TodayKey; var width = strip.Bounds.Width;
+            var at = strip.TranslatePoint(new Point((day.AddHours(21) - strip.From).TotalMinutes / 1440 * width, strip.Bounds.Height / 2), window)!.Value;
+            window.MouseDown(at, MouseButton.Left); Settle(window);
+            Assert.NotNull(strip.ZoomFrom); Assert.Equal(day.AddHours(21), strip.Pin);
+            // Pressed at 21:00, seven-eighths of the way along, so a twelfth of the strip further (five minutes) stays on it.
+            window.MouseMove(at - new Point(width / 12, 0)); Settle(window); Assert.Equal(day.AddHours(20).AddMinutes(55), strip.Pin);
+            window.MouseUp(at - new Point(width / 12, 0), MouseButton.Left); Settle(window);
+            Assert.Null(strip.ZoomFrom); Assert.Equal(day.AddHours(20).AddMinutes(55), NotesModel.ReminderOf(model.Notes.Find(id)!));
         }
         finally { window.Close(); }
     }
