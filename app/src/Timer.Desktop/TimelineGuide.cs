@@ -51,7 +51,7 @@ public static class TimelineGuide
         double X(DateTime time) => gutter + (time - day).TotalHours * pixelsPerHour;
         var pins = new List<Pin>();
         // The display look: reminders are lit tags above the line among the hour digits, and the reminder pointed at reads along the ruler (see VfdReadout).
-        var vfd = model.DisplayTimeline; Action<IReadOnlyList<DayNote>, double>? VfdList = null;
+        var vfd = model.DisplayTimeline; Func<IReadOnlyList<DayNote>, long>? VfdShowing = null;
         bool Late(Pin pin) => pin.Notes.Any(model.Notes.IsLate);
         string ColourKey(Pin pin) => Late(pin) ? "Overtime" : "AccentLit";
         // Notes within a pin's width of each other are one pin, so none is hidden behind another.
@@ -104,8 +104,8 @@ public static class TimelineGuide
             visual.PointerPressed += (_, e) =>
             {
                 if (!e.GetCurrentPoint(visual).Properties.IsLeftButtonPressed) return;
-                // On the display a tag holding several reminders lists them; one opens straight in Details, as it always has.
-                if (vfd && members.Count > 1) VfdList?.Invoke(members, x); else model.Notes.RequestEditNote(id);
+                // A press opens the reminder in Details; on the display, for a tag holding several, it is the one the ruler is reading at that moment.
+                model.Notes.RequestEditNote(vfd && members.Count > 1 && VfdShowing is { } pick ? pick(members) : id);
                 e.Handled = true;
             };
             canvas.Children.Add(visual);
@@ -154,7 +154,7 @@ public static class TimelineGuide
         Paint(noteCard, Border.BackgroundProperty, "Panel"); Paint(noteCard, Border.BorderBrushProperty, "Line");
         canvas.Children.Add(line); canvas.Children.Add(guideDot); canvas.Children.Add(chip); canvas.Children.Add(noteCard);
         var readout = vfd ? new VfdReadout(canvas, model, axisY) : null;
-        if (vfd) VfdList = (notes, x) => readout!.ShowList(notes, x);
+        if (vfd) VfdShowing = notes => readout!.Showing(notes);
         // What the line crosses among the blocks is ringed by the block's own shadow, the way a selected block is, so the ring is always the same width all round (a ring drawn as a
         // separate shape was sometimes a pixel or two off). A selected or recording block already has its own ring and is left alone.
         var ringed = new Dictionary<Control, (BoxShadows Shadow, int Z)>();
@@ -279,7 +279,7 @@ public static class TimelineGuide
 /// <summary>
 /// On the display look, the reminder the pointer is on reads along the ruler: the hour digits switch off and its time, words and how soon take their row, running away
 /// from its tag on the left half of what shows and up to it on the right half. Several reminders at one tag take turns every <see cref="TurnSeconds"/>, with which of how
-/// many before them and a track under that count, at most <see cref="TrackPieces"/> pieces lit in proportion. Pressing such a tag drops a list of them all.
+/// many before them and a track under that count, at most <see cref="TrackPieces"/> pieces lit in proportion. Pressing such a tag opens the one it is reading.
 /// </summary>
 public sealed class VfdReadout
 {
@@ -287,20 +287,47 @@ public sealed class VfdReadout
     private readonly Canvas canvas; private readonly TimerModel model; private readonly double axisY;
     private readonly StackPanel row = new() { Name = "TimelineReadout", Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 7, IsHitTestVisible = false, ZIndex = 9 };
     private readonly Canvas track = new() { Name = "TimelineReadoutTrack", IsHitTestVisible = false, ZIndex = 9 };
-    private Border? list;
     private IReadOnlyList<DayNote>? showing; private int turn; private double at;
     private readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromSeconds(TurnSeconds) };
     /// <summary>Which reminder of the tag is showing, for tests.</summary>
     public int Turn => turn;
     public VfdReadout(Canvas canvas, TimerModel model, double axisY)
     {
-        this.canvas = canvas; this.model = model; this.axisY = axisY;
-        row.IsVisible = track.IsVisible = false; canvas.Children.Add(row); canvas.Children.Add(track);
+        this.canvas = canvas; this.model = model; this.axisY = axisY; ByCanvas.AddOrUpdate(canvas, this);
+        // The readout and the hour digits cross-fade (none with less motion asked for), so the ruler changes its words rather than flicking between them.
+        row.Opacity = track.Opacity = 0; Fades(row); Fades(track); canvas.Children.Add(row); canvas.Children.Add(track);
+        foreach (var label in canvas.Children.OfType<Control>().Where(c => c.Name?.StartsWith("TimelineHour_", StringComparison.Ordinal) == true || c.Name?.StartsWith("TimelinePin_", StringComparison.Ordinal) == true)) Fades(label);
         timer.Tick += (_, _) => { if (showing is { Count: > 1 } notes) { turn = (turn + 1) % notes.Count; Draw(); } };
         canvas.DetachedFromVisualTree += (_, _) => timer.Stop();
-        // A press anywhere else on the timeline puts a list away.
-        canvas.AddHandler(InputElement.PointerPressedEvent, (_, e) => { if (list is not null && e.Source is Visual v && !v.GetSelfAndVisualAncestors().Contains(list)) CloseList(); }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
     }
+    // Which readout a timeline canvas carries, so the timeline's scroll can hand it the wheel first.
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Canvas, VfdReadout> ByCanvas = new();
+    /// <summary>The readout of the timeline that <paramref name="source"/> sits in, if it has one.</summary>
+    public static VfdReadout? Under(Visual? source)
+    {
+        for (var v = source; v is not null; v = v.GetVisualParent()) if (v is Canvas c && ByCanvas.TryGetValue(c, out var r)) return r;
+        return null;
+    }
+    /// <summary>
+    /// Steps through the reminders at the tag being read, one a notch (towards earlier on a notch up, as a list scrolls), wrapping at the ends; true when it took the
+    /// wheel, so the timeline does not slide under the pointer while it reads. The turn timer starts again, so the one stepped to is read for its full time.
+    /// </summary>
+    public bool Step(int direction)
+    {
+        if (showing is not { Count: > 1 } notes || direction == 0) return false;
+        turn = ((turn + Math.Sign(direction)) % notes.Count + notes.Count) % notes.Count; Draw();
+        if (timer.IsEnabled) { timer.Stop(); timer.Start(); }
+        return true;
+    }
+    /// <summary>How long the ruler takes to change its words.</summary>
+    public const int FadeMilliseconds = 180;
+    private static void Fades(Control control)
+    {
+        if (Motion.Reduced) return;
+        control.Transitions = new Avalonia.Animation.Transitions { new Avalonia.Animation.DoubleTransition { Property = Visual.OpacityProperty, Duration = TimeSpan.FromMilliseconds(FadeMilliseconds), Easing = new Avalonia.Animation.Easings.CubicEaseOut() } };
+    }
+    /// <summary>The id of the reminder the ruler is reading, when it is reading this tag's; else the tag's first.</summary>
+    public long Showing(IReadOnlyList<DayNote> notes) => ReferenceEquals(notes, showing) ? notes[turn].Id : notes[0].Id;
     private Color Key(string key) => Color.Parse(model.GlassTheme.Colour(key));
     // The other tags step back while one reads along the ruler, so its words never sit on top of them.
     private void OtherTags(bool dim) { foreach (var pin in canvas.Children.OfType<Canvas>().Where(c => c.Name?.StartsWith("TimelinePin_", StringComparison.Ordinal) == true)) pin.Opacity = dim && Math.Abs(Canvas.GetLeft(pin) + 10 - at) > 1 ? .15 : 1; }
@@ -308,7 +335,7 @@ public sealed class VfdReadout
     /// <summary>Shows the reminders at a tag (or puts the readout away with null).</summary>
     public void Show(IReadOnlyList<DayNote>? notes, double x)
     {
-        if (notes is null) { if (showing is null) return; showing = null; timer.Stop(); row.IsVisible = track.IsVisible = false; HourLabels(true); OtherTags(false); return; }
+        if (notes is null) { if (showing is null) return; showing = null; timer.Stop(); row.Opacity = track.Opacity = 0; HourLabels(true); OtherTags(false); return; }
         if (ReferenceEquals(notes, showing)) return;
         showing = notes; turn = 0; at = x; HourLabels(false); OtherTags(true); Draw();
         timer.Stop(); if (notes.Count > 1 && !Motion.Reduced) timer.Start();
@@ -340,9 +367,9 @@ public sealed class VfdReadout
             row.Measure(Size.Infinity); width = row.DesiredSize.Width;
         }
         var x = toRight ? at + 14 : at - 14 - width;
-        Canvas.SetLeft(row, x); Canvas.SetTop(row, 5); row.IsVisible = true;
+        Canvas.SetLeft(row, x); Canvas.SetTop(row, 5); row.Opacity = 1;
         // The track sits exactly under the count: one piece a reminder up to ten, then ten pieces each standing for a share, lit up to the one showing.
-        track.Children.Clear(); track.IsVisible = count is not null;
+        track.Children.Clear(); track.Opacity = count is not null ? 1 : 0;
         if (count is not null)
         {
             var pieces = Math.Min(TrackPieces, notes.Count); var lit = (int)Math.Ceiling((turn + 1) / (double)notes.Count * pieces);
@@ -363,33 +390,4 @@ public sealed class VfdReadout
     /// <summary>The pieces of the track, lit or not, for tests.</summary>
     public IReadOnlyList<bool> Pieces(Color lit) => track.Children.OfType<Border>().Select(b => b.Background is SolidColorBrush s && s.Color == lit).ToList();
 
-    /// <summary>Drops a dashed list of every reminder at a tag under it, numbered; pressing one opens it in Details.</summary>
-    public void ShowList(IReadOnlyList<DayNote> notes, double x)
-    {
-        CloseList();
-        var ink = Key("Ink"); var quiet = Key("Muted"); var accent = Color.Parse(ThemeEngine.LitOf(model.GlassTheme));
-        var perColumn = (int)Math.Ceiling(notes.Count / 2.0); var columns = notes.Count > 4 ? 2 : 1; if (columns == 1) perColumn = notes.Count;
-        var grid = new Grid { Margin = new Thickness(10, 8), ColumnSpacing = 18, RowSpacing = 4 };
-        for (var c = 0; c < columns; c++) grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
-        for (var r = 0; r < perColumn; r++) grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-        for (var i = 0; i < notes.Count; i++)
-        {
-            var note = notes[i]; var id = note.Id;
-            var line = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 6 };
-            line.Children.Add(new SegmentText((i + 1).ToString(System.Globalization.CultureInfo.InvariantCulture).PadLeft(2), 8, quiet));
-            var words = LowerDisplay.Drawable(model.Notes.Text(note)); line.Children.Add(new SegmentText(words.Length > 26 ? words[..26] : words, 8, ink));
-            var press = new Border { Name = "TimelineListRow_" + i, Child = line, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Padding = new Thickness(2) };
-            press.PointerPressed += (_, e) => { if (e.GetCurrentPoint(press).Properties.IsLeftButtonPressed) { CloseList(); model.Notes.RequestEditNote(id); e.Handled = true; } };
-            Grid.SetColumn(press, i / perColumn); Grid.SetRow(press, i % perColumn); grid.Children.Add(press);
-        }
-        // Dashed and filled dark, so it is plainly a list and never a block or a meeting.
-        var outline = new Rectangle { Stroke = new SolidColorBrush(accent), StrokeThickness = 1.2, StrokeDashArray = new Avalonia.Collections.AvaloniaList<double> { 3.5, 2.5 }, RadiusX = 6, RadiusY = 6, IsHitTestVisible = false };
-        var body = new Grid { Children = { outline, grid } };
-        list = new Border { Name = "TimelineReminderList", Child = body, Background = new SolidColorBrush(Color.Parse("#0B0E13")), CornerRadius = new CornerRadius(6), ZIndex = 39 };
-        list.Measure(Size.Infinity);
-        var (left, right) = Visible(); var lx = Math.Clamp(x - 8, left + 4, Math.Max(left + 4, right - 4 - list.DesiredSize.Width));
-        Canvas.SetLeft(list, lx); Canvas.SetTop(list, axisY + 8); canvas.Children.Add(list);
-    }
-    public bool ListOpen => list is not null;
-    public void CloseList() { if (list is null) return; canvas.Children.Remove(list); list = null; }
 }

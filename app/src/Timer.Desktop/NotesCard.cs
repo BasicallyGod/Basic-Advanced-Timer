@@ -300,7 +300,7 @@ public sealed class NotesCard : Border
     {
         scope = null;
         var label = string.IsNullOrWhiteSpace(draft) ? "New note" : draft;
-        var content = new ReminderPopup(() => model.Engine.Now, label, draftReminder, answered => { draftReminder = answered; CloseReminder(); DrawForm(true); }, CloseReminder);
+        var content = new ReminderPickerCard(model, label, draftReminder, answered => { draftReminder = answered; CloseReminder(); DrawForm(true); }, CloseReminder);
         reminderHost.Child = ReminderPopup.Roomy(content, reminderHost); reminderHost.IsOpen = true;
     }
     // The meeting's day, on the same small calendar in its day-only form, hung under the day button.

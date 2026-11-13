@@ -69,6 +69,8 @@ public sealed class AccentTextTests
             Press(window, "DatePick"); Audit(window, "date button", model, found); AuditPopups(window, "date", model, found); Press(window, "DatePick");
             Press(window, "SidebarAlertsButton"); AuditPopups(window, "alerts", model, found); Press(window, "SidebarAlertsButton");
             Press(window, "FormBell"); AuditPopups(window, "reminder", model, found); window.GetVisualDescendants().OfType<Button>().Where(b => b.Name == "ReminderCancel" || b.Name == "ReminderClose").ToList().ForEach(b => b.RaiseEvent(new RoutedEventArgs(Button.ClickEvent))); Press(window, "CardKindNotes");
+            // A reminder is set by letting go of the pin, so its card has no Set; the meeting's day card still does, so the audit opens that too.
+            Press(window, "CardKindMeetings"); Press(window, "MeetingDay"); AuditPopups(window, "meeting day", model, found); window.GetVisualDescendants().OfType<Button>().Where(b => b.Name == "ReminderClose").ToList().ForEach(b => b.RaiseEvent(new RoutedEventArgs(Button.ClickEvent))); Press(window, "CardKindNotes");
             Press(window, "NotesTab"); Audit(window, "notes page", model, found);
             Press(window, "WeekOverviewTab"); Audit(window, "week", model, found);
             if (Has(window, "WeekTable")) { Press(window, "WeekTable"); Audit(window, "week table", model, found); }

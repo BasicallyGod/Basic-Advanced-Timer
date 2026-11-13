@@ -18,7 +18,11 @@ public sealed class PillAlertsCard : Border
     public const double CardWidth = 336;
     private readonly TimerModel model;
     private readonly Action fold, openDashboard;
-    private Popup rescheduling = new();
+    // The reminder being moved, and its picker, kept across redraws (the lateness changes every minute and redraws the card) so a chosen day is not lost.
+    private long? reschedulingId;
+    private ReschedulePicker? picker;
+    /// <summary>The picker showing in the open row, if Reschedule was pressed.</summary>
+    public ReschedulePicker? Picker => picker;
     private TopLevel? keyHost;
     private IReadOnlyList<AlertItem> items = Array.Empty<AlertItem>();
     private string? shown;
@@ -43,7 +47,7 @@ public sealed class PillAlertsCard : Border
     /// <summary>Up and Down move the open row and Escape folds; true when the key was used.</summary>
     public bool HandleKey(Avalonia.Input.Key key)
     {
-        if (key == Avalonia.Input.Key.Escape) { fold(); return true; }
+        if (key == Avalonia.Input.Key.Escape) { if (picker is not null) EndReschedule(); else fold(); return true; }
         if (items.Count < 2) return false;
         if (key == Avalonia.Input.Key.Down) { Step(1); return true; }
         if (key == Avalonia.Input.Key.Up) { Step(-1); return true; }
@@ -55,11 +59,11 @@ public sealed class PillAlertsCard : Border
     /// <summary>Opens the list with the most urgent alert open. With nothing waiting it says so, and stays until it is put away.</summary>
     public void Open(bool list = false) { Index = 0; allowEmpty = model.Alerts.Count == 0; Sync(true); }
     /// <summary>Opens the alert at <paramref name="index"/> and folds the one that was open.</summary>
-    public void OpenRow(int index) { if (index < 0 || index >= items.Count) return; Index = index; Sync(true); }
+    public void OpenRow(int index) { if (index < 0 || index >= items.Count) return; Index = index; ForgetPicker(); Sync(true); }
     public void Step(int by)
     {
         if (items.Count == 0) return;
-        Index = (Index + by + items.Count) % items.Count; Sync(true);
+        Index = (Index + by + items.Count) % items.Count; ForgetPicker(); Sync(true);
     }
 
     private string Signature() => Index + "|" + string.Join(";", items.Select(i => i.Key + "," + i.Detail + "," + i.Caption));
@@ -88,8 +92,6 @@ public sealed class PillAlertsCard : Border
 
     private void Rebuild()
     {
-        // A pop-up sits in one place only, so each redraw of the card makes its own.
-        rescheduling = new Popup { Placement = PlacementMode.Bottom, IsLightDismissEnabled = true, Name = "AlertRescheduleHost" };
         var head = Ui.Grid("*,Auto"); head.Margin = new Thickness(6, 0, 0, 4); head.Height = 26;
         var title = Bold(items.Count == 0 ? "Nothing waiting" : $"{items.Count} waiting", "Ink", 12.5); title.Name = "AlertTitle"; title.VerticalAlignment = VerticalAlignment.Center; Ui.Put(head, title);
         var cross = Ui.IconButton(IconKind.Close, "Fold", "AlertFold", fold); cross.Width = 24; cross.Height = 24; Ui.Put(head, cross, 1);
@@ -98,7 +100,7 @@ public sealed class PillAlertsCard : Border
             // Nothing waiting: one short line, the words, Open Notes and the cross, with no empty list or foot under it.
             head.ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"); head.Margin = new Thickness(6, 0, 0, 0);
             Grid.SetColumn(cross, 2); var notes = Link("Open Notes", "AlertOpenDashboard", OpenNotes, null, "Ink"); notes.VerticalAlignment = VerticalAlignment.Center; notes.Margin = new Thickness(0, 0, 6, 0); Ui.Put(head, notes, 1);
-            var only = new Grid(); only.Children.Add(head); only.Children.Add(rescheduling); Child = only; return;
+            var only = new Grid(); only.Children.Add(head); Child = only; return;
         }
         // No gap between rows: the padding of each row carries the space, so every point of the list belongs to some row and presses never land in a dead strip.
         var rows = new StackPanel { Spacing = 0, Name = "AlertRows" };
@@ -108,7 +110,7 @@ public sealed class PillAlertsCard : Border
         var foot = Ui.Grid("Auto,*,Auto"); foot.Margin = new Thickness(6, 6, 6, 0);
         Ui.Put(foot, Link("Open Notes", "AlertOpenDashboard", OpenNotes, null, "Ink"), 2);
         var frame = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto") };
-        Grid.SetRow(scroll, 1); Grid.SetRow(foot, 2); frame.Children.Add(head); frame.Children.Add(scroll); frame.Children.Add(foot); frame.Children.Add(rescheduling);
+        Grid.SetRow(scroll, 1); Grid.SetRow(foot, 2); frame.Children.Add(head); frame.Children.Add(scroll); frame.Children.Add(foot);
         Child = frame;
     }
     private static Button Link(string words, string name, Action click, IconKind? trailing, string token)
@@ -140,7 +142,16 @@ public sealed class PillAlertsCard : Border
             default: meta.Children.Add(NoteParts.Ink(item.Caption, "Muted", 12.5)); break;
         }
         column.Children.Add(meta);
-        var actions = Actions(item); actions.Margin = new Thickness(18, 0, 0, 0); column.Children.Add(actions);
+        // While it is being moved, the row's buttons give way to the days and the strip of the day, with Cancel under them.
+        Control actions;
+        if (picker is not null && item.NoteId == reschedulingId)
+        {
+            if (picker.Parent is Panel old) old.Children.Remove(picker);
+            var cancel = Link("Cancel", "AlertRescheduleCancel", EndReschedule, null, "Muted"); cancel.HorizontalAlignment = HorizontalAlignment.Right;
+            actions = new StackPanel { Spacing = 6, Name = "AlertRescheduling", Children = { picker, cancel } };
+        }
+        else actions = Actions(item);
+        actions.Margin = new Thickness(18, 0, 0, 0); column.Children.Add(actions);
         var card = new Border { Child = column, CornerRadius = new CornerRadius(12), Padding = new Thickness(10, 10, 10, 12), Margin = new Thickness(0, 2), Name = "AlertOpenRow" };
         card.Bind(Border.BackgroundProperty, card.GetResourceObservable("Well")); card.Bind(Border.BoxShadowProperty, card.GetResourceObservable("ShadowSunk"));
         return card;
@@ -170,7 +181,7 @@ public sealed class PillAlertsCard : Border
                 Ui.Put(row, Act("AlertDone", "Done", IconKind.Check, () => { if (item.NoteId is { } id) model.Notes.Toggle(id); }, true));
                 Ui.Put(row, Act("AlertLater", "In 10 min", null, () => { if (item.NoteId is { } id) model.Notes.SetReminder(id, model.Engine.Now.AddMinutes(10)); }), 1);
                 // Reschedule is the least used, so it is words and not a third key.
-                Button? reschedule = null; reschedule = Link("Reschedule", "AlertReschedule", () => Reschedule(item, reschedule!), null, "Muted"); reschedule.HorizontalAlignment = HorizontalAlignment.Right; Ui.Put(row, reschedule, 3); break;
+                var reschedule = Link("Reschedule", "AlertReschedule", () => Reschedule(item), null, "Muted"); reschedule.HorizontalAlignment = HorizontalAlignment.Right; Ui.Put(row, reschedule, 3); break;
             case AlertKind.Break:
                 Ui.Put(row, Act("AlertResume", "Resume", null, () => model.ToggleBreak(), true));
                 Ui.Put(row, Act("AlertStay", "Stay on break", null, () => model.SnoozeAlert(item.Key, TimeSpan.FromMinutes(15))), 1); break;
@@ -180,14 +191,21 @@ public sealed class PillAlertsCard : Border
         }
         return row;
     }
-    private void Reschedule(AlertItem item, Button anchor)
+    /// <summary>Opens the days and the strip in place of the row's buttons for <paramref name="item"/>.</summary>
+    public void Reschedule(AlertItem item)
     {
         if (item.NoteId is not { } id || model.Notes.Find(id) is not { } note) return;
-        rescheduling.PlacementTarget = anchor;
-        rescheduling.Child = ReminderPopup.Roomy(new ReminderPopup(() => model.Engine.Now, model.Notes.Text(note), NotesModel.ReminderOf(note), answered =>
-        { model.Notes.SetReminder(id, answered); rescheduling.IsOpen = false; rescheduling.Child = null; }, () => { rescheduling.IsOpen = false; rescheduling.Child = null; }), rescheduling);
-        rescheduling.IsOpen = true;
+        reschedulingId = id;
+        picker = new ReschedulePicker(model, NotesModel.ReminderOf(note), at =>
+        {
+            ForgetPicker(); model.Notes.SetReminder(id, at);
+            model.Tell("Moved to " + at.ToString(model.DayOf(at) == model.TodayKey ? "HH:mm" : "ddd d MMM, HH:mm", System.Globalization.CultureInfo.GetCultureInfo("en-GB")));
+            Sync(true);
+        });
+        Sync(true);
     }
+    private void EndReschedule() { ForgetPicker(); Sync(true); }
+    private void ForgetPicker() { reschedulingId = null; picker = null; }
     private void OpenNotes() { fold(); model.RequestPage("notes"); openDashboard(); }
 
     // ---- the other rows: one line each

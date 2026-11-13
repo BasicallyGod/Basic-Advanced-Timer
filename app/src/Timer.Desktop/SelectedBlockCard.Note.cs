@@ -52,7 +52,7 @@ public sealed partial class SelectedBlockCard
         reminderButton = Ui.Ctl("DetailsNoteReminder", null, null, "Choose a reminder", () =>
         {
             if (notes.Find(f.Id) is not { } now) return;
-            var content = new ReminderPopup(() => model.Engine.Now, notes.Text(now), NotesModel.ReminderOf(now), answered => { popup.IsOpen = false; notes.SetReminder(f.Id, answered); }, () => popup.IsOpen = false);
+            var content = new ReminderPickerCard(model, notes.Text(now), NotesModel.ReminderOf(now), answered => { popup.IsOpen = false; notes.SetReminder(f.Id, answered); }, () => popup.IsOpen = false);
             popup.PlacementTarget = reminderButton; popup.Child = ReminderPopup.Roomy(content, popup); popup.IsOpen = true;
         });
         reminderButton.Width = double.NaN; reminderButton.Height = 38; reminderButton.HorizontalAlignment = HorizontalAlignment.Stretch; reminderButton.HorizontalContentAlignment = HorizontalAlignment.Left; reminderButton.Padding = new Thickness(12, 0);

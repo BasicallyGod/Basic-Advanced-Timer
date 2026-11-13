@@ -12,15 +12,15 @@ namespace Timer.Desktop;
 
 /// <summary>
 /// The Week overview in the display look (the board "The week as a display", option A), behind the same setting as the timeline (<see cref="TimerModel.DisplayTimeline"/>):
-/// the totals, the day chart as lit slices in unlit slots, and the accounts with cell budget bars, each a dark panel under one honeycomb. The table view keeps its plain type.
+/// the totals, the day chart as lit slices in unlit slots, and the accounts with cell budget bars, each a dark panel whose lit fills go through the honeycomb. The table view keeps its plain type.
 /// The figures are <see cref="WeekOverview.Figures"/>, so they match the plain page exactly.
 /// </summary>
 public static class VfdWeek
 {
-    /// <summary>A dark display panel: the trough's glass, what is drawn in it, and one honeycomb over the lot.</summary>
+    /// <summary>A dark display panel: the trough's glass and what is drawn in it (only the lit fills are meshed).</summary>
     public static Control Panel(Control content, double height, string name)
     {
-        var grid = new Grid { Height = height, Children = { content, new HoneycombOverlay() } };
+        var grid = new Grid { Height = height, Children = { content } };
         var panel = new Border { Name = name, CornerRadius = new CornerRadius(14), ClipToBounds = true, Child = grid, Background = new LinearGradientBrush { StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative), GradientStops = { new GradientStop(Color.Parse("#0B0E13"), 0), new GradientStop(Color.Parse("#10141B"), 1) } } };
         return new ThemeVariantScope { RequestedThemeVariant = ThemeVariant.Dark, Child = panel };
     }
@@ -34,7 +34,12 @@ public static class VfdWeek
     private static Color Glass(TimerModel model, string key) => Color.Parse(model.GlassTheme.Colour(key));
     private static string Hm(TimerModel model, TimeSpan t) => LowerDisplay.Drawable(model.FormatShort(t)).Replace(" ", "");
     // A lit fill with its soft glow round it, and the unlit slot or cell beside it.
-    private static void Lit(DrawingContext c, Color colour, Rect r, double radius) { new PhosphorBloom(colour, 0, .78).Draw(c, new RectangleGeometry(r, radius, radius), true); c.DrawRectangle(new SolidColorBrush(colour), null, r, radius, radius); }
+    // Only lit fills go through the honeycomb, with their bloom between the cells; the figures and words stay whole so they read cleanly.
+    private static void Lit(DrawingContext c, Color colour, Rect r, double radius)
+    {
+        new PhosphorBloom(colour, 0, .78).Draw(c, new RectangleGeometry(r, radius, radius), true);
+        using (Honeycomb.Meshed(c, r)) c.DrawRectangle(new SolidColorBrush(colour), null, r, radius, radius);
+    }
     private static void Unlit(DrawingContext c, Color ink, Rect r, double radius) => c.DrawRectangle(new SolidColorBrush(VfdLook.Ghost(ink)), null, r, radius, radius);
     private static void Stripes(DrawingContext c, Color ink, Rect r)
     {

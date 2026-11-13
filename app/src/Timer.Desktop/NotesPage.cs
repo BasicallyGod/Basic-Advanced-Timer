@@ -581,10 +581,10 @@ public sealed class NotesPage : Grid
     {
         var target = this.GetVisualDescendants().OfType<Button>().FirstOrDefault(b => b.Name == "PageWhen") ?? (Control)formHost;
         whenHost.PlacementTarget = target;
-        whenHost.Child = ReminderPopup.Roomy(new ReminderPopup(() => model.Engine.Now, string.IsNullOrWhiteSpace(draft) ? "New note" : draft, when, answered =>
+        whenHost.Child = ReminderPopup.Roomy(new ReminderPickerCard(model, string.IsNullOrWhiteSpace(draft) ? "New note" : draft, when, answered =>
         {
             when = answered; whenHost.IsOpen = false; whenHost.Child = null; if (editing is not null) Redraw(); else DrawForm();
-        }, () => { whenHost.IsOpen = false; whenHost.Child = null; }, "Reminder"), whenHost);
+        }, () => { whenHost.IsOpen = false; whenHost.Child = null; }), whenHost);
         whenHost.IsOpen = true;
     }
 
