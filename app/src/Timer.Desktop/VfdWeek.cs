@@ -12,12 +12,12 @@ namespace Timer.Desktop;
 
 /// <summary>
 /// The Week overview in the display look (the board "The week as a display", option A), behind the same setting as the timeline (<see cref="TimerModel.DisplayTimeline"/>):
-/// the totals, the day chart as lit slices in unlit slots, and the accounts with cell budget bars, each a dark panel under one honeycomb. The table view keeps its plain type.
+/// the totals, the day chart as lit slices in unlit slots, and the accounts with cell budget bars, each a dark panel whose lit fills go through the honeycomb. The table view keeps its plain type.
 /// The figures are <see cref="WeekOverview.Figures"/>, so they match the plain page exactly.
 /// </summary>
 public static class VfdWeek
 {
-    /// <summary>A dark display panel: the trough's glass, what is drawn in it, and one honeycomb over the lot.</summary>
+    /// <summary>A dark display panel: the trough's glass and what is drawn in it (only the lit fills are meshed).</summary>
     public static Control Panel(Control content, double height, string name)
     {
         var grid = new Grid { Height = height, Children = { content } };

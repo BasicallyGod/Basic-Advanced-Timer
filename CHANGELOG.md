@@ -6,6 +6,12 @@ The right-click menu shows `Version 0.1.<build> (<commit>)` and the channel for 
 
 The dated Avalonia milestones below are newest first, not numbered releases. Use the [alpha commit history](https://github.com/BasicallyGod/Basic-Advanced-Timer/commits/alpha/) and [build workflow runs](https://github.com/BasicallyGod/Basic-Advanced-Timer/actions/workflows/avalonia-preview.yml) to identify a packaged build.
 
+## 13 November 2026
+
+| Change | Commit | Details |
+|---|---|---|
+| Display timeline, Windows feedback: the honeycomb now covers only the lit fills, so segment words, figures and hours are whole and readable (the mesh over everything broke them up); the ruler's readout and the hour digits cross-fade instead of swapping; pressing a shared reminder tag opens the reminder the ruler is reading, with no list. | [2a93600](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/2a93600) | `VfdTimelineTests`. |
+
 ## 12 November 2026
 
 | Change | Commit | Details |
