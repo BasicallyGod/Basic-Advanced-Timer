@@ -39,9 +39,13 @@ public sealed class Sidebar : Border
         Ui.Put(grid, heading, 0, 1);
         // The accounts are one display window under the clock (the board "Display polish", sidebar option B): the pill's display carried down, its rows divided by
         // faint rules. The window wears the display's own well, shade and lip, so it follows the theme like the clock above it, and the list scrolls inside it.
+        // The window runs the full height down to Quit timer. The list scrolls with no scroll bar; a column of cells at the right edge (the week display's indicator)
+        // shows where it is, and that column is always kept, so the rows never change width when the list starts to scroll.
         AccountScroll = new ScrollViewer { Name = "SidebarAccountScroll", Content = new AccountList(model, reorderable: true, display: true), AllowAutoHide = false,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-        var window = new Border { Name = "SidebarAccountDisplay", CornerRadius = new CornerRadius(14), ClipToBounds = true, Child = AccountScroll, Padding = new Thickness(0, 4), VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 2, 0, 0) };
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Hidden };
+        var indicator = new ScrollCells(AccountScroll) { Name = "SidebarAccountIndicator", Width = ScrollCells.ColumnWidth, Margin = new Thickness(0, 6, 6, 6) };
+        var inside = Ui.Grid("*,Auto", "*"); Ui.Put(inside, AccountScroll, 0, 0); Ui.Put(inside, indicator, 1, 0);
+        var window = new Border { Name = "SidebarAccountDisplay", CornerRadius = new CornerRadius(14), ClipToBounds = true, Child = inside, Padding = new Thickness(0, 4), VerticalAlignment = VerticalAlignment.Stretch, Margin = new Thickness(0, 2, 0, 0) };
         window.Bind(Border.BackgroundProperty, window.GetResourceObservable("DisplayWell"));
         void Shade() => window.BoxShadow = new BoxShadows(new BoxShadow { IsInset = true, OffsetY = 2, Blur = 5, Color = Ui.ThemeColour(window, "DisplayShade", Color.Parse("#A0000000")) }, new[] { new BoxShadow { OffsetY = 1, Color = Ui.ThemeColour(window, "DisplayEdge", Color.Parse("#12FFFFFF")) } });
         window.ActualThemeVariantChanged += (_, _) => Shade(); window.AttachedToVisualTree += (_, _) => Shade();

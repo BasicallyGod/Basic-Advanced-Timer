@@ -177,4 +177,24 @@ public sealed class SidebarTests
         }
         finally { window.Close(); }
     }
+
+    [AvaloniaFact]
+    public void TheAccountsDisplayRunsDownToQuitTimerAndShowsWhereItIsOnlyWhenItScrolls()
+    {
+        var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            var box = Find<Border>(window, "SidebarAccountDisplay"); var quit = Find<Button>(window, "QuitTimer");
+            var boxFoot = box.TranslatePoint(new Point(0, box.Bounds.Height), window)!.Value.Y; var quitTop = quit.TranslatePoint(default, window)!.Value.Y;
+            Assert.InRange(quitTop - boxFoot, 0, 16); // Full height, whatever the number of accounts.
+            var cells = Find<ScrollCells>(window, "SidebarAccountIndicator"); Assert.False(cells.Showing);
+            var rows = box.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("accountDisplay")).ToList();
+            var rowRight = rows[0].TranslatePoint(new Point(rows[0].Bounds.Width, 0), window)!.Value.X; var cellsLeft = cells.TranslatePoint(default, window)!.Value.X;
+            Assert.True(rowRight <= cellsLeft + .5); // The column is kept beside the rows even while it draws nothing.
+            model.SetAccounts(model.AccountSettings.Concat(Enumerable.Range(1, 14).Select(n => new AccountSettings("Extra " + n)))); Settle(window);
+            Assert.True(cells.Showing);
+            var pics = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (pics is not null) { window.GetVisualDescendants().OfType<ScrollViewer>().Single(v => v.Name == "SidebarAccountScroll").Offset = new Vector(0, 140); Settle(window); using var f = window.CaptureRenderedFrame(); f?.Save(Path.Combine(pics, "sidebar-scrolling.png")); }
+        }
+        finally { window.Close(); }
+    }
 }

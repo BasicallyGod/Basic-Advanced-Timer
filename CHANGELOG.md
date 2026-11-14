@@ -10,6 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 |---|---|---|
+| Sidebar accounts display runs the full height down to Quit timer, with no scroll bar: a column of small cells at its right edge shows where the list is while it scrolls. | pending | `ScrollCells`, `SidebarAccountIndicator`. |
 | Light displays brighter: the pill's and sidebar's display well is lifted towards white instead of shaded towards the ink, so the dark segments stand clear of it. | pending | `ThemeEngine.Write`, `DisplayWell`, `DisplayGroove`. |
 | Sidebar accounts as a display: one sunk display window of rows, each a lamp in the account colour, the name and hours in segment letters and a row of budget cells (amber from 80 per cent, red once spent). The pill keeps its card rows. | pending | `AccountDisplayRow`, `SidebarAccountDisplay`; card-row tests now read the pill list. |
 | Reminder drag polished: the zoomed hour pans every frame, faster deeper into the end; the pin's time no longer flickers between neighbours; the ticks glide; the wheel moves the hour or the pin by a quarter hour. | pending | `RescheduleTests`. |
