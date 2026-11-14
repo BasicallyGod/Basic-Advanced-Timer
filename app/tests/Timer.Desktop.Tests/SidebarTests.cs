@@ -187,6 +187,7 @@ public sealed class SidebarTests
             var box = Find<Border>(window, "SidebarAccountDisplay"); var quit = Find<Button>(window, "QuitTimer");
             var boxFoot = box.TranslatePoint(new Point(0, box.Bounds.Height), window)!.Value.Y; var quitTop = quit.TranslatePoint(default, window)!.Value.Y;
             Assert.InRange(quitTop - boxFoot, 0, 16); // Full height, whatever the number of accounts.
+            var clock = Find<Border>(window, "SidebarDisplay"); Assert.Equal(box.Bounds.Width, clock.Bounds.Width, 0.5); Assert.Equal(box.TranslatePoint(default, window)!.Value.X, clock.TranslatePoint(default, window)!.Value.X, 0.5); // The clock display lines up with the accounts under it.
             var cells = Find<ScrollCells>(window, "SidebarAccountIndicator"); Assert.False(cells.Showing);
             var rows = box.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("accountDisplay")).ToList();
             var rowRight = rows[0].TranslatePoint(new Point(rows[0].Bounds.Width, 0), window)!.Value.X; var cellsLeft = cells.TranslatePoint(default, window)!.Value.X;
