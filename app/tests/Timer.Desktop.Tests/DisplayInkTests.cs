@@ -162,6 +162,11 @@ public sealed class DisplayInkTests
                     finally { pill.Close(); }
                 }
                 model.SetCompactPill(false); model.SetTallPill(false);
+                // The alerts card, which the pill and the sidebar hang under their count.
+                var host = new Window { Width = 380, Height = 420, Content = new PillAlertsCard(model, () => { }, () => { }) { HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top, Margin = new Thickness(0, 12, 0, 0) } };
+                host.Show();
+                try { for (var pass = 0; pass < 3; pass++) { Dispatcher.UIThread.RunJobs(); using var f = host.CaptureRenderedFrame(); } using var frame = host.CaptureRenderedFrame(); frame?.Save(Path.Combine(folder, $"{style}-{theme}-alerts.png")); }
+                finally { host.Close(); }
             }
         DisplayInk.Style = DisplayStyle.Phosphor;
     }

@@ -131,3 +131,7 @@ Files: `LowerDisplay.cs`, `StatusFace.cs`, `TimerModel.cs` (`PillLower`).
 ## Out of scope
 
 Pop-ups and cards that are ordinary controls (Details, Notes, dialogs) change only through the theme resources; account textures do not appear there yet.
+
+## Status
+
+Stages 0 to 5 are built on `feature/eink-display`. What differs from this plan is listed in `CLAUDE.md` (E-ink display style, Deviations), and the checks still to do on Windows are in `docs/testing/performance-test-campaign.md`.
