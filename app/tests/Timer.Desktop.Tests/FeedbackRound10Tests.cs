@@ -43,8 +43,8 @@ public sealed class FeedbackRound10Tests
             }
             model.SelectBlock(Array.Empty<SessionRow>(), false); Settle(window);
             Ellipse DotOf(string block) => Find<Border>(window, block).GetVisualDescendants().OfType<Ellipse>().Single(e => e.Name == "NoteDot");
-            Assert.Equal(HorizontalAlignment.Center, DotOf("TimelineEntry0").HorizontalAlignment); // Half an hour is a sliver.
-            Assert.Equal(HorizontalAlignment.Right, DotOf("TimelineEntry1").HorizontalAlignment); // An hour has room for it at the edge.
+            // On the display the dot is always in the block's bottom right corner, small enough for any block that shows one.
+            Assert.Equal(HorizontalAlignment.Right, DotOf("TimelineEntry0").HorizontalAlignment); Assert.Equal(HorizontalAlignment.Right, DotOf("TimelineEntry1").HorizontalAlignment);
         }
         finally { window.Close(); }
     }
@@ -178,7 +178,8 @@ public sealed class FeedbackRound10Tests
         {
             var card = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineRecording");
             Assert.Equal(new Thickness(0), card.BorderThickness); // Not a border, which left the left side bare.
-            Assert.Equal(2, card.BoxShadow.Count); var ring = card.BoxShadow[0]; Assert.Equal(3, ring.Spread); Assert.Equal(0, ring.Blur);
+            // On the display the recording ring is drawn just inside the block's own edge, so a selected neighbour's ring outside never meets it.
+            Assert.Equal(3, card.BoxShadow.Count); var ring = card.BoxShadow[0]; Assert.True(ring.IsInset); Assert.Equal(0, ring.Blur);
         }
         finally { window.Close(); }
     }

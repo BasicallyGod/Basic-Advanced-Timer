@@ -97,14 +97,14 @@ public sealed class DialogTests
     {
         var model = Model(out var engine); var dashboard = new DashboardWindow(model); dashboard.Show(); Settle(dashboard);
         Border Card(int index) => Find<Border>(dashboard, "TimelineEntry" + index);
-        Assert.Equal(0, Card(0).BoxShadow.Count); Assert.DoesNotContain("mergeSelected", Card(0).Classes);
+        Assert.Equal(1, Card(0).BoxShadow.Count); Assert.DoesNotContain("mergeSelected", Card(0).Classes); // Only the lit block's own glow.
         model.ToggleSelection(new[] { engine.Sessions[0] }); Settle(dashboard);
         var card = Card(0);
         Assert.Contains("mergeSelected", card.Classes); Assert.Equal(new Thickness(0), card.BorderThickness); // A ring round the block, not a border that moves its text.
-        Assert.Equal(2, card.BoxShadow.Count); var ring = card.BoxShadow[0]; Assert.Equal(3, ring.Spread); Assert.Equal(0, ring.Blur);
+        Assert.Equal(3, card.BoxShadow.Count); var ring = card.BoxShadow[0]; Assert.Equal(3, ring.Spread); Assert.Equal(0, ring.Blur);
         Assert.True(dashboard.TryFindResource("AccentLit", Avalonia.Styling.ThemeVariant.Dark, out var found));
         Assert.Equal(Assert.IsAssignableFrom<Avalonia.Media.ISolidColorBrush>(found).Color, ring.Color); // In the Dark theme's lit accent: the timeline is dark glass in both looks.
-        Assert.Equal(0, Card(1).BoxShadow.Count); Assert.DoesNotContain("mergeSelected", Card(1).Classes); // The other block is untouched.
+        Assert.Equal(1, Card(1).BoxShadow.Count); Assert.DoesNotContain("mergeSelected", Card(1).Classes); // The other block is untouched.
         dashboard.Close();
     }
 

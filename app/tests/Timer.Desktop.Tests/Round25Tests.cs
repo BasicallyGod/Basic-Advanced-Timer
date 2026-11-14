@@ -72,7 +72,7 @@ public sealed class Round25Tests
             var tile = Named(window, "TimelineMeetingStack").OfType<Border>().Single();
             Assert.Empty(Named(window, "TimelineMeeting").Where(c => c.Name![15..].All(char.IsDigit) && c.Name!.Length > 15)); // None of the three is drawn on its own.
             Assert.Equal(48, tile.Bounds.Height, 0.5);
-            Assert.Contains("3 meetings", tile.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text));
+            Assert.Contains(tile.GetVisualDescendants().OfType<SegmentText>(), t => t.Name == "StackTitle" && t.Text.StartsWith("3 MEETINGS"));
             Assert.Contains("Client call", TipTexts(tile)); Assert.Contains("Supplier check-in", TipTexts(tile)); Assert.Contains("11:45–12:30", TipTexts(tile));
             Assert.Empty(window.GetVisualDescendants().OfType<Button>().Where(b => b.Name?.Contains("More") == true && b.Name.StartsWith("Timeline"))); // No +N chip any more.
         }
@@ -91,7 +91,7 @@ public sealed class Round25Tests
         {
             var tile = Tile(window);
             Assert.Empty(Named(window, "TimelineEntry")); // None of the five is drawn alone, and nothing folds into a chip.
-            Assert.Contains("5 blocks · 05:00", tile.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text));
+            Assert.Contains(tile.GetVisualDescendants().OfType<SegmentText>(), t => t.Name == "StackTitle" && t.Text.StartsWith("5 BLOCKS"));
             Assert.Equal(model.TimelinePixelsPerHour * (10.4 - 9) - ReviewViews.BlockGap, tile.Bounds.Width, 1); // From the first start to the last end.
             var tip = Assert.IsType<StackPanel>(ToolTip.GetTip(tile)); var grid = Assert.IsType<Grid>(tip.Children[1]); Assert.Equal(model.Engine.Sessions.Count, grid.RowDefinitions.Count); // A row each,
             Assert.Equal(3, grid.Children.Select(Grid.GetColumn).Distinct().Count()); // in three columns, so the times and lengths line up.
@@ -161,7 +161,7 @@ public sealed class Round25Tests
             Assert.Equal(ReviewViews.LiveLane, live.Bounds.Height, 0.5);
             Assert.True(Top(tile, canvas) - (Top(live, canvas) + live.Bounds.Height) >= ReviewViews.LiveGap - 0.5); // Clear of the tile, ring and all.
             var plain = FiveDeepTileHeight(); Assert.True(tile.Bounds.Height < plain - ReviewViews.LiveLane); // The tile gave up room for the lane.
-            Assert.Contains("4 blocks", tile.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).First(t => t!.StartsWith("4")));
+            Assert.Contains(tile.GetVisualDescendants().OfType<SegmentText>(), t => t.Name == "StackTitle" && t.Text.StartsWith("4 BLOCKS"));
             Press(window, Centre(window, tile));
             Assert.Equal("Blocks", Kind(window));
             var bars = Named(window, "Stack_").OfType<Border>().ToList(); Assert.Equal(5, bars.Count);

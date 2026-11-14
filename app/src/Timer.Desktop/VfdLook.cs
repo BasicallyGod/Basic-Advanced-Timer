@@ -6,7 +6,7 @@ namespace Timer.Desktop;
 
 /// <summary>
 /// The display look for the timeline and the week (the board "The timeline as a display", option A): the pill's vacuum-fluorescent glass carried into the
-/// dashboard's dark trough. It is a setting (<see cref="TimerModel.DisplayTimeline"/>); with it off the trough is drawn as before.
+/// dashboard's dark trough. It is how the timeline is always drawn; the original plain look was retired.
 /// </summary>
 public static class VfdLook
 {

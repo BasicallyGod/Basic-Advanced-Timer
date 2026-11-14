@@ -73,7 +73,7 @@ public sealed class AccentTextTests
             Press(window, "CardKindMeetings"); Press(window, "MeetingDay"); AuditPopups(window, "meeting day", model, found); window.GetVisualDescendants().OfType<Button>().Where(b => b.Name == "ReminderClose").ToList().ForEach(b => b.RaiseEvent(new RoutedEventArgs(Button.ClickEvent))); Press(window, "CardKindNotes");
             Press(window, "NotesTab"); Audit(window, "notes page", model, found);
             Press(window, "WeekOverviewTab"); Audit(window, "week", model, found);
-            if (Has(window, "WeekTable")) { Press(window, "WeekTable"); Audit(window, "week table", model, found); }
+            if (Has(window, "WeekKeySheet")) { Press(window, "WeekKeySheet"); Audit(window, "timesheet", model, found); Press(window, "WeekKeyWeek"); }
             Press(window, "Settings");
             foreach (var section in new[] { "Look", "Pill", "Alerts", "Day", "Accounts", "Export", "About" })
                 if (Has(window, "Settings" + section)) { Press(window, "Settings" + section); Audit(window, "settings " + section, model, found); }

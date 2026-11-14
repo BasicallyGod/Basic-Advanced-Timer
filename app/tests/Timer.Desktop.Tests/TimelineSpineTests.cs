@@ -43,7 +43,7 @@ public sealed class TimelineSpineTests
         try
         {
             var chip = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "NowChip");
-            var label = (TextBlock)chip.Child!; Assert.Equal(model.Engine.Now.ToString("HH:mm"), label.Text);
+            var label = (SegmentText)chip.Child!; Assert.Equal(model.Engine.Now.ToString("HH:mm"), label.Text);
             Assert.Contains(window.GetVisualDescendants().OfType<Border>(), b => b.Name == "NowMarker");
             model.ChangeDate(-1); Dispatcher.UIThread.RunJobs(); using var f = window.CaptureRenderedFrame();
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<Border>(), b => b.Name == "NowMarker");

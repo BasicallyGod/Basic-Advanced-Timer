@@ -33,7 +33,7 @@ public sealed class PreviewCaptureTests
                 window.GetVisualDescendants().OfType<NotesPage>().Single().OpenNote(model.Notes.All.First(n => !NotesModel.IsMeeting(n) && n.Day.Date == model.Engine.Now.Date).Id); Shot("note-edit");
                 window.GetVisualDescendants().OfType<NotesPage>().Single().SetKind(true); Dispatcher.UIThread.RunJobs(); Shot("meeting");
                 window.GetVisualDescendants().OfType<NotesPage>().Single().OpenNote(model.Notes.MeetingsOn(model.Engine.Now.Date).First().Id); Shot("meeting-edit");
-                window.SelectTab(true); Shot("week"); Press("WeekTable"); Shot("week-table");
+                window.SelectTab(true); Shot("week"); Press("WeekKeySheet"); Shot("week-table"); Press("WeekKeyWeek");
                 Press("Settings"); foreach (var section in new[] { "Look", "Pill", "Alerts", "Day", "Accounts", "Export", "About" }) { Press("Settings" + section); Shot("settings-" + section.ToLowerInvariant()); }
             }
             finally { window.Close(); }
@@ -278,7 +278,7 @@ public sealed class PreviewCaptureTests
                 var firstBlock = model.Engine.Sessions.First(); model.SelectBlock(new[] { firstBlock }, false); Dispatcher.UIThread.RunJobs();
                 var copyButton = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "CopySelected"); ToolTip.SetIsOpen(copyButton, true); Shot("tooltip"); ToolTip.SetIsOpen(copyButton, false); model.ClearSelection();
                 Press("SidebarAlertsButton"); Shot("alerts"); Press("SidebarAlertsButton"); Press("DatePick"); Shot("datepick"); Press("DatePick");
-                Press("WeekOverviewTab"); Shot("week"); Press("WeekTable"); Shot("weektable"); Press("WeekChart"); Press("NotesTab"); Shot("notes"); Press("TimelineTab");
+                Press("WeekOverviewTab"); Shot("week"); Press("WeekKeySheet"); Shot("weektable"); Press("WeekKeyWeek"); Press("NotesTab"); Shot("notes"); Press("TimelineTab");
                 window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "Settings").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Shot("settings");
                 var cal = new Window { Width = 360, Height = 380, Content = new Border { Padding = new Avalonia.Thickness(16), Child = new Calendar { SelectedDate = new DateTime(2026, 10, 16), DisplayDate = new DateTime(2026, 10, 16) } } };
                 cal.RequestedThemeVariant = window.RequestedThemeVariant; cal.Show(); Dispatcher.UIThread.RunJobs(); using var c1 = cal.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs(); using var c2 = cal.CaptureRenderedFrame(); c2?.Save(Path.Combine(folder, theme + "-calendar.png")); cal.Close();

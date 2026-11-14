@@ -107,7 +107,6 @@ public sealed class SettingsView : Grid
 
         stack.Children.Add(BuildDisplayStyle());
         stack.Children.Add(Section("Hints", Toggle("Show tooltips", "Short hints on hover. With them off, budget percentages are still in Week overview.", "ShowTooltips", () => model.Tooltips, v => model.SetTooltips(v))));
-        stack.Children.Add(Section("Timeline", Toggle("Display timeline", "Draw the timeline as the pill's display: lit blocks through the honeycomb and segment figures.", "DisplayTimeline", () => model.DisplayTimeline, v => model.SetDisplayTimeline(v))));
         stack.Children.Add(Section("Seasonal", Toggle("Seasonal decorations", "A wreath and lights round the pill at Christmas, 1 December to 6 January. Off by default.", "SeasonalDecorations", () => model.SeasonalDecorations, v => model.SetSeasonalDecorations(v))));
         stack.Margin = new Thickness(0, 0, 0, 6); // room for the last tick's shadow when the page scrolls
         return stack;

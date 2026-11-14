@@ -17,18 +17,10 @@ public sealed class VfdTimelineTests
     private static void Settle(Window window) { for (var pass = 0; pass < 3; pass++) { Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame(); } Dispatcher.UIThread.RunJobs(); }
     private static TimerModel Demo(string theme = "Dark") { var model = TimerModel.CreateDemo(() => DemoNow); model.CompleteSetup(); model.SetTheme(theme); return model; }
 
-    [Fact]
-    public void TheDisplayLookIsASettingThatIsOffUntilChosen()
-    {
-        var model = Demo(); Assert.False(model.DisplayTimeline);
-        model.SetDisplayTimeline(true); Assert.True(model.DisplayTimeline);
-        model.SetDisplayTimeline(false); Assert.False(model.DisplayTimeline);
-    }
-
     [AvaloniaFact]
     public void NoSegmentWordsRunPastTheirBlockOrMeetingAtAnyZoom_AndANarrowBreakIsACupOrNothing()
     {
-        var model = Demo(); model.SetDisplayTimeline(true);
+        var model = Demo(); 
         var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
@@ -53,7 +45,7 @@ public sealed class VfdTimelineTests
     [AvaloniaFact]
     public void OnTheDisplayTheTimelineIsDrawnInSegmentsUnderOneMesh()
     {
-        var model = Demo(); model.SetDisplayTimeline(true); if (!model.IsTracking) model.ToggleAccount(model.Accounts[0].Name);
+        var model = Demo(); if (!model.IsTracking) model.ToggleAccount(model.Accounts[0].Name);
         var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
@@ -82,7 +74,7 @@ public sealed class VfdTimelineTests
     }
     private void RulerReadout()
     {
-        var model = Demo(); model.SetDisplayTimeline(true);
+        var model = Demo(); 
         var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
@@ -127,15 +119,13 @@ public sealed class VfdTimelineTests
     [AvaloniaFact]
     public void OnTheDisplayTheWeekIsDrawnAsPanelsAndADayStillOpensTheTimeline()
     {
-        var model = Demo(); model.SetDisplayTimeline(true);
+        var model = Demo(); 
         var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
             var tab = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "WeekOverviewTab");
             tab.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Settle(window);
-            Assert.Contains(window.GetVisualDescendants().OfType<Border>(), b => b.Name == "WeekTotals");
-            Assert.Contains(window.GetVisualDescendants().OfType<Border>(), b => b.Name == "WeekVfdChart");
-            Assert.Contains(window.GetVisualDescendants().OfType<Border>(), b => b.Name == "WeekVfdAccounts");
+            Assert.Single(window.GetVisualDescendants().OfType<WeekInstrument>());
             var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR");
             var today = window.GetVisualDescendants().OfType<Button>().First(b => b.Name == "WeekDay_" + model.TodayKey.ToString("yyyyMMdd"));
             var at = today.TranslatePoint(new Point(today.Bounds.Width / 2, today.Bounds.Height / 2), window)!.Value;
@@ -143,9 +133,10 @@ public sealed class VfdTimelineTests
             if (folder is not null) { Directory.CreateDirectory(folder); using var frame = window.CaptureRenderedFrame(); frame?.Save(Path.Combine(folder, "vfd-week-dark.png")); }
             today.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Settle(window);
             Assert.Equal(model.TodayKey, model.SelectedDate);
-            // The table keeps its plain type.
-            model.SetWeekAsTable(true); Settle(window);
-            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Border>(), b => b.Name == "WeekVfdChart");
+            // The day opened the Timeline; back on the Week page, the Timesheet key swaps the day strips for hours a day, on the same instrument.
+            window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "WeekOverviewTab").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Settle(window);
+            window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "WeekKeySheet").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Settle(window);
+            Assert.True(model.WeekAsTable); Assert.Single(window.GetVisualDescendants().OfType<WeekInstrument>());
         }
         finally { window.Close(); }
     }

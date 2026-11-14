@@ -112,8 +112,7 @@ public sealed class SelectedBlockCardTests
             model.SelectBlock(new[] { engine.Sessions[0] }, false); Settle(window);
             var note = Find<TextBox>(window, "SelectedNote"); note.Text = "Drafting"; Enter(note); Settle(window);
             Assert.Equal("Drafting", model.Editor.Note(engine.Sessions[0])); Assert.Equal("30", engine.Sessions[0].Minutes);
-            Assert.Contains("• Drafting", window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text)); // The block on the timeline shows the first line.
-            Assert.Contains(window.GetVisualDescendants().OfType<IconGlyph>(), g => g.Name == "NoteMark" && g.Kind == IconKind.Note); // And a small page mark in its corner.
+            Assert.Contains(window.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Ellipse>(), e => e.Name == "NoteDot"); // The block on the timeline carries a small dot for its note.
         }
         finally { window.Close(); }
     }
@@ -195,9 +194,8 @@ public sealed class SelectedBlockCardTests
             model.SelectBlock(new[] { engine.Sessions[0] }, false); Settle(window);
             var card = Find<Border>(window, "TimelineEntry0");
             Assert.False(card.ClipToBounds); // The card is not clipped, or the ring round it would be cut off.
-            Assert.Equal(2, card.BoxShadow.Count); Assert.Equal(3, card.BoxShadow[0].Spread); // The ring, then its bloom.
-            var time = card.GetVisualDescendants().OfType<TextBlock>().First(t => t.Name == "BlockDuration");
-            Assert.DoesNotContain("clock", time.Classes); Assert.Equal(FontWeight.SemiBold, time.FontWeight);
+            Assert.Equal(3, card.BoxShadow.Count); Assert.Equal(3, card.BoxShadow[0].Spread); // The ring, then its bloom, then the lit block's own glow.
+            Assert.NotEmpty(card.GetVisualDescendants().OfType<SegmentText>().Where(t => t.Name == "BlockWords")); // The block's words are segment letters.
         }
         finally { window.Close(); }
     }

@@ -10,6 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 |---|---|---|
+| The Week page is one instrument in either look: totals, a strip for each day and the accounts with budgets and pace on one display, with Week and Timesheet keys, folded quiet accounts, row scrolling and tracing an account. The original plain timeline and week, and the Display timeline setting, are retired. | pending | `WeekInstrument.cs`, `DisplaySkin`, `WeekOverview.Build`; saved `displaytimeline=` is ignored. |
 | E-ink display style, stage 0: Settings, Look has Display style (Phosphor or E-ink) and an Effect slider (0 to 100, 60 until chosen). Nothing draws in e-ink yet; this is the setting, the paper and ink colours, the grain, the type and the account textures the later stages use. | pending | `DisplayInk.cs` (`DisplayStyle`, `DisplayInk`, `InkType`, `InkRole`), `TimerModel.DisplayStyle`/`InkPercent`/`TextureOf`, appearance lines `displaystyle=ink`, `inkstrength=NN`, `textures=`; `docs/design/eink-display-plan.md`. |
 | Sidebar clock display widened to 224 so it lines up with the accounts display and Quit timer under it. | pending | `StatusFace.SidebarDisplayWidth`. |
 | Sidebar accounts display runs the full height down to Quit timer, with no scroll bar: a column of small cells at its right edge shows where the list is while it scrolls. | pending | `ScrollCells`, `SidebarAccountIndicator`. |

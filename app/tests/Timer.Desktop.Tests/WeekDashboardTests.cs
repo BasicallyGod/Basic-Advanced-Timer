@@ -147,27 +147,6 @@ public sealed class WeekDashboardTests
     }
 
     [AvaloniaFact]
-    public void TheWeekIsTheOverviewAloneWithNoHoursTableOrEntriesView()
-    {
-        var model = Model(false, out var engine, e => e.Sessions.AddRange(new[] { Row("09:00:00", "90"), Row("11:00:00", "30", "Account two"), Row("08:00:00", "60", date: "2026-10-06") }));
-        var window = new DashboardWindow(model); window.Show();
-        try
-        {
-            window.SelectTab(true); Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
-            var columns = window.GetVisualDescendants().OfType<Button>().Where(c => c.Name?.StartsWith("WeekDay_") == true).ToList();
-            Assert.Equal(5, columns.Count); // A column per working day, with no weekend.
-            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "By account");
-            var texts = window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
-            Assert.Contains("Working time", texts); Assert.Contains("Allocated", texts); Assert.Contains("Unallocated", texts); Assert.Contains("Breaks", texts); Assert.DoesNotContain("Worked this week", texts);
-            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => b.Name == "CopyHours"); // No wall of numbers on the overview.
-            // The rail has the timeline and the overview, and nothing for the hours table or the entries, which went with Settings taking Export.
-            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => b.Name is "WeekHoursTab" or "WeekEntriesTab");
-            Assert.Equal(new[] { "TimelineTab", "WeekOverviewTab" }, window.GetVisualDescendants().OfType<Button>().Where(b => b.Name is "TimelineTab" or "WeekOverviewTab").Select(b => b.Name!).ToArray());
-        }
-        finally { window.Close(); }
-    }
-
-    [AvaloniaFact]
     public void DateTextHasAFixedWidthAndArrowKeysStepThePeriod()
     {
         var model = Model(false, out _);
@@ -211,7 +190,7 @@ public sealed class WeekDashboardTests
     }
 
     [AvaloniaFact]
-    public void DemoHasEightTrackedAccountsWithSensibleBudgetsAndOverviewLinesUpWithEachAccount()
+    public void DemoHasEightTrackedAccountsWithSensibleBudgets()
     {
         var model = TimerModel.CreateDemo(() => Day.AddHours(12)); // A Friday, so the week holds Monday to Thursday history.
         var accounts = model.Accounts.Where(a => !BreakAccount.Is(a.Name)).ToList();
@@ -221,26 +200,6 @@ public sealed class WeekDashboardTests
         var fractions = accounts.Where(a => a.Budget is not null).Select(a => model.BudgetUsed(a).TotalSeconds / a.Budget!.Value.TotalSeconds).ToList();
         Assert.All(fractions, f => Assert.True(f > .05)); // Every budget has something used, so no meter is empty.
         Assert.Contains(fractions, f => f is >= .8 and < 1); Assert.Contains(fractions, f => f >= 1); Assert.Contains(fractions, f => f < .8); // Comfortable, nearly used and over.
-        var window = new DashboardWindow(model); window.Show();
-        try
-        {
-            window.SelectTab(true); Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame(); Dispatcher.UIThread.RunJobs();
-            var lines = window.GetVisualDescendants().OfType<Grid>().Where(g => g.Name?.StartsWith("WeekAccount_") == true).ToList();
-            Assert.Equal(9, lines.Count); // The hidden account is still in the week's reports.
-            double Centre(Control c) => c.TranslatePoint(new Point(0, c.Bounds.Height / 2), window)!.Value.Y;
-            foreach (var line in lines)
-            {
-                var name = line.Children.OfType<TextBlock>().First(t => Grid.GetColumn(t) == 1);
-                foreach (var other in line.Children.OfType<Control>().Where(c => Grid.GetColumn(c) is 0 or 2 or 3 or 4 or 5 or 6))
-                    Assert.True(Math.Abs(Centre(other) - Centre(name)) < 1.5, $"{name.Text}: column {Grid.GetColumn(other)} is {Centre(other) - Centre(name):0.0}px off");
-            }
-            Assert.Equal(1, lines.Select(l => Math.Round(l.Bounds.Height)).Distinct().Count()); // Rows are the same height with or without a budget.
-            // The words sit at the same height in their row with or without a budget.
-            Assert.Equal(1, lines.Select(l => Math.Round(Centre(l.Children.OfType<TextBlock>().First(t => Grid.GetColumn(t) == 1)) - l.TranslatePoint(new Point(0, 0), window)!.Value.Y)).Distinct().Count());
-            var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR");
-            if (folder is not null) { Directory.CreateDirectory(folder); frame?.Save(Path.Combine(folder, "demo-overview.png")); }
-        }
-        finally { window.Close(); }
     }
 
     [AvaloniaFact]

@@ -53,25 +53,6 @@ public sealed class WeekOverviewTests
         Assert.True(days.Single(d => d.Date == Day).Overlaps); Assert.True(days.Single(d => d.Date == Day).Marked);
     }
 
-    [AvaloniaFact]
-    public void TheTotalsStripShowsWorkingTimeTheBarAndTheFiguresAndTheChartHasAColumnPerDayWithAScheduleLine()
-    {
-        var model = Model(e => e.Sessions.AddRange(new[] { Row("09:00:00", "90"), Row("11:00:00", "30", "Account two"), Row("08:00:00", "60", date: "2026-10-06") }));
-        var window = new DashboardWindow(model); window.Show(); window.SelectTab(true); Settle(window);
-        try
-        {
-            var w = WeekOverview.Figures(model, new DateTime(2026, 10, 5));
-            Assert.Equal(model.Format(w.Working), Find<TextBlock>(window, "WeekWorking").Text); Assert.Equal(model.FormatShort(w.Allocated), Find<TextBlock>(window, "WeekAllocated").Text);
-            Assert.Equal("Scheduled " + model.FormatShort(w.Scheduled), Find<TextBlock>(window, "WeekScheduled").Text); Assert.EndsWith("to go", Find<TextBlock>(window, "WeekToGo").Text);
-            Assert.NotNull(Find<Border>(window, "WeekBar"));
-            Assert.NotNull(Find<Border>(window, "WeekScheduleLine")); Assert.StartsWith("Schedule", Find<TextBlock>(window, "WeekScheduleLabel").Text); Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Name == "WeekChange");
-            var friday = Find<Button>(window, "WeekDay_20261009");
-            Assert.Contains("working time", Avalonia.Automation.AutomationProperties.GetName(friday)); Assert.NotNull(ToolTip.GetTip(friday));
-            Assert.Contains(friday.GetVisualDescendants().OfType<TextBlock>(), t => t.Name == "WeekDayLabel" || t.Text == "Fri 9"); // Today's label stands out.
-        }
-        finally { window.Close(); }
-    }
-
     // A day whose accounts run all the way through the schedule's hours and five minutes past them, with forty minutes of breaks laid over the middle: more on accounts
     // than there is working time, which is the breaks' share. The working time is the hours less the breaks and plus the five minutes.
     private static TimerModel DayWithBreaks(out WeekDay day, out TimeSpan span)
@@ -104,29 +85,6 @@ public sealed class WeekOverviewTests
     }
 
     [AvaloniaFact]
-    public void TheChartTheBarAndToGoMeasureWorkingTimeAgainstTheNetSchedule()
-    {
-        var model = DayWithBreaks(out var day, out var span); model.SetBreakAllowance(TimeSpan.FromMinutes(40));
-        var window = new DashboardWindow(model); window.Show(); window.SelectTab(true); Settle(window);
-        try
-        {
-            var week = WeekOverview.Figures(model, new DateTime(2026, 10, 5));
-            var column = Find<Button>(window, "WeekDay_20261006");
-            Assert.DoesNotContain(column.GetVisualDescendants().OfType<Border>(), b => b.Name == "WeekBreaksSlice"); // Breaks are no part of the column.
-            // The column is the working time (the accounts' slices squeezed to it), drawn at the same scale as the schedule line stands at.
-            var top = Math.Max(Math.Max(week.Days.Max(d => d.Scheduled.TotalHours), week.Days.Max(d => d.Working.TotalHours)), 8);
-            var perHour = Math.Min(17, (232 - 72 - 22) / top);
-            var slices = column.GetVisualDescendants().OfType<Border>().Where(b => b.Tag is TimerAccount).Sum(b => b.Height);
-            Assert.Equal(day.Working.TotalHours * perHour, slices, 1);
-            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Border>(), b => b.Name == "WeekBarBreaks");
-            var left = week.Scheduled - week.Working; var words = Find<TextBlock>(window, "WeekToGo").Text!;
-            Assert.Equal(model.FormatShort(left > TimeSpan.Zero ? left : TimeSpan.Zero) + " to go", words);
-            Assert.Equal("Scheduled " + model.FormatShort(week.Scheduled), Find<TextBlock>(window, "WeekScheduled").Text);
-        }
-        finally { window.Close(); }
-    }
-
-    [AvaloniaFact]
     public void ClickingADayOpensItInTheTimeline()
     {
         var model = Model(e => e.Sessions.AddRange(new[] { Row("08:00:00", "60", date: "2026-10-06"), Row("09:00:00", "60") }));
@@ -140,33 +98,108 @@ public sealed class WeekOverviewTests
         finally { window.Close(); }
     }
 
-    [AvaloniaFact]
-    public void TheTableViewListsAccountsUnallocatedAndWorkingTimeAndTheSwitchGoesBack()
+    // ---- the Week instrument, in both looks
+
+    private static DashboardWindow Open(TimerModel model, bool ink)
     {
-        var model = Model(e => e.Sessions.AddRange(new[] { Row("09:00:00", "90"), Row("11:00:00", "30", "Account two") }));
-        var window = new DashboardWindow(model); window.Show(); window.SelectTab(true); Settle(window);
+        if (ink) model.SetDisplayStyle(DisplayStyle.Ink);
+        var window = new DashboardWindow(model); window.Show(); window.SelectTab(true); Settle(window); return window;
+    }
+    private static WeekInstrument Instrument(Window window) => window.GetVisualDescendants().OfType<WeekInstrument>().Single();
+
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void TheWeekIsOneInstrumentWithADayButtonForEachWorkingDayAndTheTwoViewKeys(bool ink)
+    {
+        var model = Model(e => e.Sessions.AddRange(new[] { Row("09:00:00", "90"), Row("11:00:00", "30", "Account two"), Row("08:00:00", "60", date: "2026-10-06") }));
+        var window = Open(model, ink);
         try
         {
-            Assert.DoesNotContain(window.GetVisualDescendants().OfType<StackPanel>(), p => p.Name == "WeekTableView");
-            Click(window, "WeekTable");
-            Assert.NotNull(Find<StackPanel>(window, "WeekTableView")); Assert.NotNull(Find<Grid>(window, "WeekTableRow_Workingtime")); Assert.NotNull(Find<Grid>(window, "WeekTableRow_Unallocated")); Assert.NotNull(Find<Grid>(window, "WeekTableRow_Accountone"));
-            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Grid>(), g => g.Name == "WeekTableRow_Breaks");
-            Click(window, "WeekChart"); Assert.DoesNotContain(window.GetVisualDescendants().OfType<StackPanel>(), p => p.Name == "WeekTableView");
+            var instrument = Instrument(window);
+            Assert.Equal(5, window.GetVisualDescendants().OfType<Button>().Count(b => b.Name?.StartsWith("WeekDay_") == true)); // No weekend.
+            var friday = Find<Button>(window, "WeekDay_20261009");
+            Assert.Contains("working", Avalonia.Automation.AutomationProperties.GetName(friday)); Assert.NotNull(ToolTip.GetTip(friday));
+            Assert.NotNull(Find<Button>(window, "WeekKeyWeek")); Assert.NotNull(Find<Button>(window, "WeekKeySheet"));
+            // The old chart, table and tiles are gone, and so are the buttons for Copy and Export on the page (they live in Settings).
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => b.Name is "WeekChart" or "WeekTable" or "WeekCopyHours" or "WeekExportCsv");
+            Assert.False(instrument.Sheet);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void TheTimesheetKeySwapsTheDayStripsForHoursADayAndTheWeekKeyGoesBack(bool ink)
+    {
+        var model = Model(e => e.Sessions.AddRange(new[] { Row("09:00:00", "90"), Row("11:00:00", "30", "Account two") }));
+        var window = Open(model, ink);
+        try
+        {
+            Click(window, "WeekKeySheet"); Assert.True(model.WeekAsTable); Assert.True(Instrument(window).Sheet);
+            Assert.Equal(5, window.GetVisualDescendants().OfType<Button>().Count(b => b.Name?.StartsWith("WeekDay_") == true)); // The weekday heads still open their day.
+            Click(window, "WeekKeyWeek"); Assert.False(model.WeekAsTable); Assert.False(Instrument(window).Sheet);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AccountsWithNoTimeAndNoBudgetFoldIntoOneRowThatShowAndHideBring(bool ink)
+    {
+        var model = Model(e => e.Sessions.Add(Row("09:00:00", "90")));
+        var window = Open(model, ink);
+        try
+        {
+            var instrument = Instrument(window);
+            Assert.Equal(1, instrument.Folded); Assert.DoesNotContain("Account two", instrument.ShownAccounts); Assert.Contains("Account three", instrument.ShownAccounts); // A budget keeps its row even with no time.
+            Click(window, "WeekShowQuiet"); Assert.Contains("Account two", instrument.ShownAccounts);
+            Click(window, "WeekShowQuiet"); Assert.DoesNotContain("Account two", instrument.ShownAccounts);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void PressingAnAccountTracesItAndPressingItAgainLetsGo(bool ink)
+    {
+        var model = Model(e => e.Sessions.AddRange(new[] { Row("09:00:00", "90"), Row("11:00:00", "30", "Account two") }));
+        var window = Open(model, ink);
+        try
+        {
+            var instrument = Instrument(window); Assert.Null(instrument.Traced);
+            Click(window, "WeekAccount_Accountone"); Assert.Equal("Account one", instrument.Traced);
+            Click(window, "WeekAccount_Accountone"); Assert.Null(instrument.Traced);
         }
         finally { window.Close(); }
     }
 
     [AvaloniaFact]
-    public void TheAccountsListIsKeptShortAndTheHeaderNamesTheWeekAndOffersThisWeek()
+    public void ALongListOfAccountsScrollsByWholeRowsAndTheRowsOnShowStayInOrder()
     {
-        var model = Model(e => e.Sessions.AddRange(new[] { Row("07:00:00", "720"), Row("11:00:00", "30", "Account two") }));
+        var model = TimerModel.CreateDemo(() => Day.AddHours(12)); model.CompleteSetup();
         var window = new DashboardWindow(model); window.Show(); window.SelectTab(true); Settle(window);
         try
         {
-            // The row keeps to the time and the budget; the share of the week and the pace are in its hover detail.
-            Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Name == "WeekPace" || t.Text is "Share" or "Pace");
-            Assert.Contains("Over by 02:00", ToolTip.GetTip((Control)Find<Grid>(window, "WeekAccount_Accountone").Parent!)!.ToString());
-            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Name == "WeekNoBudget" && t.Text == "No budget");
+            var instrument = Instrument(window); var all = instrument.RowCount; var capacity = instrument.Capacity;
+            var before = instrument.ShownAccounts.ToList(); Assert.NotEmpty(before);
+            if (all > capacity) { instrument.ScrollBy(1); Assert.NotEqual(before, instrument.ShownAccounts); instrument.ScrollBy(-1); Assert.Equal(before, instrument.ShownAccounts); }
+            instrument.ScrollBy(-5); Assert.Equal(before, instrument.ShownAccounts); // It stops at the top.
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void ABudgetRowSaysItsPaceInItsDetailAndTheHeaderNamesTheWeek()
+    {
+        var model = Model(e => e.Sessions.AddRange(new[] { Row("07:00:00", "720"), Row("11:00:00", "30", "Account two") }));
+        var window = Open(model, false);
+        try
+        {
+            Assert.Contains("Over by 02:00", ToolTip.GetTip(Find<Button>(window, "WeekAccount_Accountone"))!.ToString());
             Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "5 – 11 Oct");
             var thisWeek = Find<Button>(window, "GoToToday"); Assert.False(thisWeek.IsEnabled);
             model.ChangeWeek(-1); Settle(window); Assert.True(thisWeek.IsEnabled); Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "This week");

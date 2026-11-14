@@ -59,7 +59,7 @@ public sealed class HorizontalTimelineTests
     }
 
     [AvaloniaFact]
-    public void ABreakIsHatchedAndAnAccountBlockIsAGradientOfItsOwnColour()
+    public void ABreakIsAnOutlineAndAnAccountBlockIsLitInItsOwnColour()
     {
         var model = Model(); model.Engine.Sessions.Add(new("2026-10-21", "Account one", "09:00:00", "recorded", "60"));
         model.Engine.Sessions.Add(new("2026-10-21", BreakAccount.Name, "10:00:00", "recorded", "30"));
@@ -67,8 +67,9 @@ public sealed class HorizontalTimelineTests
         try
         {
             var work = Find<Border>(window, "TimelineEntry0"); var rest = Find<Border>(window, "TimelineEntry1");
-            Assert.IsType<LinearGradientBrush>(work.Background); Assert.Equal(2, ((LinearGradientBrush)work.Background!).GradientStops.Count);
-            var hatch = Assert.IsType<LinearGradientBrush>(rest.Background); Assert.Equal(GradientSpreadMethod.Repeat, hatch.SpreadMethod);
+            // A work block is lit: a transparent card with a fill layer of its own colour under its words. A break is an amber outline with nothing lit.
+            Assert.Single(work.GetVisualDescendants().OfType<Border>(), b => b.Name == "BlockPhosphor");
+            Assert.DoesNotContain(rest.GetVisualDescendants().OfType<Border>(), b => b.Name == "BlockPhosphor"); Assert.NotNull(rest.BorderBrush); Assert.True(rest.BorderThickness.Left > 0);
         }
         finally { window.Close(); }
     }
