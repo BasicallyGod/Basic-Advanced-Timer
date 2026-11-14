@@ -165,4 +165,15 @@ public sealed class DisplayInkTests
             }
         DisplayInk.Style = DisplayStyle.Phosphor;
     }
+
+    [AvaloniaFact]
+    public void TheTwoKeysHaveTheirOwnSizeInEachLook()
+    {
+        var glyph = new BreakBadgeGlyph(); var play = new TransportGlyph();
+        DisplayInk.Style = DisplayStyle.Phosphor; glyph.Measure(Size.Infinity); play.Measure(Size.Infinity);
+        Assert.Equal(new Size(VfdGlyph.BadgeWidth, VfdGlyph.BadgeHeight), glyph.DesiredSize); Assert.Equal(glyph.DesiredSize, play.DesiredSize);
+        DisplayInk.Style = DisplayStyle.Ink; glyph.InvalidateMeasure(); glyph.Measure(Size.Infinity); play.InvalidateMeasure(); play.Measure(Size.Infinity);
+        Assert.Equal(new Size(VfdGlyph.InkKeyWidth, VfdGlyph.InkKeyHeight), glyph.DesiredSize); Assert.Equal(glyph.DesiredSize, play.DesiredSize);
+        DisplayInk.Style = DisplayStyle.Phosphor;
+    }
 }

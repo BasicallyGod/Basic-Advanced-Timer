@@ -82,7 +82,8 @@ public sealed class StatusFace : Grid
     public const double NameZone = 88, ControlZone = 34, ControlHeight = 16, ControlGap = 1, RightPadding = 6;
     /// <summary>The pill's window: LED, clock, count, account name, and one column for play/pause and break.</summary>
     public static double DisplayWidth => LeftWidth - DisplayPadding + CountNameGap + NameZone + NameTagGap + ControlZone + RightPadding;
-    public static double ShortDisplayWidth => LeftWidth;
+    /// <summary>The compact pill's window: LED, clock, count, and the stacked play and break keys, with no account name.</summary>
+    public static double ShortDisplayWidth => LeftWidth - DisplayPadding + CountNameGap + ControlZone + RightPadding;
     /// <summary>The sidebar's display is a fixed width whatever the pill does.</summary>
     // As wide as the accounts display under it and Quit timer at the foot: the sidebar's width less its 12 pixel padding either side.
     public const double SidebarDisplayWidth = Timer.Desktop.Sidebar.Width - 24;
@@ -103,13 +104,14 @@ public sealed class StatusFace : Grid
     public Border StateLight => stateLight;
     /// <summary>The alert count's two digits.</summary>
     public SegmentRun AlertCountDigits => alertCountRun;
-    /// <summary>Hides the play key, account box and break so the pill is only its display (the compact pill). Not for the sidebar.</summary>
+    /// <summary>Hides the account name and box so the pill is its display and the two keys (the compact pill). Not for the sidebar.</summary>
     public void SetCompact(bool compact)
     {
         if (Sidebar) return;
-        displayBox.Padding = new Thickness(DisplayPadding, 0, compact ? DisplayPadding : RightPadding, 0);
-        nameSpacer!.IsVisible = tagSpacer!.IsVisible = AccountsButton.IsVisible = !compact;
-        transportControls.IsVisible = Circle.IsVisible = Break.IsVisible = !compact;
+        // The compact pill keeps the play and break keys (stacked at the right, as on the full pill) and drops the account name and its box, which stay in the right-click menu.
+        displayBox.Padding = new Thickness(DisplayPadding, 0, RightPadding, 0);
+        tagSpacer!.IsVisible = AccountsButton.IsVisible = !compact;
+        nameSpacer!.IsVisible = transportControls.IsVisible = Circle.IsVisible = Break.IsVisible = true;
     }
     /// <summary>The tall pill's lower display and the button round it that steps it on; null on the sidebar.</summary>
     public LowerDisplay? Lower { get; private set; }
@@ -125,7 +127,7 @@ public sealed class StatusFace : Grid
     {
         if (lowerHost is null || Lower is null || LowerButton is null) return;
         // Named even while hidden, so the button always says what it does.
-        var all = Enum.GetValues<PillLower>(); var next = all[(Array.IndexOf(all, model.PillLower) + 1) % all.Length];
+        var all = LowerDisplay.Cycle; var next = all[(all.ToList().IndexOf(model.PillLower) + 1) % all.Count];
         var tip = LowerDisplay.NameOf(model.PillLower) + " · press for " + LowerDisplay.NameOf(next).ToLowerInvariant();
         ToolTip.SetTip(LowerButton, tip); Avalonia.Automation.AutomationProperties.SetName(LowerButton, tip);
         if (!lowerHost.IsVisible) return;

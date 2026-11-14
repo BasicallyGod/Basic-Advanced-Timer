@@ -1093,9 +1093,10 @@ public sealed class TimerModel : INotifyPropertyChanged
         SetAppearanceFlag(TallPillLine, on ? "on" : null, true); Notify(PresentationChange);
     }
     /// <summary>What the tall pill's lower display shows. Pressing it steps to the next; saved as pilllower=strip and so on (the day strip has no line).</summary>
-    public PillLower PillLower => Enum.TryParse<PillLower>(AppearanceValue(PillLowerLine), true, out var shown) && Enum.IsDefined(shown) ? shown : PillLower.Strip;
+    // A saved budgets (gone) or, in E-ink, bat (Phosphor's alone) falls back to the day strip.
+    public PillLower PillLower => LowerDisplay.Available(Enum.TryParse<PillLower>(AppearanceValue(PillLowerLine), true, out var shown) && Enum.IsDefined(shown) ? shown : PillLower.Strip);
     public void SetPillLower(PillLower shown) { if (shown == PillLower) return; SetAppearanceFlag(PillLowerLine, shown == PillLower.Strip ? null : shown.ToString().ToLowerInvariant(), true); Notify(PresentationChange); }
-    public void CyclePillLower() { var all = Enum.GetValues<PillLower>(); SetPillLower(all[(Array.IndexOf(all, PillLower) + 1) % all.Length]); }
+    public void CyclePillLower() { var all = LowerDisplay.Cycle; SetPillLower(all[(all.ToList().IndexOf(PillLower) + 1) % all.Count]); }
     // A saved displaytimeline= line is ignored and left alone: the display look is the only one now.
     // ---- the display style: Phosphor (the vacuum-fluorescent look) or E-ink (normal type, grain, calm motion), for the whole application
     private const string DisplayStyleLine = "displaystyle=", InkStrengthLine = "inkstrength=", TexturesLine = "textures=";

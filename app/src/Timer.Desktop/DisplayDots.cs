@@ -243,7 +243,7 @@ public sealed class TransportGlyph : VfdGlyph
         Bloom(context, BadgeOutline, StrokeWidth, 1);
         Bloom(context, Triangle, 0, 1 - progress, true);
         Bloom(context, Bars, 0, progress, true);
-        using (Honeycomb.Meshed(context, new Rect(0, 0, Width, Height)))
+        using (Honeycomb.Meshed(context, new Rect(0, 0, BadgeWidth, BadgeHeight)))
         {
             Ink(context, BadgeOutline, StrokeWidth, 1);
             Ink(context, Triangle, 0, 1 - progress, true);
@@ -299,11 +299,12 @@ public sealed class BreakBadgeGlyph : VfdGlyph
             return;
         }
         var label = Label.Value;
-        var shift = Matrix.CreateTranslation(Width / 2 - label.Bounds.Center.X, Height / 2 - label.Bounds.Center.Y);
+        // The badge is 30 by 14 (a little more room round it in the key), so the label is centred on the badge, not on the control.
+        var shift = Matrix.CreateTranslation(BadgeWidth / 2 - label.Bounds.Center.X, BadgeHeight / 2 - label.Bounds.Center.Y);
         Bloom(context, BadgeOutline, StrokeWidth, strength);
         using (context.PushTransform(shift))
             Bloom(context, label, 0, strength, true);
-        using (Honeycomb.Meshed(context, new Rect(0, 0, Width, Height)))
+        using (Honeycomb.Meshed(context, new Rect(0, 0, BadgeWidth, BadgeHeight)))
         {
             Ink(context, BadgeOutline, StrokeWidth, strength);
             using (context.PushTransform(shift))

@@ -5,22 +5,26 @@ using Timer.Core;
 namespace Timer.Desktop;
 
 /// <summary>What the tall pill's lower display shows. Pressing it steps to the next, in this order.</summary>
-public enum PillLower { Strip, Next, Budgets, Week, Both, Bat }
+public enum PillLower { Strip, Next, Week, Both, Bat }
 
 /// <summary>
 /// The tall pill's second display row, under the clock and the account name (the board "The tall pill"). It is the same vacuum-fluorescent glass: every shape is drawn
 /// through the honeycomb, unlit segments stay faintly drawn, and on a dark theme the lit ones bloom outside the mesh. It shows one of <see cref="PillLower"/> at a time:
-/// the day as a strip of blocks, what is up next as a ticker, budgets as level meters, the week as columns, the strip and the ticker together, or a bat at night.
+/// the day as a strip of blocks, what is up next as a ticker, the week as columns, the strip and the ticker together, or a bat at night.
 /// It draws from the model each time it is drawn; the owner redraws it when the model changes, and its own timer runs only while the ticker or the bat moves.
 /// </summary>
 public sealed class LowerDisplay : SteppedControl
 {
     public const double RowHeight = 40, BothHeight = 68, Pad = 10;
     public static double HeightFor(PillLower shown) => shown == PillLower.Both ? BothHeight : RowHeight;
+    /// <summary>The displays the lower row steps through, in order: the bat is Phosphor's alone, and Budgets are gone (the sidebar and the Week page carry them).</summary>
+    public static IReadOnlyList<PillLower> Cycle => DisplayInk.On ? new[] { PillLower.Strip, PillLower.Next, PillLower.Week, PillLower.Both } : new[] { PillLower.Strip, PillLower.Next, PillLower.Week, PillLower.Both, PillLower.Bat };
+    /// <summary>What a saved choice shows in this look: a display this look lacks falls back to the strip.</summary>
+    public static PillLower Available(PillLower wanted) => Cycle.Contains(wanted) ? wanted : PillLower.Strip;
     /// <summary>The name of each display, for its tooltip and the Settings words.</summary>
     public static string NameOf(PillLower shown) => shown switch
     {
-        PillLower.Strip => "Day strip", PillLower.Next => "Up next", PillLower.Budgets => "Budgets", PillLower.Week => "Week", PillLower.Both => "Day strip and up next", _ => "Night bat"
+        PillLower.Strip => "Day strip", PillLower.Next => "Up next", PillLower.Week => "Week", PillLower.Both => "Day strip and up next", _ => "Night bat"
     };
     /// <summary>The ticker steps a cell in this time, a little faster than the account name, since it carries more.</summary>
     public const double TickerStepMilliseconds = 300;
@@ -38,21 +42,32 @@ public sealed class LowerDisplay : SteppedControl
 
     public LowerDisplay(TimerModel model) { this.model = model; IsHitTestVisible = false; Height = RowHeight; }
 
+    // E-ink changes display in steps rather than a fade: the old one drops to two thirds and then a third while the new one comes up to a third and then a half.
+    private PillLower previous; private int fadeStep = 3; private double fadeClock; public const double FadeStepMilliseconds = 90;
     public void Show(PillLower what)
     {
-        if (shown != what) { shown = what; Height = HeightFor(what); }
+        if (shown != what)
+        {
+            if (DisplayInk.On && !Motion.Reduced && IsVisible) { previous = shown; fadeStep = 0; fadeClock = 0; } else fadeStep = 3;
+            shown = what; Height = HeightFor(what);
+        }
         tickerParts = null;
         InvalidateVisual(); Wake();
     }
     protected override int IntervalMilliseconds => 100;
-    protected override bool Animating => IsVisible && !Motion.Reduced && shown is PillLower.Next or PillLower.Both or PillLower.Bat && (shown == PillLower.Bat || Ribbon.Length > TickerCells);
-    protected override void Advance(double milliseconds) => elapsed += milliseconds;
+    protected override bool Animating => IsVisible && !Motion.Reduced && (fadeStep < 3 || shown is PillLower.Next or PillLower.Both or PillLower.Bat && (shown == PillLower.Bat || Ribbon.Length > TickerCells));
+    protected override void Advance(double milliseconds)
+    {
+        elapsed += milliseconds;
+        if (fadeStep < 3) { fadeClock += milliseconds; while (fadeClock >= FadeStepMilliseconds && fadeStep < 3) { fadeClock -= FadeStepMilliseconds; fadeStep++; } }
+    }
 
     // ---------- drawing: the shapes are collected first, then drawn as bloom, ghosts and lit phosphor ----------
     private readonly record struct Op(Geometry Shape, Color Colour, double Width, bool Filled, bool Lit);
     private sealed class Painter
     {
         public readonly List<Op> Ops = new();
+        public readonly List<(string Text, double X, double Y, double H, Color Colour)> Texts = new();
         public Color Ghost;
         public void Line(Point a, Point b, double width, Color colour, bool lit) => Ops.Add(new Op(new LineGeometry(a, b), colour, width, false, lit));
         public void Box(Rect r, double radius, Color colour, bool lit) => Ops.Add(new Op(new RectangleGeometry(r, radius, radius), colour, 0, true, lit));
@@ -63,6 +78,17 @@ public sealed class LowerDisplay : SteppedControl
         /// <summary>A run of sixteen-segment cells, slanted like the account name, at any height: the name's cell scaled (19 wide for 28 tall). Returns its width.</summary>
         public double Text(string text, double x, double y, double h, Func<int, Color> colour, bool ghosts = true)
         {
+            if (DisplayInk.On)
+            {
+                // E-ink: the same words in normal type, a run for each colour; they are drawn after the shapes, whole and without a mesh.
+                var at = x; var run = 0;
+                while (run < text.Length)
+                {
+                    var end = run + 1; var c0 = colour(run); while (end < text.Length && colour(end) == c0) end++;
+                    var piece = text[run..end]; Texts.Add((piece, at, y, h, c0)); at += SegmentText.TextWidth(piece, h); run = end;
+                }
+                return at - x;
+            }
             var cw = h * 19 / 28; var gw = h * 13.4 / 28; var th = Math.Max(1.1, SegmentName.Thickness * h / 20); var ins = th / 2; var inner = h - 2 * ins; var trimMax = 1.1 * h / 20;
             for (var i = 0; i < text.Length; i++)
             {
@@ -107,17 +133,44 @@ public sealed class LowerDisplay : SteppedControl
     public override void Render(DrawingContext context)
     {
         FrameMonitor.Bump("draw LowerDisplay");
-        frameAccounts = shown is PillLower.Strip or PillLower.Both or PillLower.Budgets ? model.ReviewAccounts : null;
-        var dark = SoftTint.IsDark(this);
+        if (fadeStep < 3)
+        {
+            // Two steps of the old display fading out under the new one coming in.
+            var oldStrength = fadeStep == 0 ? .66 : .33; var newStrength = fadeStep == 0 ? .33 : .5;
+            using (context.PushOpacity(oldStrength)) Draw(context, previous);
+            using (context.PushOpacity(newStrength)) Draw(context, shown);
+            return;
+        }
+        Draw(context, shown);
+    }
+    private void Draw(DrawingContext context, PillLower what)
+    {
+        frameAccounts = what is PillLower.Strip or PillLower.Both ? model.ReviewAccounts : null;
+        var dark = SoftTint.IsDark(this); var was = shown; shown = what; // the painters read which display is showing
         var p = new Painter { Ghost = SoftTint.WithAlpha(C("Ink", "#18233A"), dark ? .085 : .09) };
-        switch (shown)
+        switch (what)
         {
             case PillLower.Strip: Strip(p, 0); break;
             case PillLower.Next: Ticker(p, 0); break;
-            case PillLower.Budgets: Budgets(p); break;
             case PillLower.Week: Week(p); break;
             case PillLower.Both: Strip(p, 0); Ticker(p, 28); break;
             default: Bat(p); break;
+        }
+        shown = was;
+        if (DisplayInk.On)
+        {
+            // E-ink: shapes as plain ink (a filled box gets a little grain), then the words in normal type over them.
+            var paper = DisplayInk.For(dark);
+            foreach (var op in p.Ops.OrderBy(o => o.Lit))
+            {
+                var brush = new SolidColorBrush(op.Colour);
+                if (op.Filled && op.Shape is RectangleGeometry box && op.Lit) DisplayInk.Cell(context, paper, brush, box.Rect, Math.Min(box.Rect.Height / 2, 3));
+                else if (op.Filled) context.DrawGeometry(brush, null, op.Shape);
+                else context.DrawGeometry(null, new Pen(brush, op.Width, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), op.Shape);
+            }
+            using (context.PushClip(new Rect(Bounds.Size)))
+                foreach (var (text, x, y, h, colour) in p.Texts) InkType.Draw(context, text, DisplaySkin.RoleFor(h), new SolidColorBrush(colour), x, y + h / 2 + DisplaySkin.RoleFor(h).Size * .365);
+            frameAccounts = null; return;
         }
         // Bloom first, outside the mesh, so it fills the gaps between the cells; then the ghosts and the lit phosphor through the honeycomb.
         var strength = dark ? .78 : .28;
@@ -177,7 +230,7 @@ public sealed class LowerDisplay : SteppedControl
 
     // ---------- up next ----------
     public const double TickerHeight = 15, TickerLeft = 32;
-    private int TickerCells => (int)Math.Max(1, Math.Floor((Bounds.Width - TickerLeft - Pad) / (TickerHeight * 19 / 28)));
+    private int TickerCells => (int)Math.Max(1, Math.Floor((Bounds.Width - TickerLeft - Pad) / (DisplayInk.On ? InkType.Width("e", DisplaySkin.RoleFor(TickerHeight)) : TickerHeight * 19 / 28)));
     /// <summary>What the ticker says, with the colour role of each piece: the next meeting and the next reminder today, or that nothing is coming up.</summary>
     public IReadOnlyList<(string Words, string Role)> UpNext()
     {
@@ -210,26 +263,6 @@ public sealed class LowerDisplay : SteppedControl
         var offset = scroll ? (int)(elapsed / TickerStepMilliseconds) % chars.Count : 0;
         for (var i = 0; i < cells; i++) { var k = offset + i; var (ch, col) = scroll ? chars[k % chars.Count] : k < chars.Count ? chars[k] : (' ', roles["ink"]); text[i] = ch; colours[i] = col; }
         p.Text(new string(text), TickerLeft, y0 + 7, TickerHeight, i => colours[i]);
-    }
-
-    // ---------- budgets ----------
-    private void Budgets(Painter p)
-    {
-        var ink = C("Ink", "#18233A"); var quiet = C("Muted", "#8A8F98"); var amber = StatusFace.BreakGlyphColour(this); var red = C("Overtime", "#E5484D");
-        var rows = model.Accounts.Where(a => model.BudgetRatio(a) is not null).Take(3).ToList();
-        if (rows.Count == 0) { p.Text("NO BUDGETS SET", Pad, 13, 13, _ => quiet); return; }
-        var top = 4 + (3 - rows.Count) * 5.75;
-        for (var r = 0; r < rows.Count; r++)
-        {
-            var a = rows[r]; var ratio = model.BudgetRatio(a)!.Value; var y = top + r * 11.5;
-            var colour = ratio >= 1 ? red : ratio >= .8 ? amber : ink;
-            p.Dot(new Point(13, y + 4.5), 2, AccountColour(a.Name), true);
-            // The account's initials, as the pill's key used to carry them (Account one reads AO), since a first three letters were often the same for every account.
-            var code = Drawable(PillWindow.Initials(a.Display)).Replace(" ", ""); p.Text(code.Length > 3 ? code[..3] : code.PadRight(3), 19, y, 9, _ => quiet);
-            var cells = 30; var lit = (int)Math.Min(cells, Math.Round(ratio * cells)); var right = Bounds.Width - 41; var step = (right - 46) / cells;
-            for (var c = 0; c < cells; c++) p.Box(new Rect(46 + c * step, y + 1, step - 2, 7), 1.2, c < lit ? colour : p.Ghost, c < lit);
-            var pct = Math.Min(999, (int)Math.Round(ratio * 100)).ToString(); p.Text(pct.PadLeft(3), right + 3, y, 9, _ => colour);
-        }
     }
 
     // ---------- the week ----------
