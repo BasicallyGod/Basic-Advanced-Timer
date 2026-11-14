@@ -135,8 +135,9 @@ public static class ThemeEngine
         Put("ImportantEdge", Color.Parse(ThemeColours.Mix(colours["Line"], gold, lightGround ? .5 : .55)));
         // The clock's display is set into the card: a well a shade under it, the grooves of its unlit LED, the shade falling inside its top and left edges and a faint light
         // edge along its foot (dividers inside it take the same two).
-        Put("DisplayWell", Color.Parse(lightGround ? ThemeColours.Mix(colours["Surface"], colours["Ink"], .035) : ThemeColours.Mix(colours["Panel"], "#000000", .45)));
-        Put("DisplayGroove", Color.Parse(lightGround ? ThemeColours.Mix(colours["Surface"], colours["Ink"], .02) : ThemeColours.Mix(colours["Panel"], "#000000", .55)));
+        // On a light theme the well is lifted towards white rather than shaded towards the ink, so dark segments stand clear of it (a well a shade under the card read as grey).
+        Put("DisplayWell", Color.Parse(lightGround ? ThemeColours.Mix(colours["Surface"], "#FFFFFF", .5) : ThemeColours.Mix(colours["Panel"], "#000000", .45)));
+        Put("DisplayGroove", Color.Parse(lightGround ? ThemeColours.Mix(colours["Surface"], colours["Ink"], .05) : ThemeColours.Mix(colours["Panel"], "#000000", .55)));
         Put("DisplayShade", lightGround ? Color.FromArgb(38, 60, 52, 100) : Color.FromArgb(166, 0, 0, 0));
         Put("ZoneHover", Color.FromArgb(lightGround ? (byte)22 : (byte)24, lightGround ? (byte)60 : (byte)255, lightGround ? (byte)52 : (byte)255, lightGround ? (byte)100 : (byte)255));
         Put("ZonePressed", Color.FromArgb(lightGround ? (byte)40 : (byte)42, lightGround ? (byte)60 : (byte)255, lightGround ? (byte)52 : (byte)255, lightGround ? (byte)100 : (byte)255));
