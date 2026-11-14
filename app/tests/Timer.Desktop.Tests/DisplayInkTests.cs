@@ -146,7 +146,23 @@ public sealed class DisplayInkTests
                     window.SelectTab(true); Shot("week");
                     model.SetWeekAsTable(true); Shot("timesheet"); model.SetWeekAsTable(false);
                 }
-                finally { window.Close(); DisplayInk.Style = DisplayStyle.Phosphor; }
+                finally { window.Close(); }
+                DisplayInk.Style = style; // the window closing leaves the thread's look as the model set it, but be sure
+                // The pill in its three styles, tracking, so the display's clock, count, name and keys can be looked at.
+                model.ToggleAccount("Account one");
+                foreach (var shape in new[] { "full", "compact", "tall" })
+                {
+                    model.SetCompactPill(shape == "compact"); model.SetTallPill(shape == "tall");
+                    var pill = new PillWindow(model); pill.Show();
+                    try
+                    {
+                        for (var pass = 0; pass < 3; pass++) { Dispatcher.UIThread.RunJobs(); using var f = pill.CaptureRenderedFrame(); }
+                        using var frame = pill.CaptureRenderedFrame(); frame?.Save(Path.Combine(folder, $"{style}-{theme}-pill-{shape}.png"));
+                    }
+                    finally { pill.Close(); }
+                }
+                model.SetCompactPill(false); model.SetTallPill(false);
             }
+        DisplayInk.Style = DisplayStyle.Phosphor;
     }
 }

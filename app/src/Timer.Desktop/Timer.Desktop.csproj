@@ -27,6 +27,8 @@
     <AvaloniaResource Include="Assets/AppIcon.png" />
     <AvaloniaResource Include="Assets/Fonts/ChakraPetch-SemiBold.ttf" />
     <AvaloniaResource Include="Assets/Fonts/OFL.txt" />
+    <AvaloniaResource Include="Assets/Fonts/unifont-latin.bin" />
+    <AvaloniaResource Include="Assets/Fonts/Unifont-LICENSE.txt" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="BasicallyGod.Timer.Core" Version="$(SharedTimerVersion)" />

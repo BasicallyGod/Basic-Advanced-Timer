@@ -187,3 +187,44 @@ public sealed class InkFill(Color colour, double radius, int texture) : Avalonia
         DisplayInk.Texture(context, texture, rect, radius, colour);
     }
 }
+
+/// <summary>
+/// The dot-matrix font of E-ink's account name: GNU Unifont's 8 by 16 glyphs (Latin, Greek and Cyrillic, 921 of them) read lazily from one small resource. A glyph is sixteen
+/// row bytes, the left-most dot in the top bit. Characters it has no glyph for are left out, as the segment name leaves out what it cannot draw.
+/// </summary>
+public static class DotFont
+{
+    public const int Width = 8, Height = 16;
+    private static Dictionary<int, byte[]>? glyphs;
+    private static Dictionary<int, byte[]> Glyphs => glyphs ??= Load();
+    private static Dictionary<int, byte[]> Load()
+    {
+        var map = new Dictionary<int, byte[]>();
+        try
+        {
+            using var stream = Avalonia.Platform.AssetLoader.Open(new Uri("avares://" + typeof(DotFont).Assembly.GetName().Name + "/Assets/Fonts/unifont-latin.bin"));
+            using var memory = new MemoryStream(); stream.CopyTo(memory); var data = memory.ToArray();
+            var count = data[0] | data[1] << 8;
+            for (var i = 0; i < count; i++) { var at = 2 + i * 18; map[data[at] | data[at + 1] << 8] = data[(at + 2)..(at + 18)]; }
+        }
+        catch (Exception) { /* No resource (a test host without the assets): the name simply draws nothing. */ }
+        return map;
+    }
+    /// <summary>The sixteen row bytes of <paramref name="ch"/>, or null when the font has none (a blank for a space).</summary>
+    public static byte[]? Rows(char ch) => Glyphs.TryGetValue(ch, out var rows) ? rows : null;
+    public static bool Has(char ch) => ch == ' ' || Glyphs.ContainsKey(ch);
+    /// <summary>The text as the dot matrix can draw it: accents and ligatures spelled out as far as the font allows, anything else dropped; null when too little survives.</summary>
+    public static string? Normalise(string name)
+    {
+        var sb = new System.Text.StringBuilder(); var seen = 0; var drawn = 0;
+        foreach (var raw in name.Normalize(System.Text.NormalizationForm.FormC))
+        {
+            seen++;
+            if (Has(raw)) { sb.Append(raw); drawn++; continue; }
+            var plain = raw.ToString().Normalize(System.Text.NormalizationForm.FormD).FirstOrDefault(char.IsAsciiLetter);
+            if (plain != 0 && Has(plain)) { sb.Append(plain); drawn++; }
+        }
+        var text = System.Text.RegularExpressions.Regex.Replace(sb.ToString(), " {2,}", " ").Trim();
+        return text.Length < 2 || drawn * 2 < seen ? null : text;
+    }
+}

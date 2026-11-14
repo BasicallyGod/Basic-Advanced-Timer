@@ -342,7 +342,8 @@ public sealed class StatusFace : Grid
         var alerts = model.PillAlertsMode == "off" ? Array.Empty<AlertItem>() : model.Alerts; var waiting = alerts.Count > 0;
         var lit = waiting ? ThemeColourOr(alerts[0].LightToken, "#3558C8") : ThemeColourOr("Muted", "#8A8F98");
         var count = Math.Min(alerts.Count, 99);
-        alertCountRun.Text = waiting ? (count < 10 ? " " + count : count.ToString()) : "  ";
+        // E-ink always shows two zero-padded digits (05, and a quiet 00 with nothing waiting); Phosphor leaves the cells blank.
+        alertCountRun.Text = DisplayInk.On ? count.ToString("00") : waiting ? (count < 10 ? " " + count : count.ToString()) : "  ";
         alertCountRun.Colour = lit;
         bell.Show(lit, waiting);
         var reminderWords = !waiting ? "No reminders waiting" : alerts.All(a => a.Kind == AlertKind.Reminder) ? "A reminder is due" : $"{alerts.Count} waiting, most urgent first";
@@ -391,7 +392,7 @@ public sealed class StatusFace : Grid
         Transport.Show(recording, instant: !Transport.IsAttachedToVisualTree());
         var index = shown is null ? -1 : model.Accounts.ToList().FindIndex(a => a.Name == shown);
         NameRun!.Colour = ThemeColourOr("Ink", "#18233A");
-        NameRun.Text = shown is null ? "CHOOSE" : SegmentName.ForAccount(model.Accounts.FirstOrDefault(a => a.Name == shown)?.Display ?? shown, Math.Max(0, index));
+        NameRun.Text = shown is null ? (DisplayInk.On ? "Choose" : "CHOOSE") : SegmentName.ForAccount(model.Accounts.FirstOrDefault(a => a.Name == shown)?.Display ?? shown, Math.Max(0, index));
         if (nameHost is not null)
         {
             // The words the old card showed under the name now live in its tooltip and accessible name.

@@ -93,6 +93,7 @@ public sealed class SegmentRun : Control
     /// <summary>The width a run of <paramref name="text"/> takes at <paramref name="height"/>, which depends only on how many digits and colons it has, so the clock never changes width.</summary>
     public static double WidthOf(string text, double height)
     {
+        if (DisplayInk.On) { var role = DisplaySkin.RoleFor(height); double zero = InkType.Width("0", role), colon = ColonCell(role); return text.Sum(ch => ch == ':' ? colon + 2 * ColonPad : zero); }
         var shapes = SegmentShapes.For(height); var width = 0.0; var previousDigit = false;
         foreach (var c in text)
         {
@@ -102,8 +103,22 @@ public sealed class SegmentRun : Control
         return width;
     }
     protected override Size MeasureOverride(Size availableSize) => new(WidthOf(Text, DigitHeight), DigitHeight);
+    // E-ink: a colon is as wide as the type makes it, and every digit (and blank) takes one tabular cell, so the run never changes width.
+    private static double ColonCell(InkRole role) => InkType.Width("0:0", role) - 2 * InkType.Width("0", role);
+    private void RenderInk(DrawingContext context)
+    {
+        var role = DisplaySkin.RoleFor(DigitHeight); var colour = Colour ?? Ui.ThemeColour(this, LitKey, Colors.Gray); var brush = new SolidColorBrush(colour);
+        double zero = InkType.Width("0", role), colon = ColonCell(role), x = 0, baseline = DigitHeight / 2 + role.Size * .365;
+        foreach (var c in Text)
+        {
+            if (c == ':') { InkType.Draw(context, ":", role, brush, x + ColonPad, baseline); x += colon + 2 * ColonPad; continue; }
+            if (c != ' ') InkType.Draw(context, c.ToString(), role, brush, x, baseline);
+            x += zero;
+        }
+    }
     public override void Render(DrawingContext context)
     {
+        if (DisplayInk.On) { RenderInk(context); return; }
         FrameMonitor.Bump("draw SegmentRun");
         var shapes = SegmentShapes.For(DigitHeight);
         var dark = ActualThemeVariant == ThemeVariant.Dark;
