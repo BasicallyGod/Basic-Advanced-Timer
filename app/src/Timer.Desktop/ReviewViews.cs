@@ -219,24 +219,42 @@ public static partial class ReviewViews
         return intervals;
     }
 
-    /// <summary>A block's words on the display, by the room it has: the length over the name, a line of both, or initials, in segment letters in the given ink.</summary>
-    private static void VfdWords(StackPanel text, BlockDetail detail, double width, string length, string name, Color ink)
+    /// <summary>
+    /// A block's words on the display, by the room it has: the length over the name, a line of both, or initials, in segment letters in the given ink. Words are only
+    /// drawn when they fit inside the block's padding whole (slant included), never a single letter, and otherwise the block shows nothing: letters running past a
+    /// block's edge read as a fault. A break says BREAK where it fits, then a cup, then nothing.
+    /// </summary>
+    private static void VfdWords(StackPanel text, BlockDetail detail, double width, string length, string name, Color ink, bool isBreak = false)
     {
-        var room = width - 16; var upper = LowerDisplay.Drawable(name); var initials = LowerDisplay.Drawable(PillWindow.Initials(name));
+        // The words' own room: the block less the text's margins either side and a little to spare for the round caps.
+        var room = width - (detail == BlockDetail.Full ? (width < 84 ? 14 : 20) : 16) - 6;
+        var upper = isBreak ? "BREAK" : LowerDisplay.Drawable(name); var initials = isBreak ? "" : LowerDisplay.Drawable(PillWindow.Initials(name));
         SegmentText Seg(string words, double height) => new(words, height, ink, weight: 1.12) { Name = "BlockWords" };
+        bool Fits(string words, double height) => words.Length >= 2 && SegmentText.Fits(words, height, room);
         switch (detail)
         {
             case BlockDetail.Full:
-                if (SegmentText.Fits(length, 13, room)) text.Children.Add(Seg(length, 13)); else if (SegmentText.Fits(length, 9, room)) text.Children.Add(Seg(length, 9));
-                var shown = SegmentText.Fits(upper, 11, room) ? upper : SegmentText.Fits(initials, 11, room) ? initials : null;
+                if (Fits(length, 13)) text.Children.Add(Seg(length, 13)); else if (Fits(length, 9)) text.Children.Add(Seg(length, 9));
+                var shown = Fits(upper, 11) ? upper : Fits(initials, 11) ? initials : null;
                 if (shown is not null) text.Children.Add(Seg(shown, 11));
                 text.Spacing = 6; break;
             case BlockDetail.Inline:
-                var line = SegmentText.Fits(length + " " + upper, 9, room) ? length + " " + upper : SegmentText.Fits(length + " " + initials, 9, room) ? length + " " + initials : SegmentText.Fits(length, 9, room) ? length : null;
+                var line = Fits(length + " " + upper, 9) ? length + " " + upper : Fits(length + " " + initials, 9) ? length + " " + initials : Fits(length, 9) ? length : null;
                 if (line is not null) text.Children.Add(Seg(line, 9)); break;
             default:
-                var small = SegmentText.Fits(initials + " " + length, 8, room) ? initials + " " + length : SegmentText.Fits(initials, 8, room) ? initials : null;
+                var small = Fits(initials + " " + length, 8) ? initials + " " + length : Fits(initials, 8) ? initials : null;
                 if (small is not null) text.Children.Add(Seg(small, 8)); break;
+        }
+        // A break too narrow for its word keeps a cup while there is room for one, and is a plain amber outline below that.
+        if (isBreak && text.Children.Count == 0 && width >= 26)
+            text.Children.Add(new BreakGlyph { Name = "BreakCup", Width = 14, Height = 14, Fixed = new SolidColorBrush(ink), HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center, IsHitTestVisible = false });
+        else if (isBreak && text.Children.Count > 0 && text.Children.OfType<SegmentText>().All(t => t.Text != "BREAK"))
+        {
+            // The length fitted but the word did not: a cup beside it says what the block is.
+            var length2 = text.Children[0]; text.Children.Clear();
+            var row = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 5 };
+            if (width >= 60) row.Children.Add(new BreakGlyph { Name = "BreakCup", Width = 12, Height = 12, Fixed = new SolidColorBrush(ink), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, IsHitTestVisible = false });
+            row.Children.Add(length2); text.Children.Add(row);
         }
     }
 
@@ -376,7 +394,7 @@ public static partial class ReviewViews
                     var bare = Ui.Text(PillWindow.Initials(display), 10); bare.LineHeight = 11; bare.FontWeight = FontWeight.SemiBold; bare.Name = "BlockInitials"; text.Children.Add(bare);
                     break;
             }
-            if (vfd) { text.Children.Clear(); marquees.Clear(); VfdWords(text, detail, width, model.Format(duration), display, isBreak ? StatusFace.BreakGlyphColour(canvas) : VfdLook.BlockInk); }
+            if (vfd) { text.Children.Clear(); marquees.Clear(); VfdWords(text, detail, width, model.Format(duration), display, isBreak ? Color.Parse("#F5B63A") : VfdLook.BlockInk, isBreak); }
             foreach (var child in text.GetLogicalDescendants().OfType<TextBlock>()) child.Foreground = Brush.Parse(ink);
             // The card itself is not clipped, or the selection ring round it would be cut off; what is inside it is clipped instead.
             var card = new Border { Width = width, Height = height, CornerRadius = new CornerRadius(CornerFor(laneCount, width, height)) };
@@ -393,7 +411,7 @@ public static partial class ReviewViews
             var content = new Grid { ClipToBounds = true };
             // On the display only the lit fill goes through the honeycomb, and its glow shows between the cells; the words stay whole on top of it, since the
             // mesh over small segment letters broke them up on Windows.
-            if (vfd && !isBreak) content.Children.Add(new Border { Name = "BlockPhosphor", Background = new SolidColorBrush(SoftTint.WithAlpha(Color.Parse(look.Fill), .95)), CornerRadius = card.CornerRadius, OpacityMask = Honeycomb.Brush, IsHitTestVisible = false });
+            if (vfd && !isBreak) content.Children.Add(new Border { Name = "BlockPhosphor", Background = new SolidColorBrush(SoftTint.WithAlpha(Color.Parse(look.Fill), .95)), CornerRadius = card.CornerRadius, OpacityMask = Honeycomb.LargeBrush, IsHitTestVisible = false });
             content.Children.Add(text);
             // The gaps inside a merged block are lighter, and a small link marks it as merged.
             if (interval.Group is { } mergedGroup)
@@ -520,13 +538,21 @@ public static partial class ReviewViews
                 if (vfd)
                 {
                     // On the display a meeting is an outline with its name in segment letters; the times stay as quiet words, which follow a drag.
-                    var words = LowerDisplay.Drawable(model.Notes.Text(meeting)); var cells = Math.Max(1, (int)((width - 16) / SegmentText.CellWidth(9)));
-                    head = Ui.Grid("*"); Ui.Put(head, new SegmentText(words.Length > cells ? words[..cells] : words, 9, glassInk));
-                    body.Children.Clear(); body.Children.Add(head);
+                    // The name in as many whole cells as fit inside the outline (its margins and slant counted), and none below three: a letter or two cut off
+                    // at the edge read as a fault, and the tooltip and Details have the name.
+                    var words = LowerDisplay.Drawable(model.Notes.Text(meeting)); var room = width - 16 - 6; var cells = words.Length;
+                    while (cells > 0 && !SegmentText.Fits(new string('8', cells), 9, room)) cells--;
+                    body.Children.Clear();
+                    // Cut short, it stops at the last whole word where one fits ("TEAM SYNC" becomes "TEAM", not "TEAM S"), and only cuts inside a word when no word fits.
+                    var cut = words.Length > cells ? words[..cells] : words;
+                    if (words.Length > cells && cut.LastIndexOf(' ') is var space && space >= 3) cut = cut[..space];
+                    cut = cut.TrimEnd();
+                    if (cut.Length >= 3) { head = Ui.Grid("*"); Ui.Put(head, new SegmentText(cut, 9, glassInk) { Name = "MeetingWords" }); body.Children.Add(head); }
                 }
                 else body.Children.Add(head);
                 TextBlock? span = null;
-                if (rows == 1) { span = new TextBlock { Text = Hm(meeting.At) + "–" + Hm(meeting.End), FontSize = 11, TextTrimming = TextTrimming.CharacterEllipsis }; span.Classes.Add("muted"); body.Children.Add(span); }
+                // On the display the times show only where they fit whole, as the name does; a cut "13…" told nothing.
+                if (rows == 1 && !(vfd && width < 76)) { span = new TextBlock { Text = Hm(meeting.At) + "–" + Hm(meeting.End), FontSize = 11, TextTrimming = TextTrimming.CharacterEllipsis }; span.Classes.Add("muted"); body.Children.Add(span); }
                 // A meeting is a quiet block of its own, a light grey with no outline, so it reads as a plan beside the coloured time that was tracked; the pointer over it turns it to
                 // the selected tint.
                 // The card itself is not clipped, so the guide's ring (the card's own shadow) shows; its content is.

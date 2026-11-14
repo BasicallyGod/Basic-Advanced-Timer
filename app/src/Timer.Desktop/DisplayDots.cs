@@ -18,9 +18,14 @@ namespace Timer.Desktop;
 public static class Honeycomb
 {
     public const double Cell = 1.45, Inset = 0.93;
-    private static readonly Lazy<IBrush> Shared = new(() =>
+    /// <summary>
+    /// The cell of the larger mesh used on the dashboard's display timeline and week. Their lit areas are wide and seen from further off than the pill's figures, and
+    /// at 1.45 the mesh blurred into a grey wash on Windows; a bigger cell keeps each hexagon distinct.
+    /// </summary>
+    public const double LargeCell = 2.3;
+    private static IBrush Build(double s)
     {
-        double s = Cell, w = Math.Sqrt(3) * s, h = 3 * s; var g = new StreamGeometry();
+        double w = Math.Sqrt(3) * s, h = 3 * s; var g = new StreamGeometry();
         using (var c = g.Open())
             // One period of the lattice holds five half-cells; the neighbouring tiles complete the ones cut by its edge.
             foreach (var (cx, cy) in new[] { (w / 2, s), (0.0, 2.5 * s), (w, 2.5 * s), (0.0, -0.5 * s), (w, -0.5 * s) })
@@ -36,7 +41,13 @@ public static class Honeycomb
         var drawing = new GeometryDrawing { Brush = Brushes.White, Geometry = g };
         var rect = new RelativeRect(0, 0, w, h, RelativeUnit.Absolute);
         return new DrawingBrush(drawing) { TileMode = TileMode.Tile, SourceRect = rect, DestinationRect = rect, Stretch = Stretch.Fill };
-    });
+    }
+    private static readonly Lazy<IBrush> Shared = new(() => Build(Cell));
+    private static readonly Lazy<IBrush> SharedLarge = new(() => Build(LargeCell));
+    /// <summary>The larger mesh, for the display timeline and week.</summary>
+    public static IBrush LargeBrush => SharedLarge.Value;
+    /// <summary>Pushes the larger mesh over <paramref name="bounds"/>; dispose to stop.</summary>
+    public static IDisposable MeshedLarge(DrawingContext context, Rect bounds) => context.PushOpacityMask(LargeBrush, bounds);
     /// <summary>The mask: opaque inside each cell and clear between them. Start it at a control's top left with <c>OpacityMask</c>.</summary>
     public static IBrush Brush => Shared.Value;
     /// <summary>Pushes the mesh as an opacity mask over <paramref name="bounds"/>; dispose to stop.</summary>

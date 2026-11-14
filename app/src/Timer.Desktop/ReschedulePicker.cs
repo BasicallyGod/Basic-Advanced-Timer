@@ -292,7 +292,7 @@ public sealed class ReminderPickerCard : Border
         var column = new StackPanel { Spacing = 10 };
         var title = Ui.Grid("Auto,*,Auto"); title.ColumnSpacing = 8;
         Ui.Put(title, new TextBlock { Text = "Reminder", FontSize = 13, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center });
-        var who = new TextBlock { Text = forText, FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center }; who.Classes.Add("muted"); Ui.Put(title, who, 1);
+        // Only the heading: the note's own words beside it crowded the card, and the card hangs under the note it is for.
         var cross = Ui.IconButton(IconKind.Close, "Close", "ReminderClose", close); cross.Width = 24; cross.Height = 24; Ui.Put(title, cross, 2);
         Picker = new ReschedulePicker(model, current, at => answer(at));
         // Remove only when there is something to remove, at the left; Cancel at the right, where Reschedule's is.

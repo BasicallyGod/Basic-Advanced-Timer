@@ -6,6 +6,12 @@ The right-click menu shows `Version 0.1.<build> (<commit>)` and the channel for 
 
 The dated Avalonia milestones below are newest first, not numbered releases. Use the [alpha commit history](https://github.com/BasicallyGod/Basic-Advanced-Timer/commits/alpha/) and [build workflow runs](https://github.com/BasicallyGod/Basic-Advanced-Timer/actions/workflows/avalonia-preview.yml) to identify a packaged build.
 
+## 14 November 2026
+
+| Change | Commit | Details |
+|---|---|---|
+| Display polish: larger honeycomb on the timeline and week; segment words never run past a block or meeting (whole words or nothing, no single letters); narrow breaks show a cup, then nothing; the week's totals, readout and By account are bigger, the readout names the slice under the pointer in full and counts what does not fit, and By account scrolls inside its rounded panel; the reminder card's heading no longer repeats the note. | pending | `VfdTimelineTests`. |
+
 ## 13 November 2026
 
 | Audit follow-up | Details |
