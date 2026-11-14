@@ -213,6 +213,11 @@
       <Setter Property="Background" Value="{DynamicResource Selected}" />
     </Style>
     <!-- The dashboard's account rows are soft rounded cards. The recording account's card takes a gentle tint of the tracking colour. -->
+    <!-- The sidebar's account rows in its display window: bare, a faint wash under the pointer and a deeper one while pressed. -->
+    <Style Selector="Button.accountDisplay"><Setter Property="Padding" Value="0" /><Setter Property="CornerRadius" Value="0" /><Setter Property="BorderThickness" Value="0" /><Setter Property="Background" Value="Transparent" /></Style>
+    <Style Selector="Button.accountDisplay /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="Transparent" /><Setter Property="BoxShadow" Value="none" /></Style>
+    <Style Selector="Button.accountDisplay:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="#0AFFFFFF" /></Style>
+    <Style Selector="Button.accountDisplay:pressed /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="#14FFFFFF" /></Style>
     <Style Selector="Button.accountCard"><Setter Property="CornerRadius" Value="14" /><Setter Property="Padding" Value="12,4,8,4" /><Setter Property="BorderThickness" Value="0" /></Style>
     <Style Selector="Button.accountCard /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource Panel}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowThumb}" /></Style>
     <Style Selector="Button.accountCard:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource KeyHover}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowKey}" /></Style>

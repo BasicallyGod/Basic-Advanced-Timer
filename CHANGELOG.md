@@ -10,6 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 |---|---|---|
+| Sidebar accounts as a display: one sunk display window of rows, each a lamp in the account colour, the name and hours in segment letters and a row of budget cells (amber from 80 per cent, red once spent). The pill keeps its card rows. | pending | `AccountDisplayRow`, `SidebarAccountDisplay`; card-row tests now read the pill list. |
 | Reminder drag polished: the zoomed hour pans every frame, faster deeper into the end; the pin's time no longer flickers between neighbours; the ticks glide; the wheel moves the hour or the pin by a quarter hour. | pending | `RescheduleTests`. |
 | Display polish: larger honeycomb on the timeline and week; segment words never run past a block or meeting (whole words or nothing, no single letters); narrow breaks show a cup, then nothing; the week's totals, readout and By account are bigger, the readout names the slice under the pointer in full and counts what does not fit, and By account scrolls inside its rounded panel; the reminder card's heading no longer repeats the note. | pending | `VfdTimelineTests`. |
 

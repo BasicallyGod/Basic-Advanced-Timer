@@ -157,4 +157,24 @@ public sealed class SidebarTests
             finally { window.Close(); pill.Close(); }
         }
     }
+
+    [AvaloniaFact]
+    public void TheSidebarsAccountsAreDisplayRowsInASunkWindowAndAPressStartsOne()
+    {
+        var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            var box = Find<Border>(window, "SidebarAccountDisplay");
+            var rows = box.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("accountDisplay")).ToList();
+            Assert.Equal(3, rows.Count);
+            Assert.All(rows, r => { Assert.Equal(AccountDisplayRow.RowHeight, r.Bounds.Height, 0.5); Assert.IsType<AccountDisplayRow>(r.Content); });
+            Assert.Empty(box.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("accountCard"))); // No card rows here any more.
+            var name = model.Accounts[0].Name;
+            rows[0].RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Settle(window);
+            Assert.True(model.IsTracking); Assert.Equal(name, model.ActiveAccount);
+            rows[0].RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Settle(window);
+            Assert.False(model.IsTracking); // Pressing it again stops it.
+        }
+        finally { window.Close(); }
+    }
 }

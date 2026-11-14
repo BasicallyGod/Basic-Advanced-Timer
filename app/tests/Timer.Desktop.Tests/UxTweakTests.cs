@@ -373,7 +373,7 @@ public sealed class UxTweakTests
     [AvaloniaFact]
     public void AccountRowsPairBudgetUsedWithItsPeriodAndKeepThePercentageForTheHover()
     {
-        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); var window = new DashboardWindow(model); window.Show();
+        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); var window = CardRows.Window(model, 1400);
         try
         {
 Settle(window);

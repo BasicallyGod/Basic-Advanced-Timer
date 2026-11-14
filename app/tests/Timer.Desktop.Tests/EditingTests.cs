@@ -376,8 +376,8 @@ public sealed class EditingTests
         try
         {
 Dispatcher.UIThread.RunJobs(); using var frame = dashboard.CaptureRenderedFrame();
-            var rows = dashboard.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("account")).ToList();
-            Assert.NotEmpty(rows); Assert.All(rows, r => Assert.Equal(AccountList.RowHeight, r.Bounds.Height, 0.5)); // Tall enough for the name and time on one line with the bar under it.
+            var rows = dashboard.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("accountDisplay")).ToList();
+            Assert.NotEmpty(rows); Assert.All(rows, r => Assert.Equal(AccountDisplayRow.RowHeight, r.Bounds.Height, 0.5)); // The sidebar's display rows: name and hours on one line with the cells under them. // Tall enough for the name and time on one line with the bar under it.
             var tab = dashboard.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "TimelineTab");
             Assert.Contains("viewTab", tab.Classes); Assert.Contains("selected", tab.Classes);
         }

@@ -87,7 +87,7 @@ public sealed class PolishTests
     [AvaloniaFact]
     public void BudgetsReadAsCompactFiguresWithTheirPeriodAndTodayIsLabelled()
     {
-        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); var window = new DashboardWindow(model); window.Show();
+        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); var window = CardRows.Window(model, 1400);
         try
         {
 
@@ -105,7 +105,7 @@ public sealed class PolishTests
     [AvaloniaFact]
     public void EveryAccountRowsPlayCircleSitsInTheSameColumn()
     {
-        var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show();
+        var model = TimerModel.CreateDemo(); var window = CardRows.Window(model);
         try
         {
 
@@ -156,7 +156,7 @@ public sealed class PolishTests
     [AvaloniaFact]
     public void EveryAccountRowNameCanSlide()
     {
-        var model = TimerModel.CreateDemo(); var window = new DashboardWindow(model); window.Show();
+        var model = TimerModel.CreateDemo(); var window = CardRows.Window(model, 1400);
         try {Settle(window); Assert.True(window.GetVisualDescendants().OfType<MarqueeText>().Count(m => m.Name == "AccountName") >= 7); }
         finally { window.Close(); }
     }

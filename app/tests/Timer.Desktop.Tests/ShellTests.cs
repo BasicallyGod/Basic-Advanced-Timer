@@ -192,7 +192,7 @@ public sealed class ShellTests
 Dispatcher.UIThread.RunJobs(); using var accountsFrame = dashboard.CaptureRenderedFrame();
             texts = dashboard.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToArray();
             // The budget words are in the row's tooltip now, so the narrow panel keeps the room for the name and the time.
-            Assert.Contains(dashboard.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("accountCard")), b => ToolTip.GetTip(b)?.ToString() is { } tip && tip.Contains("9h / 15h")); dashboard.CloseFlyouts();
+            Assert.Contains(dashboard.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("accountDisplay")), b => ToolTip.GetTip(b)?.ToString() is { } tip && tip.Contains("9h / 15h")); dashboard.CloseFlyouts();
             model.ToggleAccount("Account three");
             pill.ShowPanel();
             Save(pill, Path.Combine(output, "pill-expanded-Dark.png"));
@@ -391,7 +391,7 @@ Dispatcher.UIThread.RunJobs(); using var accountsFrame = dashboard.CaptureRender
                     Assert.Contains(model.ReviewAccounts, a => a.Name == "Account one");
                     Assert.Equal(TimeSpan.FromMinutes(5), engine.Credited("Account one", now.Date, now.Date.AddDays(1)));
 Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
-                    Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "New client"); window.CloseFlyouts();
+                    Assert.Contains(window.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("accountDisplay")), b => Avalonia.Automation.AutomationProperties.GetName(b)?.Contains("New client") == true); window.CloseFlyouts();
                     var editor = new AccountsDialog(model).Open((DashboardWindow)window);
                     var output = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR") ?? Path.GetTempPath();
                     Save(window, Path.Combine(output, "accounts-editor.png")); editor.Close();

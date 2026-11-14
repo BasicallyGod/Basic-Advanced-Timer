@@ -37,11 +37,15 @@ public sealed class Sidebar : Border
         var label = new TextBlock { Text = "ACCOUNTS", FontSize = 11.5, FontWeight = FontWeight.SemiBold, LetterSpacing = .5, VerticalAlignment = VerticalAlignment.Center, Name = "SidebarAccountsHeading" }; label.Classes.Add("muted");
         Ui.Put(heading, label);
         Ui.Put(grid, heading, 0, 1);
-        AccountScroll = new ScrollViewer { Name = "SidebarAccountScroll", Content = new AccountList(model, reorderable: true, bars: true), AllowAutoHide = false,
+        // The accounts are one display window under the clock (the board "Display polish", sidebar option B): the pill's display carried down, its rows divided by
+        // faint rules. The window wears the display's own well, shade and lip, so it follows the theme like the clock above it, and the list scrolls inside it.
+        AccountScroll = new ScrollViewer { Name = "SidebarAccountScroll", Content = new AccountList(model, reorderable: true, display: true), AllowAutoHide = false,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-        // The rows are as wide as Quit timer. The scroll box reaches 10 pixels past them each side, so their raised shadows are not clipped.
-        AccountScroll.Margin = new Thickness(-10, 0, -10, 0);
-        Ui.Put(grid, AccountScroll, 0, 2);
+        var window = new Border { Name = "SidebarAccountDisplay", CornerRadius = new CornerRadius(14), ClipToBounds = true, Child = AccountScroll, Padding = new Thickness(0, 4), VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 2, 0, 0) };
+        window.Bind(Border.BackgroundProperty, window.GetResourceObservable("DisplayWell"));
+        void Shade() => window.BoxShadow = new BoxShadows(new BoxShadow { IsInset = true, OffsetY = 2, Blur = 5, Color = Ui.ThemeColour(window, "DisplayShade", Color.Parse("#A0000000")) }, new[] { new BoxShadow { OffsetY = 1, Color = Ui.ThemeColour(window, "DisplayEdge", Color.Parse("#12FFFFFF")) } });
+        window.ActualThemeVariantChanged += (_, _) => Shade(); window.AttachedToVisualTree += (_, _) => Shade();
+        Ui.Put(grid, window, 0, 2);
         // The foot: Quit timer closes it for good and goes red under the pointer. There is no Start day or Finish day: the day begins with its first block.
         var quitGlyph = new IconGlyph(IconKind.Close);
         QuitButton = new Button { Name = "QuitTimer", Content = Ui.Horizontal(quitGlyph, new TextBlock { Text = "Quit timer", VerticalAlignment = VerticalAlignment.Center }) }; ((StackPanel)QuitButton.Content).Spacing = 7;
