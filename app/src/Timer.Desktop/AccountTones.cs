@@ -24,6 +24,18 @@ public static class AccountTones
         while (ThemeColours.Contrast(tone, "#FFFFFF") < 4.5 && light > .12) { light -= .005; tone = FromHls(h, light, sat); }
         return (tone, "#FFFFFF");
     }
+    // The brighter phosphor colours, as a CRT draws them, one for each colour of the app's own account palette (the same order), so a default account keeps its identity.
+    private static readonly string[] Palette = { "#91B7D5", "#94BF9B", "#D9A18A", "#BAA4CE", "#C9D17F", "#86C5C0", "#D79BB5", "#C4A38F", "#E58F8F", "#E6A86B", "#8F94E6", "#B8BDB0", "#7FD18F", "#E87FA0" };
+    private static readonly string[] Crts = { "#4C8DFF", "#FFE45C", "#FF4FA3", "#22D3EE", "#FF8A3D", "#9A7CFF", "#B8F03C", "#2EE6C5", "#7CC4FF", "#FF7A9A", "#E255FF", "#FFB38A", "#7C88FF", "#CFE8FF" };
+    /// <summary>
+    /// The colour of an account on the Phosphor Dark display. A colour from the app's own palette takes its bright CRT partner; any other keeps its own hue, brought up to
+    /// a bright saturated phosphor, so a colour someone chose is still recognisably theirs.
+    /// </summary>
+    public static string Crt(string colour)
+    {
+        var at = Array.FindIndex(Palette, c => c.Equals(colour, StringComparison.OrdinalIgnoreCase)); if (at >= 0) return Crts[at];
+        var (h, l, s) = ToHls(colour); return FromHls(h, Math.Clamp(Math.Max(l, .58), .58, .66), Math.Max(s, .9));
+    }
     /// <summary>The colour of an account's slice in a chart: softened toward the card on Light, lifted a little on Dark.</summary>
     public static string Chart(string colour, bool dark)
     {

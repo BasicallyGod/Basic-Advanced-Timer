@@ -224,12 +224,12 @@ public static partial class ReviewViews
     /// drawn when they fit inside the block's padding whole (slant included), never a single letter, and otherwise the block shows nothing: letters running past a
     /// block's edge read as a fault. A break says BREAK where it fits, then a cup, then nothing.
     /// </summary>
-    private static void VfdWords(StackPanel text, BlockDetail detail, double width, string length, string name, Color ink, bool isBreak = false)
+    private static void VfdWords(StackPanel text, BlockDetail detail, double width, string length, string name, Color ink, bool isBreak = false, Color? plate = null)
     {
-        // The words' own room: the block less the text's margins either side and a little to spare for the round caps.
-        var room = width - (detail == BlockDetail.Full ? (width < 84 ? 14 : 20) : 16) - 6;
+        // The words' own room: the block less the text's margins either side and a little to spare for the round caps (and, in E-ink, the paper plate each line sits on).
+        var room = width - (detail == BlockDetail.Full ? (width < 84 ? 14 : 20) : 16) - 6 - (plate is null ? 0 : 8);
         var upper = isBreak ? "BREAK" : LowerDisplay.Drawable(name); var initials = isBreak ? "" : LowerDisplay.Drawable(PillWindow.Initials(name));
-        SegmentText Seg(string words, double height) => new(words, height, ink, weight: 1.12) { Name = "BlockWords" };
+        SegmentText Seg(string words, double height) => new(words, height, ink, weight: 1.12) { Name = "BlockWords", Plate = plate };
         bool Fits(string words, double height) => words.Length >= 2 && SegmentText.Fits(words, height, room);
         switch (detail)
         {
@@ -265,6 +265,8 @@ public static partial class ReviewViews
         var pixelsPerHour = model.TimelinePixelsPerHour;
         // The display look: lit block fills through the honeycomb, and sixteen-segment words and figures drawn whole over them.
         var glassInk = Color.Parse(model.GlassTheme.Colour("Ink")); var glassQuiet = Color.Parse(model.GlassTheme.Colour("Muted"));
+        // E-ink: the timeline is the theme's paper, blocks are grained ink with the account's texture, and their words sit on small paper plates.
+        var inkOn = DisplayInk.On; var inkColours = DisplayInk.For(model.GlassTheme.Dark); var blockInk = inkOn ? inkColours.Ink : VfdLook.BlockInk; Color? plate = inkOn ? inkColours.Paper : null;
         var planned = model.Notes.MeetingsOn(day);
         // A day with a timed note has its pins hung under the ruler, so the meeting row and the blocks sit a little lower to make room, and the blocks are that much shorter.
         var pinned = model.Notes.PinnedOn(day);
@@ -363,15 +365,16 @@ public static partial class ReviewViews
             var text = new StackPanel { Spacing = 2, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Margin = detail == BlockDetail.Full ? new Thickness(width < 84 ? 7 : 10, 6) : new Thickness(8, 0) };
             var recording = interval.Row is null && interval.Group is null;
             var note = interval.Group is { } groupNote ? groupNote.Note : recording ? "Recording now" : interval.Row is { } noteRow ? model.Editor.Note(noteRow) : "";
-            VfdWords(text, detail, width, model.Format(duration), display, isBreak ? Color.Parse("#F5B63A") : VfdLook.BlockInk, isBreak);
+            VfdWords(text, detail, width, model.Format(duration), display, isBreak ? (inkOn ? inkColours.Amber : Color.Parse("#F5B63A")) : blockInk, isBreak, plate);
             // The card itself is not clipped, or the selection ring round it would be cut off; what is inside it is clipped instead.
             var card = new Border { Width = width, Height = height, CornerRadius = new CornerRadius(CornerFor(laneCount, width, height)) };
-            if (isBreak) { card.Background = Brushes.Transparent; card.BorderBrush = new SolidColorBrush(Color.Parse("#F5B63A")); card.BorderThickness = new Thickness(1.4); }
+            if (isBreak) { card.Background = Brushes.Transparent; card.BorderBrush = new SolidColorBrush(inkOn ? inkColours.Amber : Color.Parse("#F5B63A")); card.BorderThickness = new Thickness(1.4); }
             else card.Background = Brushes.Transparent; // The lit fill is a layer of its own under the words, seen through the honeycomb (below).
             var content = new Grid { ClipToBounds = true };
             // On the display only the lit fill goes through the honeycomb, and its glow shows between the cells; the words stay whole on top of it, since the
             // mesh over small segment letters broke them up on Windows.
-            if (!isBreak) content.Children.Add(new Border { Name = "BlockPhosphor", Background = new SolidColorBrush(SoftTint.WithAlpha(Color.Parse(look.Fill), .95)), CornerRadius = card.CornerRadius, OpacityMask = Honeycomb.LargeBrush, IsHitTestVisible = false });
+            if (!isBreak && inkOn) content.Children.Add(new InkFill(Color.Parse(model.ChartColour(colour)), card.CornerRadius.TopLeft, model.TextureOf(interval.Account)) { Name = "BlockInk", IsHitTestVisible = false });
+            else if (!isBreak) content.Children.Add(new Border { Name = "BlockPhosphor", Background = new SolidColorBrush(SoftTint.WithAlpha(Color.Parse(model.CurrentTheme.Dark ? AccountTones.Crt(colour) : look.Fill), .95)), CornerRadius = card.CornerRadius, OpacityMask = Honeycomb.LargeBrush, IsHitTestVisible = false });
             content.Children.Add(text);
             // The gaps inside a merged block are lighter, and a small link marks it as merged.
             if (interval.Group is { } mergedGroup)
@@ -393,7 +396,7 @@ public static partial class ReviewViews
             // A block with a note carries a small page mark in its corner, when it is wide enough for the note's first line.
             // On the display a note is one small dark dot in the block's bottom right corner, whatever its size.
             if (width >= 16 && !recording && !string.IsNullOrWhiteSpace(note) && (interval.Row is not null || interval.Group is not null))
-                content.Children.Add(new Avalonia.Controls.Shapes.Ellipse { Name = "NoteDot", Width = 6.5, Height = 6.5, Fill = new SolidColorBrush(VfdLook.BlockInk), HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 7, 7), IsHitTestVisible = false });
+                content.Children.Add(new Avalonia.Controls.Shapes.Ellipse { Name = "NoteDot", Width = 6.5, Height = 6.5, Fill = new SolidColorBrush(blockInk), HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 7, 7), IsHitTestVisible = false });
             card.Child = content;
             var addedEarly = false;
             var selectionSources = interval.Group?.Sources ?? (interval.Row is { } source ? new[] { source } : Array.Empty<SessionRow>());
@@ -403,7 +406,7 @@ public static partial class ReviewViews
                 card.Classes.Add("mergeSelected"); card.BoxShadow = Ring(accent); card.ZIndex = 3;
             }
             // A lit block glows into the mesh round it, after any ring it wears.
-            if (!isBreak)
+            if (!isBreak && !inkOn)
             {
                 var worn = card.BoxShadow; var rest = new List<BoxShadow>(); for (var k = 1; k < worn.Count; k++) rest.Add(worn[k]); rest.Add(VfdLook.Glow(Color.Parse(look.Fill)));
                 card.BoxShadow = worn.Count > 0 ? new BoxShadows(worn[0], rest.ToArray()) : new BoxShadows(VfdLook.Glow(Color.Parse(look.Fill)));
@@ -422,7 +425,7 @@ public static partial class ReviewViews
                 // outside the block as the selection ring (a border left the left side bare and ate into the block), so it is drawn the same way, in green.
                 card.Classes.Add("recording"); card.Name = "TimelineRecording"; card.Cursor = new Cursor(StandardCursorType.Arrow);
                 // On the display the ring is inside the block's own edge, so a selected neighbour's ring outside never meets it.
-                card.BoxShadow = VfdLook.RecordingRing(Color.Parse(look.Fill)); card.ZIndex = 3;
+                card.BoxShadow = inkOn ? new BoxShadows(new BoxShadow { IsInset = true, Spread = 3, Color = inkColours.Live }) : VfdLook.RecordingRing(Color.Parse(look.Fill)); card.ZIndex = 3;
                 var stop = new MenuItem { Header = "Stop tracking" }; stop.Click += (_, _) => model.TogglePause();
                 card.ContextMenu = new ContextMenu { ItemsSource = new[] { stop } };
                 card.PointerPressed += (_, e) =>

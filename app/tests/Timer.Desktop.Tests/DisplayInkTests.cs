@@ -126,4 +126,27 @@ public sealed class DisplayInkTests
         }
         finally { window.Close(); DisplayInk.Style = DisplayStyle.Phosphor; }
     }
+
+    // Pictures of the pages in each look and theme, written when TIMER_PREVIEW_DIR is set, for looking at the layout.
+    [AvaloniaFact]
+    public void PicturesOfTheWeekAndTimelineInBothLooks()
+    {
+        var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR"); if (folder is null) return;
+        Directory.CreateDirectory(folder);
+        foreach (var style in new[] { DisplayStyle.Phosphor, DisplayStyle.Ink })
+            foreach (var theme in new[] { "Light", "Dark" })
+            {
+                var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 14, 15, 7)); model.CompleteSetup(); model.SetTheme(theme); model.SetDisplayStyle(style);
+                var window = new DashboardWindow(model); window.Show();
+                try
+                {
+                    for (var pass = 0; pass < 3; pass++) { Dispatcher.UIThread.RunJobs(); using var f = window.CaptureRenderedFrame(); }
+                    void Shot(string name) { for (var pass = 0; pass < 3; pass++) { Dispatcher.UIThread.RunJobs(); using var f = window.CaptureRenderedFrame(); } using var frame = window.CaptureRenderedFrame(); frame?.Save(Path.Combine(folder, $"{style}-{theme}-{name}.png")); }
+                    Shot("timeline");
+                    window.SelectTab(true); Shot("week");
+                    model.SetWeekAsTable(true); Shot("timesheet"); model.SetWeekAsTable(false);
+                }
+                finally { window.Close(); DisplayInk.Style = DisplayStyle.Phosphor; }
+            }
+    }
 }

@@ -66,9 +66,13 @@ public static class WeekOverview
         var figures = Figures(model, start); var (grid, _) = ReviewViews.WeekTableFor(model, start);
         // One instrument on one display: the totals, the days and the accounts, in whichever look is chosen.
         var instrument = new WeekInstrument(model, figures, grid);
-        var holder = DisplayInk.On ? InkPanel(model, instrument) : VfdWeek.Panel(instrument, double.NaN, "WeekPanel");
+        var holder = DisplayInk.On ? InkPanel(model, instrument) : model.CurrentTheme.Dark ? VfdWeek.Panel(instrument, double.NaN, "WeekPanel") : PalePanel(instrument);
         var root = Ui.Grid("*", "*"); root.Margin = new Thickness(0, 0, 14, 4); Ui.Put(root, holder); return root;
     }
+    // The Phosphor look on a Light theme: the pale flat well of the pill and sidebar, with a hairline.
+    private static Control PalePanel(Control content) => new Border { Name = "WeekPanel", CornerRadius = new CornerRadius(14), ClipToBounds = true, Child = content,
+        Background = new LinearGradientBrush { StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative), GradientStops = { new GradientStop(Color.Parse("#F0F0EE"), 0), new GradientStop(Color.Parse("#EBEBE9"), 1) } },
+        BorderBrush = new SolidColorBrush(Color.FromArgb(40, 60, 58, 70)), BorderThickness = new Thickness(1) };
     // The e-ink panel: the theme's paper with a hairline round it, the same corner as the dark glass.
     private static Control InkPanel(TimerModel model, Control content)
     {

@@ -97,7 +97,7 @@ public static class DisplayInk
     public static void PaperGrain(DrawingContext context, bool onLightPaper, Rect rect, double radius)
     {
         if (percent == 0) return;
-        using (context.PushClip(new RoundedRect(rect, radius))) using (context.PushOpacity(Strength)) context.DrawRectangle(Paper(onLightPaper), null, rect);
+        using (context.PushClip(new RoundedRect(rect, radius))) using (context.PushOpacity(Strength * .35)) context.DrawRectangle(Paper(onLightPaper), null, rect);
     }
 
     // ---- textures
@@ -132,7 +132,8 @@ public static class InkType
     /// <summary>"ON PACE" becomes "On pace": the display words were written in capitals for segment letters.</summary>
     public static string Sentence(string text)
     {
-        if (text.Length == 0 || !text.Any(char.IsLetter) || text != text.ToUpperInvariant()) return text;
+        // Initials ("AO") and other very short capitals stay as they are.
+        if (text.Length == 0 || !text.Any(char.IsLetter) || text != text.ToUpperInvariant() || text.Count(char.IsLetter) <= 3) return text;
         var lower = text.ToLowerInvariant().ToCharArray(); var i = Array.FindIndex(lower, char.IsLetter); lower[i] = char.ToUpperInvariant(lower[i]);
         return System.Text.RegularExpressions.Regex.Replace(new string(lower), @"\bcsv\b", "CSV", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
     }
@@ -142,13 +143,15 @@ public static class InkType
     {
         foreach (var part in System.Text.RegularExpressions.Regex.Split(text, @"(\d[\d:.]*)")) if (part.Length > 0) yield return (part, char.IsDigit(part[0]));
     }
+    // A run's width with its spaces counted: Avalonia leaves trailing white space out of a measured line, which glued "Allocated 34:56" together.
+    private static double RunWidth(string run, InkRole role) => Format("|" + run + "|", role, Brushes.Black).Width - 2 * Format("|", role, Brushes.Black).Width;
     private static double Zero(InkRole role) => Format("0", role, Brushes.Black).Width;
     private static double Colon(InkRole role) => Format(":", role, Brushes.Black).Width * .9;
     /// <summary>The width of <paramref name="text"/> set in <paramref name="role"/>, with figures tabular.</summary>
     public static double Width(string text, InkRole role)
     {
         text = Sentence(text); double zero = Zero(role), colon = Colon(role), total = 0;
-        foreach (var (part, number) in Runs(text)) total += number ? part.Sum(ch => ch is ':' or '.' ? colon : zero) : Format(part, role, Brushes.Black).Width;
+        foreach (var (part, number) in Runs(text)) total += number ? part.Sum(ch => ch is ':' or '.' ? colon : zero) : RunWidth(part, role);
         return total;
     }
     /// <summary>Draws <paramref name="text"/> with its baseline at <paramref name="baseline"/>, starting at <paramref name="x"/>, or ending or centred there; returns its width.</summary>
@@ -167,9 +170,20 @@ public static class InkType
                         var cell = ch is ':' or '.' ? colon : zero; var glyph = Format(ch.ToString(), role, brush);
                         context.DrawText(glyph, new Point(px + (cell - glyph.Width) / 2, baseline - glyph.Baseline)); px += cell;
                     }
-                else { var run = Format(part, role, brush); context.DrawText(run, new Point(px, baseline - run.Baseline)); px += run.Width; }
+                else { var run = Format(part, role, brush); context.DrawText(run, new Point(px, baseline - run.Baseline)); px += RunWidth(part, role); }
             }
         }
         return total;
+    }
+}
+
+/// <summary>A block's fill in E-ink: the account's colour with the ink grain over it and its texture, drawn in one piece (nothing is lit, glowing or meshed).</summary>
+public sealed class InkFill(Color colour, double radius, int texture) : Avalonia.Controls.Control
+{
+    public override void Render(DrawingContext context)
+    {
+        var rect = new Rect(Bounds.Size); if (rect.Width <= 0 || rect.Height <= 0) return;
+        DisplayInk.Cell(context, DisplayInk.For(SoftTint.IsDark(this)), new SolidColorBrush(colour), rect, radius);
+        DisplayInk.Texture(context, texture, rect, radius, colour);
     }
 }

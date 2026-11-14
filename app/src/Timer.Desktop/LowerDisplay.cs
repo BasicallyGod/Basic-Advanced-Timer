@@ -86,6 +86,8 @@ public sealed class LowerDisplay : SteppedControl
     /// <summary>Words as the display can draw them: upper case, accents stripped, anything it has no letter for a space.</summary>
     public static string Drawable(string words)
     {
+        // E-ink draws normal type, so the words keep their case and their accents; only runs of spaces are tidied.
+        if (DisplayInk.On) return System.Text.RegularExpressions.Regex.Replace(words, @"\s{2,}", " ").Trim();
         var sb = new System.Text.StringBuilder();
         foreach (var raw in words.ToUpperInvariant().Normalize(System.Text.NormalizationForm.FormKD))
         {

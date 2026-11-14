@@ -52,6 +52,7 @@ public static class TimelineGuide
         var pins = new List<Pin>();
         // The display look: reminders are lit tags above the line among the hour digits, and the reminder pointed at reads along the ruler (see VfdReadout).
         Func<IReadOnlyList<DayNote>, long>? VfdShowing = null;
+        var tagInk = DisplayInk.On ? DisplayInk.For(model.GlassTheme.Dark).Paper : VfdLook.BlockInk; // dark on the lit tag; paper-coloured on the ink one
         bool Late(Pin pin) => pin.Notes.Any(model.Notes.IsLate);
         string ColourKey(Pin pin) => Late(pin) ? "Overtime" : "AccentLit";
         // Notes within a pin's width of each other are one pin, so none is hidden behind another.
@@ -88,8 +89,8 @@ public static class TimelineGuide
                 var tag = new Border { Name = "TimelineTag_" + first.Id, Width = 14, Height = 14, CornerRadius = new CornerRadius(3.5), IsHitTestVisible = false, Tag = "VfdTag" };
                 Canvas.SetLeft(tag, 3); Canvas.SetTop(tag, 5); visual.Children.Add(tag);
                 Control inked = group.Count > 1
-                    ? new SegmentText(Math.Min(group.Count, 99).ToString(System.Globalization.CultureInfo.InvariantCulture), 8, VfdLook.BlockInk, weight: 1.15)
-                    : new Canvas { Width = 2, Height = 9, Children = { new Border { Width = 2, Height = 6, CornerRadius = new CornerRadius(1), Background = new SolidColorBrush(VfdLook.BlockInk) }, new Border { Width = 2, Height = 2, CornerRadius = new CornerRadius(1), Background = new SolidColorBrush(VfdLook.BlockInk), [Canvas.TopProperty] = 7.5 } } };
+                    ? new SegmentText(Math.Min(group.Count, 99).ToString(System.Globalization.CultureInfo.InvariantCulture), 8, tagInk, weight: 1.15)
+                    : new Canvas { Width = 2, Height = 9, Children = { new Border { Width = 2, Height = 6, CornerRadius = new CornerRadius(1), Background = new SolidColorBrush(tagInk) }, new Border { Width = 2, Height = 2, CornerRadius = new CornerRadius(1), Background = new SolidColorBrush(tagInk), [Canvas.TopProperty] = 7.5 } } };
                 inked.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center; inked.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center; tag.Child = inked;
                 Paint(tag, Border.BackgroundProperty, group.Any(model.Notes.IsLate) ? "Overtime" : "AccentLit");
                 Paint(tag, Border.BorderBrushProperty, group.Any(model.Notes.IsLate) ? "Overtime" : "AccentLit"); tag.BorderThickness = new Thickness(1.2);

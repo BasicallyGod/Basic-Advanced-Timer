@@ -13,9 +13,11 @@ namespace Timer.Desktop;
 /// How a display draws one piece of text, a cell or a ghost: lit segments with a bloom (Phosphor) or plain type and grain on paper (E-ink). Drawn displays (the week,
 /// later the tall pill's rows) ask a skin instead of asking the style themselves, so one layout serves both looks.
 /// </summary>
-public sealed class DisplaySkin(bool ink, bool dark, Color text, Color quiet, Color accent, Color amber, Color red, Color live, Color paper)
+public sealed class DisplaySkin(bool ink, bool dark, Color text, Color quiet, Color accent, Color amber, Color red, Color live, Color paper, bool pale = false)
 {
     public bool Ink { get; } = ink; public bool Dark { get; } = dark;
+    /// <summary>Phosphor on a Light theme: the pale flat well the pill and sidebar wear, dark segments on it and no bloom.</summary>
+    public bool Pale { get; } = pale;
     public Color Text { get; } = text;
     public Color Quiet { get; } = quiet;
     public Color Accent { get; } = accent;
@@ -33,6 +35,7 @@ public sealed class DisplaySkin(bool ink, bool dark, Color text, Color quiet, Co
             var c = DisplayInk.For(model.CurrentTheme.Dark);
             return new DisplaySkin(true, model.CurrentTheme.Dark, c.Ink, c.Muted, c.Lit, c.Amber, c.Red, c.Live, c.Paper);
         }
+        if (!model.CurrentTheme.Dark) return new DisplaySkin(false, false, Color.Parse("#10141B"), Color.Parse("#3C414A"), Color.Parse("#5D389A"), Color.Parse("#8A4F00"), Color.Parse("#C42424"), Color.Parse("#0F6E40"), Color.Parse("#F0F0EE"), pale: true);
         var glass = model.GlassTheme; Color G(string key) => Color.Parse(glass.Colour(key));
         return new DisplaySkin(false, true, G("Ink"), G("Muted"), Color.Parse(ThemeEngine.LitOf(glass)), Color.Parse("#F5B63A"), G("Overtime"), G("Live"), G("Surface"));
     }
@@ -72,7 +75,7 @@ public sealed class DisplaySkin(bool ink, bool dark, Color text, Color quiet, Co
     {
         if (r.Width <= 0 || r.Height <= 0) return;
         if (Ink) { DisplayInk.Cell(c, Colours, new SolidColorBrush(colour), r, radius); DisplayInk.Texture(c, texture, r, radius, colour); return; }
-        if (bloom) new PhosphorBloom(colour, 0, .78).Draw(c, new RectangleGeometry(r, radius, radius), true);
+        if (bloom && !Pale) new PhosphorBloom(colour, 0, .78).Draw(c, new RectangleGeometry(r, radius, radius), true);
         using (Honeycomb.MeshedLarge(c, r)) c.DrawRectangle(new SolidColorBrush(colour), null, r, radius, radius);
     }
     /// <summary>An unlit slot or cell.</summary>
@@ -193,7 +196,7 @@ public sealed class WeekInstrument : Panel
         double AccountsRuleY, double AccountsTop, int Capacity, double FootY, double[] DayY, double[] ColumnX);
     private Frame Layout(Size size)
     {
-        double W = size.Width, H = size.Height, L = Pad, R = W - Pad - ScrollColumn - 10, S = R - 176, Fr = S - 24, B1 = Fr - 106, B0 = L + 168;
+        double W = size.Width, H = size.Height, L = Pad, R = W - Pad - ScrollColumn - 10, S = R - 198, Fr = S - 24, B1 = Fr - 106, B0 = L + 168;
         const double totalsY = 34; var daysRule = 112.0; var top = daysRule + 14; var y = top;
         var dayY = new double[days.Count]; double[] columns = Array.Empty<double>();
         if (!Sheet) { y += 18; for (var i = 0; i < days.Count; i++) { dayY[i] = y; y += DayH; } }
@@ -227,8 +230,11 @@ public sealed class WeekInstrument : Panel
     private void Refresh() { surface.InvalidateVisual(); PlaceButtons(); }
     protected override Size ArrangeOverride(Size finalSize) { var r = base.ArrangeOverride(finalSize); PlaceButtons(); return r; }
 
-    private Color Account(AccountLine a) => Color.Parse(model.ChartColour(a.Account.Colour));
-    private Color Account(string name) => Color.Parse(model.ChartColour(model.ReviewAccounts.FirstOrDefault(a => a.Name == name)?.Colour ?? "#91B7D5"));
+    // Dark takes the bright phosphor colours (through ChartColour); the pale display takes the soft ones a little towards its ink, a quieter printed look.
+    private Color Tone(string colour) { var c = Color.Parse(model.ChartColour(colour)); return skin.Pale ? Color.Parse(ThemeColours.Mix(ColorHex(c), "#10141B", .16)) : c; }
+    private static string ColorHex(Color c) => $"#{c.R:X2}{c.G:X2}{c.B:X2}";
+    private Color Account(AccountLine a) => Tone(a.Account.Colour);
+    private Color Account(string name) => Tone(model.ReviewAccounts.FirstOrDefault(a => a.Name == name)?.Colour ?? "#91B7D5");
     private bool Dimmed(string account) => pick is not null && !account.Equals(pick, StringComparison.OrdinalIgnoreCase);
     private string Hm(TimeSpan t) => model.FormatShort(t);
 
@@ -333,7 +339,7 @@ public sealed class WeekInstrument : Panel
         {
             s.Draw(c, $"{row.Folded} more · no time or budget", f.L + 12, ry + 6, 10, s.Quiet);
             s.Unlit(c, new Rect(f.B0 + 210, mid - 1, Math.Max(0, f.B1 - f.B0 - 210), 2), 1);
-            s.Badge(c, showQuiet ? "Hide" : "Show", f.S + 86, ry + 3, 72, s.Quiet, false); return;
+            s.Badge(c, showQuiet ? "Hide" : "Show", f.S + 126, ry + 3, 72, s.Quiet, false); return;
         }
         var a = row.Account; var dim = pick is not null && !a.Account.Name.Equals(pick, StringComparison.OrdinalIgnoreCase);
         using (c.PushOpacity(dim ? .4 : 1))
@@ -355,7 +361,7 @@ public sealed class WeekInstrument : Panel
                 var tick = f.B0 + (f.B1 - f.B0) * a.Elapsed; c.DrawLine(new Pen(new SolidColorBrush(SoftTint.WithAlpha(s.Live, .6)), 1.5), new Point(tick, ry + 1), new Point(tick, ry + 21));
                 var pct = Math.Round(budget.Fraction * 100) + "%"; var pctEnd = f.S + 56;
                 s.Draw(c, pct, pctEnd, ry + 5, 10, over ? s.Red : s.Text, align: TextAlignment.Right); s.Draw(c, a.Account.Period switch { "day" => "day", "month" => "month", "quarter" => "quarter", _ => "week" }, pctEnd + 7, ry + 6, 9, s.Quiet);
-                s.Badge(c, over ? "Over" : ahead ? "Ahead" : "On pace", f.S + 106, ry + 1, 72, over ? s.Red : s.Amber, over || ahead);
+                s.Badge(c, over ? "Over" : ahead ? "Ahead" : "On pace", f.S + 126, ry + 1, 72, over ? s.Red : s.Amber, over || ahead);
             }
             else
             {
@@ -393,7 +399,7 @@ public sealed class WeekInstrument : Panel
         for (var k = first; k < Math.Min(rows.Count, first + f.Capacity); k++)
         {
             var row = rows[k]; var ry = f.AccountsTop + (k - first) * RowH;
-            if (row.Account is null) { Zone("WeekShowQuiet", new Rect(f.S + 86, ry + 3, 72, 20), (showQuiet ? "Hide" : "Show") + " the accounts with no time or budget", () => { showQuiet = !showQuiet; BuildRows(); Refresh(); }); continue; }
+            if (row.Account is null) { Zone("WeekShowQuiet", new Rect(f.S + 126, ry + 3, 72, 20), (showQuiet ? "Hide" : "Show") + " the accounts with no time or budget", () => { showQuiet = !showQuiet; BuildRows(); Refresh(); }); continue; }
             var a = row.Account; var name = a.Account.Name;
             var z = Zone("WeekAccount_" + name.Replace(" ", ""), new Rect(f.L - 10, ry - 3, f.S - f.L - 12, 28), $"{a.Account.Display}, {Hm(a.Week)} this week. Press to trace its blocks", () => { pick = pick == name ? null : name; Refresh(); });
             if (a.Budget is { } budget)

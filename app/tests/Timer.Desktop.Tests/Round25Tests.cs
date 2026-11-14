@@ -233,10 +233,12 @@ public sealed class Round25Tests
     }
 
     // The point of the round is clarity, so nothing on the timeline may lie over anything else, and the Details card keeps its parts apart and inside itself.
-    [AvaloniaFact]
-    public void NothingOnABusyTimelineOrInTheDetailsCardOverlapsAnythingElse()
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void NothingOnABusyTimelineOrInTheDetailsCardOverlapsAnythingElse(bool ink)
     {
-        var model = Model();
+        var model = Model(); if (ink) model.SetDisplayStyle(DisplayStyle.Ink);
         for (var i = 0; i < 4; i++) model.Engine.AddSession(i % 2 == 0 ? "Account one" : "Account two", At(9 + i * 0.1), At(10 + i * 0.1));
         model.Engine.AddSession("Account one", At(14), At(15)); model.Engine.AddSession("Account two", At(14.5), At(15.5)); // Two overlapping: lanes.
         model.Engine.AddSession("Internal", At(17), At(18));

@@ -17,10 +17,12 @@ public sealed class VfdTimelineTests
     private static void Settle(Window window) { for (var pass = 0; pass < 3; pass++) { Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame(); } Dispatcher.UIThread.RunJobs(); }
     private static TimerModel Demo(string theme = "Dark") { var model = TimerModel.CreateDemo(() => DemoNow); model.CompleteSetup(); model.SetTheme(theme); return model; }
 
-    [AvaloniaFact]
-    public void NoSegmentWordsRunPastTheirBlockOrMeetingAtAnyZoom_AndANarrowBreakIsACupOrNothing()
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void NoSegmentWordsRunPastTheirBlockOrMeetingAtAnyZoom_AndANarrowBreakIsACupOrNothing(bool ink)
     {
-        var model = Demo(); 
+        var model = Demo(); if (ink) model.SetDisplayStyle(DisplayStyle.Ink); 
         var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
