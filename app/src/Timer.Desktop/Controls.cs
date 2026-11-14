@@ -617,16 +617,20 @@ public sealed class AccountList : StackPanel
 {
     private readonly TimerModel model;
     private readonly List<(TimerAccount Account, Button Row, TextBlock Today, TextBlock Budget, AccountIndicator Icon, TextBlock Dot, BudgetBar? Bar, TextBlock Period)> rows = new();
-    private readonly bool reorderable, bars, compact;
+    private readonly bool reorderable, bars, compact, display;
+    private readonly Dictionary<string, AccountDisplayRow> displayRows = new();
     private readonly ViewActivity activity;
     /// <summary>A row of the bar kind: the name and time on one line with the budget bar under it, and the play tile beside them.</summary>
     public const double RowHeight = 54, RowGap = 8;
     /// <param name="bars">Shows each account's budget as a bar with a pace tick and a plain play circle, as the dashboard does.</param>
     /// <param name="compact">With bars, a shorter row for the pill's narrow drawer: the name and time, the bar and the play button, without the budget words.</param>
-    public AccountList(TimerModel model, bool reorderable = false, bool bars = false, bool compact = false)
+    /// <param name="display">The sidebar's rows as one display window (the board "Display polish", sidebar option B): each row a lamp, the name and today's hours in
+    /// segment letters and the budget as a row of cells, the rows divided by faint rules. The pill's own list keeps its raised cards.</param>
+    public AccountList(TimerModel model, bool reorderable = false, bool bars = false, bool compact = false, bool display = false)
     {
-        this.model = model; this.reorderable = reorderable; this.bars = bars; this.compact = compact;
-        if (bars) { Spacing = RowGap; Margin = compact ? new Thickness(1, 2, 3, 8) : new Thickness(10, 2, 10, 8); } // Each row is a raised card: its shadow needs a gap to fall into, and room at the sides so the scroll area does not clip it.
+        this.model = model; this.reorderable = reorderable; this.bars = bars || display; this.compact = compact; this.display = display;
+        if (display) Spacing = 0;
+        else if (bars) { Spacing = RowGap; Margin = compact ? new Thickness(1, 2, 3, 8) : new Thickness(10, 2, 10, 8); } // Each row is a raised card: its shadow needs a gap to fall into, and room at the sides so the scroll area does not clip it.
         Rebuild();
         // A list that sat hidden (in a pop-up) missed the changes made meanwhile, so it catches up when it is shown.
         AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Changed(null, new System.ComponentModel.PropertyChangedEventArgs(null)); };
@@ -637,10 +641,25 @@ public sealed class AccountList : StackPanel
     private static IEnumerable<TimerAccount> Listed(TimerModel model) => model.Accounts.Where(a => !BreakAccount.Is(a.Name));
     private void Rebuild()
     {
-        Children.Clear(); rows.Clear();
+        Children.Clear(); rows.Clear(); displayRows.Clear();
         foreach (var account in Listed(model))
         {
             var row = new Button { Name = "Account" + rows.Count, Classes = { "account" } };
+            if (display)
+            {
+                // One drawn row inside the sidebar's display window: the press, the drag to reorder, the menu and the budget tooltip work as on a card.
+                var drawn = new AccountDisplayRow(account, model, rows.Count > 0) { Name = "AccountDisplay" };
+                row.Content = drawn; row.Classes.Add("accountDisplay"); row.Height = AccountDisplayRow.RowHeight;
+                row.HorizontalAlignment = HorizontalAlignment.Stretch; row.HorizontalContentAlignment = HorizontalAlignment.Stretch; row.VerticalContentAlignment = VerticalAlignment.Stretch;
+                row.Click += (_, _) => model.ToggleAccount(account.Name);
+                if (reorderable) AttachReorder(row, account.Name);
+                var menu = new MenuItem { Header = "Name and budget…", Name = "AccountSettingsMenu" }; menu.Click += (_, _) => model.OpenAccounts();
+                row.ContextMenu = new ContextMenu { ItemsSource = new Control[] { menu } };
+                Avalonia.Automation.AutomationProperties.SetName(row, account.Display);
+                Children.Add(row); displayRows[account.Name] = drawn;
+                rows.Add((account, row, new TextBlock(), new TextBlock(), new AccountIndicator(account, model), new TextBlock(), null, new TextBlock()));
+                continue;
+            }
             // Rows can still be dragged to reorder them where that is allowed, but there is no handle: it only took room from the row.
             const int shift = 0;
             var grid = Ui.Grid(bars ? "*,Auto" : "38,*,Auto");
@@ -818,6 +837,7 @@ public sealed class AccountList : StackPanel
                 row.Budget.Classes.Set("overtime", ratio >= 1);
             }
             row.Icon.InvalidateVisual();
+            if (displayRows.TryGetValue(row.Account.Name, out var drawnRow)) { drawnRow.InvalidateVisual(); continue; }
             // The live dot pulses beside the account that is recording.
             var live = model.ActiveAccount == row.Account.Name;
             row.Dot.IsVisible = live; row.Dot.Classes.Set("break", model.IsOnBreak); row.Dot.Classes.Set("live", !model.IsOnBreak);
@@ -1386,6 +1406,53 @@ public sealed class IconGlyph : Control
                 context.DrawLine(pen, new Point(9, 2.5), new Point(9, 11)); context.DrawLine(pen, new Point(5.8, 8), new Point(9, 11.2)); context.DrawLine(pen, new Point(12.2, 8), new Point(9, 11.2));
                 context.DrawLine(pen, new Point(3, 12), new Point(3, 15.5)); context.DrawLine(pen, new Point(3, 15.5), new Point(15, 15.5)); context.DrawLine(pen, new Point(15, 15.5), new Point(15, 12));
                 break;
+        }
+    }
+}
+
+/// <summary>
+/// One account in the sidebar's display window: a lamp in the account's colour (lit green with a bloom while it records), the name and today's hours in the
+/// display's sixteen-segment letters, and under them the budget as a row of cells through the honeycomb (neutral, amber from 80 per cent, red once spent, green while
+/// it records), with a faint rule above every row but the first. It draws from the theme's display resources, so it follows Light and Dark like the clock above it.
+/// </summary>
+public sealed class AccountDisplayRow : Control
+{
+    public const double RowHeight = 46;
+    private readonly TimerAccount account; private readonly TimerModel model; private readonly bool rule;
+    public AccountDisplayRow(TimerAccount account, TimerModel model, bool rule)
+    {
+        this.account = account; this.model = model; this.rule = rule; IsHitTestVisible = false;
+        ActualThemeVariantChanged += (_, _) => InvalidateVisual();
+    }
+    private Avalonia.Media.Color C(string key, string fallback) => Ui.ThemeColour(this, key, Avalonia.Media.Color.Parse(fallback));
+    public override void Render(Avalonia.Media.DrawingContext context)
+    {
+        var w = Bounds.Width; if (w <= 0) return;
+        var ink = C("Ink", "#ECEEF2"); var quiet = C("Muted", "#A0A7B3"); var live = C("Live", "#3EDC8E"); var dark = SoftTint.IsDark(this);
+        var recording = model.ActiveAccount == account.Name && !model.IsOnBreak;
+        if (rule) context.DrawRectangle(new Avalonia.Media.SolidColorBrush(SoftTint.WithAlpha(ink, .06)), null, new Rect(10, 0, w - 20, 1));
+        if (recording) context.DrawRectangle(new Avalonia.Media.SolidColorBrush(SoftTint.WithAlpha(live, .06)), null, new Rect(0, rule ? 1 : 0, w, Bounds.Height - (rule ? 1 : 0)));
+        // The lamp: the account's colour, quiet at rest, lit green while it records.
+        var lamp = new Rect(12, 9, 4, 16);
+        if (recording && dark) new PhosphorBloom(live, 0, .78).Draw(context, new Avalonia.Media.RectangleGeometry(lamp, 2, 2), true);
+        context.DrawRectangle(new Avalonia.Media.SolidColorBrush(recording ? live : SoftTint.WithAlpha(Avalonia.Media.Color.Parse(Ui.Visible(account.Colour)), .7)), null, lamp, 2, 2);
+        // Today's hours at the right, then the name in what is left, in whole cells.
+        const double nameH = 11, hoursH = 13;
+        var hours = model.Format(model.Today(account)); var hoursW = SegmentText.WidthOf(hours.Length, hoursH);
+        SegmentText.Draw(context, hours, w - 12 - hoursW, 9, hoursH, recording ? live : ink, ghosts: true);
+        var name = LowerDisplay.Drawable(account.Display); var room = w - 12 - hoursW - 10 - 26; var cells = name.Length;
+        while (cells > 0 && SegmentText.WidthOf(cells, nameH) > room) cells--;
+        SegmentText.Draw(context, cells < name.Length ? name[..cells].TrimEnd() : name, 26, 11, nameH, ink);
+        // The budget as cells under the name, or quiet words when there is none.
+        var used = account.Budget is null ? (TimeSpan?)null : model.BudgetUsed(account);
+        if (model.BudgetRatio(account, used) is not { } ratio) { SegmentText.Draw(context, "NO BUDGET", 26, 30, 8, quiet); return; }
+        var tone = recording ? live : ratio >= 1 ? C("Overtime", "#FF6B6B") : ratio >= .8 ? Avalonia.Media.Color.Parse("#F5B63A") : ink;
+        const int n = 24; var x0 = 26.0; var cw = (w - 12 - x0) / n; var lit = (int)Math.Round(Math.Min(1, ratio) * n);
+        for (var k = 0; k < n; k++)
+        {
+            var r = new Rect(Math.Round(x0 + k * cw), 31, Math.Max(1, Math.Round(cw) - 2), 5);
+            if (k >= lit) { context.DrawRectangle(new Avalonia.Media.SolidColorBrush(SoftTint.WithAlpha(ink, .07)), null, r, 1.2, 1.2); continue; }
+            using (Honeycomb.MeshedLarge(context, r)) context.DrawRectangle(new Avalonia.Media.SolidColorBrush(tone), null, r, 1.2, 1.2);
         }
     }
 }

@@ -77,3 +77,36 @@ public sealed class SegmentText : Control
         return text.Length * cw;
     }
 }
+
+
+/// <summary>Where a scrolled list is, drawn as the display draws it: one small cell a row down a narrow column, the rows on show lit in the ink and the rest unlit.
+/// It draws nothing while the list fits, but keeps its column so the rows beside it never change width.</summary>
+public sealed class ScrollCells : Avalonia.Controls.Control
+{
+    public const double ColumnWidth = 4;
+    private readonly Avalonia.Controls.ScrollViewer scroll;
+    public ScrollCells(Avalonia.Controls.ScrollViewer scroll)
+    {
+        this.scroll = scroll;
+        scroll.ScrollChanged += (_, _) => InvalidateVisual();
+        scroll.PropertyChanged += (_, e) => { if (e.Property == Avalonia.Controls.ScrollViewer.ExtentProperty || e.Property == Avalonia.Controls.ScrollViewer.ViewportProperty) InvalidateVisual(); };
+        ActualThemeVariantChanged += (_, _) => InvalidateVisual();
+    }
+    /// <summary>True while the list is longer than its window, so the cells show.</summary>
+    public bool Showing => scroll.Extent.Height > scroll.Viewport.Height + .5;
+    public override void Render(DrawingContext context)
+    {
+        if (!Showing || Bounds.Height < 4) return;
+        var ink = Ui.ThemeColour(this, "Ink", Colors.White);
+        var rows = Math.Max(1, (int)Math.Round(scroll.Extent.Height / AccountDisplayRow.RowHeight));
+        // Small cells like the display's own, never long bars: a short list draws a short column from the top.
+        var piece = Math.Min(8, Bounds.Height / rows); var gap = Math.Min(2.5, piece * .3);
+        var first = scroll.Offset.Y / AccountDisplayRow.RowHeight; var shown = scroll.Viewport.Height / AccountDisplayRow.RowHeight;
+        for (var k = 0; k < rows; k++)
+        {
+            var r = new Rect(0, k * piece, ColumnWidth, Math.Max(1.5, piece - gap));
+            var on = k + .5 > first && k + .5 < first + shown;
+            context.DrawRectangle(new SolidColorBrush(on ? ink : VfdLook.Ghost(ink)), null, r, 1, 1);
+        }
+    }
+}

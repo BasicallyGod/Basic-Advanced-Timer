@@ -61,11 +61,11 @@ public sealed class Round14Tests
     public void TheAccountRowsSeparateTodaysTimeFromBudgetUsageAndPeriod()
     {
         Assert.True(PillWindow.DropdownWidth < 230); // Still a narrow drawer; the raised rows need a little more room than the flat ones did.
-        var model = Model(); var window = new DashboardWindow(model); window.Show();Settle(window);
+        var model = Model(); var window = new Window { Width = PillWindow.DropdownWidth, Height = 400, Content = new AccountList(model, bars: true) }; window.Show(); Settle(window); // The full card rows.
         try
         {
             var rows = window.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("accountCard")).ToList();
-            Assert.Equal(2, rows.Count); Assert.True(rows.Count == 2 && rows[0].Bounds.Width <= Sidebar.Width - 24 + 1); Assert.All(rows, r => Assert.Equal(AccountList.RowHeight, r.Bounds.Height, 0.5));
+            Assert.Equal(2, rows.Count); Assert.True(rows.Count == 2 && rows[0].Bounds.Width <= PillWindow.DropdownWidth); Assert.All(rows, r => Assert.Equal(AccountList.RowHeight, r.Bounds.Height, 0.5));
             var first = rows[0];
             // Name and today's time share a line; budget usage and period occupy their own line.
             var words = first.GetVisualDescendants().OfType<TextBlock>().Where(t => t.IsVisible && !string.IsNullOrEmpty(t.Text)).ToList();

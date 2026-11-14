@@ -26,6 +26,31 @@ public sealed class VfdTimelineTests
     }
 
     [AvaloniaFact]
+    public void NoSegmentWordsRunPastTheirBlockOrMeetingAtAnyZoom_AndANarrowBreakIsACupOrNothing()
+    {
+        var model = Demo(); model.SetDisplayTimeline(true);
+        var window = new DashboardWindow(model); window.Show(); Settle(window);
+        try
+        {
+            // Zoomed right out, where blocks and meetings are narrowest and letters were seen running past their edges.
+            for (var i = 0; i < 12; i++) model.ZoomTimeline(-1, 400, 0);
+            Settle(window);
+            var canvas = window.GetVisualDescendants().OfType<Canvas>().Single(c => c.Name == "TimelineCanvas");
+            var words = canvas.GetVisualDescendants().OfType<SegmentText>().Where(t => t.Name is "BlockWords" or "MeetingWords").ToList();
+            foreach (var t in words)
+            {
+                var card = t.GetVisualAncestors().OfType<Border>().First(b => b.Parent == canvas);
+                var left = t.TranslatePoint(new Point(0, 0), card)!.Value.X; var right = left + t.DesiredSize.Width;
+                Assert.True(left >= 0 && right <= card.Bounds.Width + .5, $"\"{t.Text}\" runs from {left:0.0} to {right:0.0} in a card {card.Bounds.Width:0.0} wide");
+                Assert.True(t.Text.Length >= 2, $"a single letter \"{t.Text}\" is drawn");
+            }
+            // No break shows a lone letter: it says BREAK, shows a cup, or nothing.
+            Assert.DoesNotContain(words, t => t.Text == "B");
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public void OnTheDisplayTheTimelineIsDrawnInSegmentsUnderOneMesh()
     {
         var model = Demo(); model.SetDisplayTimeline(true); if (!model.IsTracking) model.ToggleAccount(model.Accounts[0].Name);
@@ -35,7 +60,7 @@ public sealed class VfdTimelineTests
             var canvas = window.GetVisualDescendants().OfType<Canvas>().Single(c => c.Name == "TimelineCanvas");
             // Only the lit fills go through the honeycomb; the words sit whole on top of them.
             var phosphor = canvas.GetVisualDescendants().OfType<Border>().First(b => b.Name == "BlockPhosphor");
-            Assert.Same(Honeycomb.Brush, phosphor.OpacityMask);
+            Assert.Same(Honeycomb.LargeBrush, phosphor.OpacityMask);
             Assert.DoesNotContain(canvas.GetVisualDescendants().OfType<SegmentText>(), t => t.GetVisualAncestors().Any(a => a is Control { OpacityMask: not null }));
             Assert.IsType<SegmentText>(canvas.Children.OfType<Control>().First(c => c.Name == "TimelineHour_9"));
             Assert.Contains(canvas.GetVisualDescendants().OfType<SegmentText>(), s => s.Name == "BlockWords");

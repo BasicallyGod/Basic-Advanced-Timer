@@ -84,7 +84,8 @@ public sealed class StatusFace : Grid
     public static double DisplayWidth => LeftWidth - DisplayPadding + CountNameGap + NameZone + NameTagGap + ControlZone + RightPadding;
     public static double ShortDisplayWidth => LeftWidth;
     /// <summary>The sidebar's display is a fixed width whatever the pill does.</summary>
-    public const double SidebarDisplayWidth = 212;
+    // As wide as the accounts display under it and Quit timer at the foot: the sidebar's width less its 12 pixel padding either side.
+    public const double SidebarDisplayWidth = Timer.Desktop.Sidebar.Width - 24;
     public const int SidebarNameCells = 10;
     private const double SidebarNameZone = SidebarDisplayWidth - 2 * DisplayPadding - NameTagGap - ControlZone;
     private readonly Ellipse selectorDot = new() { Width = 10, Height = 10, VerticalAlignment = VerticalAlignment.Center };

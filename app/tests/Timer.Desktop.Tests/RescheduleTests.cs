@@ -110,7 +110,9 @@ public sealed class RescheduleTests
             // Zoomed, a twelfth of the strip is five minutes, so the exact minute is easy to reach.
             strip.MoveTo(x + width / 12); Assert.Equal(evening.AddMinutes(5), strip.Pin);
             // Holding near the right end pans the hour along the day.
-            strip.PanAt(width * .98); Assert.Equal(zoom.AddMinutes(2), strip.ZoomFrom);
+            // Holding near the right end pans the hour along the day by the time that has passed, faster the deeper into the end: about 22 minutes in a second here.
+            strip.PanAt(width * .98, 1); Assert.InRange((strip.ZoomFrom!.Value - zoom).TotalMinutes, 20, 24);
+            strip.PanAt(width * .5, 1); Assert.InRange((strip.ZoomFrom!.Value - zoom).TotalMinutes, 20, 24); // In the middle it holds still.
             var chosen = strip.Pin;
             strip.Release(); Settle(window);
             Assert.Null(strip.ZoomFrom); // Back to the whole day...
@@ -136,6 +138,29 @@ public sealed class RescheduleTests
             Assert.Null(strip.ZoomFrom); Assert.Equal(day.AddHours(20).AddMinutes(55), NotesModel.ReminderOf(model.Notes.Find(id)!));
         }
         finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheHeldPinsTimeHoldsUntilThePointerIsClearlyPastTheNextFiveMinutes_AndTheWheelMovesItAQuarterOfAnHour()
+    {
+        var (window, card, model, id) = Open();
+        try
+        {
+            var strip = card.Picker!.Strip; var day = model.TodayKey; var width = strip.Bounds.Width;
+            strip.Hold((day.AddHours(20) - strip.From).TotalMinutes / 1440 * width); Assert.Equal(day.AddHours(20), strip.Pin);
+            double X(double minutesPast) => (day.AddHours(20).AddMinutes(minutesPast) - strip.ZoomFrom!.Value).TotalMinutes / RescheduleStrip.ZoomMinutes * width;
+            strip.MoveTo(X(2.8)); Assert.Equal(day.AddHours(20), strip.Pin); // Past halfway to 20:05, but not clearly: it holds, so it cannot flicker.
+            strip.MoveTo(X(4.2)); Assert.Equal(day.AddHours(20).AddMinutes(5), strip.Pin); // Within a minute of 20:05: it moves.
+            strip.MoveTo(X(2.2)); Assert.Equal(day.AddHours(20).AddMinutes(5), strip.Pin); // And back past halfway it holds again.
+            // While held, a notch moves the hour a quarter of an hour under the still pointer.
+            var zoom = strip.ZoomFrom!.Value; strip.Wheel(1, false); Assert.Equal(zoom.AddMinutes(15), strip.ZoomFrom);
+            strip.Release(); Settle(window);
+        }
+        finally { window.Close(); }
+        // At rest, a notch moves the pin a quarter of an hour and Shift an hour.
+        var (window2, card2, _, _) = Open();
+        try { var strip = card2.Picker!.Strip; var pin = strip.Pin; strip.Wheel(1, false); Assert.Equal(pin.AddMinutes(15), strip.Pin); strip.Wheel(1, true); Assert.Equal(pin.AddMinutes(75), strip.Pin); }
+        finally { window2.Close(); }
     }
 
     [AvaloniaFact]
