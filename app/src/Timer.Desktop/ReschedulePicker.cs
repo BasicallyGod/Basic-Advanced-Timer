@@ -102,8 +102,12 @@ public sealed class RescheduleStrip : Control
     private readonly Action<DateTime> set;
     // The whole day; and, while the pin is held, where the hour the strip has zoomed to begins.
     private DateTime from, until, day;
-    private readonly Avalonia.Threading.DispatcherTimer pan = new() { Interval = TimeSpan.FromMilliseconds(40) };
-    private double lastX;
+    // Panning runs a step each screen frame while held (a fixed 40 ms timer moved two minutes at a time and, with the pin re-snapping on every step, made its chip
+    // flicker); the wheel at rest sets the pin once it stops turning.
+    private bool panning; private TimeSpan? lastFrame; private double lastX;
+    private readonly Avalonia.Threading.DispatcherTimer wheelSettle = new() { Interval = TimeSpan.FromMilliseconds(700) };
+    /// <summary>How far into each end the pointer pans the zoomed hour, and how fast it pans at the very end, in minutes a second.</summary>
+    public const double PanZone = .14, PanTop = 30;
     /// <summary>Where the pin is.</summary>
     public DateTime Pin { get; private set; }
     public DateTime From => from;
@@ -117,8 +121,8 @@ public sealed class RescheduleStrip : Control
     {
         this.model = model; this.set = set; Height = StripHeight; Focusable = true; Cursor = new Cursor(StandardCursorType.Cross); ClipToBounds = true;
         ActualThemeVariantChanged += (_, _) => InvalidateVisual();
-        pan.Tick += (_, _) => PanAt(lastX);
-        DetachedFromVisualTree += (_, _) => pan.Stop();
+        wheelSettle.Tick += (_, _) => { wheelSettle.Stop(); Commit(); };
+        DetachedFromVisualTree += (_, _) => { panning = false; wheelSettle.Stop(); };
     }
     /// <summary>Shows the whole of <paramref name="day"/> with the pin at <paramref name="pin"/> (kept inside the day and out of the past).</summary>
     public void Show(DateTime day, DateTime pin)
@@ -149,7 +153,18 @@ public sealed class RescheduleStrip : Control
     private DateTime At(double x) => Clamp(ViewFrom.AddMinutes(Fraction(x) * (ViewTo - ViewFrom).TotalMinutes));
 
     /// <summary>Moves the pin to the time under <paramref name="x"/> on the strip as it shows now; used by the pointer and by tests.</summary>
-    public void MoveTo(double x) { Pin = At(x); Describe(); InvalidateVisual(); }
+    public void MoveTo(double x)
+    {
+        // Held, the pin keeps its five minutes until the pointer is a minute and a half past the halfway point to the next (within a minute of it, or four
+        // minutes from the pin), so it never flickers between two times as the strip slides under a still pointer.
+        if (ZoomFrom is not null)
+        {
+            var raw = ViewFrom.AddMinutes(Fraction(x) * ZoomMinutes); var snapped = Clamp(raw);
+            if (Math.Abs((raw - Pin).TotalMinutes) >= 4 || Math.Abs((raw - snapped).TotalMinutes) < 1) Pin = snapped;
+        }
+        else Pin = At(x);
+        Describe(); InvalidateVisual();
+    }
     /// <summary>Puts the pin at <paramref name="t"/> on the day showing, to the five minutes; used by tests in place of a drag.</summary>
     public void PinAt(DateTime t) { Pin = Clamp(t); Describe(); InvalidateVisual(); }
     /// <summary>
@@ -162,16 +177,31 @@ public sealed class RescheduleStrip : Control
         ZoomFrom = start < from ? from : start > until.AddMinutes(-ZoomMinutes) ? until.AddMinutes(-ZoomMinutes) : start;
         Describe(); InvalidateVisual();
     }
-    /// <summary>While held, a pointer near either end pans the zoomed hour along the day (two minutes a step), and the pin follows the pointer.</summary>
-    public void PanAt(double x)
+    /// <summary>
+    /// While held, a pointer within <see cref="PanZone"/> of either end pans the zoomed hour along the day, slowly at the zone's inner edge and up to
+    /// <see cref="PanTop"/> minutes a second at the very end, by however much time has passed; the pin follows the pointer.
+    /// </summary>
+    public void PanAt(double x, double seconds)
     {
         lastX = x; if (ZoomFrom is not { } start) return;
-        var f = Fraction(x); var by = f < .08 ? -2 : f > .92 ? 2 : 0;
-        if (by != 0) { var moved = start.AddMinutes(by); ZoomFrom = moved < from ? from : moved > until.AddMinutes(-ZoomMinutes) ? until.AddMinutes(-ZoomMinutes) : moved; }
+        var f = Fraction(x); var depth = f < PanZone ? -(PanZone - f) / PanZone : f > 1 - PanZone ? (f - (1 - PanZone)) / PanZone : 0;
+        if (depth != 0) ShiftZoom(Math.Sign(depth) * depth * depth * PanTop * seconds);
         MoveTo(x);
     }
+    private void ShiftZoom(double minutes)
+    {
+        if (ZoomFrom is not { } start) return; var moved = start.AddMinutes(minutes); var last = until.AddMinutes(-ZoomMinutes);
+        ZoomFrom = moved < from ? from : moved > last ? last : moved;
+    }
+    private void Frame(TimeSpan now)
+    {
+        if (!panning || ZoomFrom is null) { lastFrame = null; return; }
+        var seconds = lastFrame is { } before ? Math.Min(.05, (now - before).TotalSeconds) : 0; lastFrame = now;
+        if (seconds > 0) PanAt(lastX, seconds);
+        TopLevel.GetTopLevel(this)?.RequestAnimationFrame(Frame);
+    }
     /// <summary>Lets go of the pin: back to the whole day, and the time is set.</summary>
-    public void Release() { pan.Stop(); ZoomFrom = null; InvalidateVisual(); Commit(); }
+    public void Release() { panning = false; ZoomFrom = null; InvalidateVisual(); Commit(); }
     /// <summary>Sets the reminder to where the pin is.</summary>
     private bool ValidPin => Pin >= from && Pin < until && Pin >= model.Engine.Now;
     public void Commit()
@@ -186,7 +216,8 @@ public sealed class RescheduleStrip : Control
     {
         base.OnPointerPressed(e);
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed || !Open) return;
-        e.Pointer.Capture(this); Focus(); Hold(e.GetPosition(this).X); pan.Start(); e.Handled = true;
+        e.Pointer.Capture(this); Focus(); wheelSettle.Stop(); Hold(e.GetPosition(this).X);
+        panning = true; lastFrame = null; TopLevel.GetTopLevel(this)?.RequestAnimationFrame(Frame); e.Handled = true;
     }
     protected override void OnPointerMoved(PointerEventArgs e) { base.OnPointerMoved(e); if (ZoomFrom is not null) { lastX = e.GetPosition(this).X; MoveTo(lastX); } }
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
@@ -196,7 +227,24 @@ public sealed class RescheduleStrip : Control
         e.Pointer.Capture(null); e.Handled = true; Release();
     }
     // A drag taken away (another window, Escape) goes back to the whole day without setting anything.
-    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e) { base.OnPointerCaptureLost(e); if (ZoomFrom is null) return; pan.Stop(); ZoomFrom = null; InvalidateVisual(); }
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e) { base.OnPointerCaptureLost(e); if (ZoomFrom is null) return; panning = false; ZoomFrom = null; InvalidateVisual(); }
+    /// <summary>
+    /// The wheel: while held, a notch moves the zoomed hour a quarter of an hour with the pin under the pointer; at rest, a notch moves the pin a quarter of an
+    /// hour (Shift, an hour) and the time is set once the wheel stops for a moment.
+    /// </summary>
+    public void Wheel(int notches, bool hour)
+    {
+        if (notches == 0 || !Open) return;
+        if (ZoomFrom is not null) { ShiftZoom(15 * notches); var raw = ViewFrom.AddMinutes(Fraction(lastX) * ZoomMinutes); Pin = Clamp(raw); }
+        else { Pin = Clamp(Pin.AddMinutes((hour ? 60 : 15) * notches)); wheelSettle.Stop(); wheelSettle.Start(); }
+        Describe(); InvalidateVisual();
+    }
+    protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
+    {
+        base.OnPointerWheelChanged(e);
+        var notches = e.Delta.Y < 0 ? 1 : e.Delta.Y > 0 ? -1 : 0;
+        if (notches != 0) { Wheel(notches, e.KeyModifiers.HasFlag(KeyModifiers.Shift)); e.Handled = true; }
+    }
     protected override void OnKeyDown(KeyEventArgs e)
     {
         base.OnKeyDown(e);
@@ -229,7 +277,8 @@ public sealed class RescheduleStrip : Control
         for (var t = first; t <= viewTo; t = t.AddMinutes(tick))
         {
             var minutes = (int)Math.Round((t - from).TotalMinutes); var major = minutes % label == 0;
-            var x = Math.Round(X(t)) + .5;
+            // Zoomed, the ticks are drawn where they fall, not on whole pixels, so a slow pan glides instead of stepping.
+            var x = zoomed ? X(t) : Math.Round(X(t)) + .5;
             if (x > 1 && x < w - 1) context.DrawLine(tickPen, new Point(x, major ? laneTop : h - footRoom - 6), new Point(x, h - footRoom));
             if (!major) continue;
             var words = zoomed ? t.ToString("HH:mm") : t == until && t.Hour == 0 ? "24" : t.ToString("HH");

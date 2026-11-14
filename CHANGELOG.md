@@ -10,6 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 |---|---|---|
+| Reminder drag polished: the zoomed hour pans every frame, faster deeper into the end; the pin's time no longer flickers between neighbours; the ticks glide; the wheel moves the hour or the pin by a quarter hour. | pending | `RescheduleTests`. |
 | Display polish: larger honeycomb on the timeline and week; segment words never run past a block or meeting (whole words or nothing, no single letters); narrow breaks show a cup, then nothing; the week's totals, readout and By account are bigger, the readout names the slice under the pointer in full and counts what does not fit, and By account scrolls inside its rounded panel; the reminder card's heading no longer repeats the note. | pending | `VfdTimelineTests`. |
 
 ## 13 November 2026
