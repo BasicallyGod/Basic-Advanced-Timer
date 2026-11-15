@@ -71,6 +71,7 @@ public sealed class ReminderPopup : Border
     {
         card.Margin = HangingCard.Room; card.BoxShadow = HangingCard.Shadow;
         host.VerticalOffset = -HangingCard.Room.Top; host.HorizontalOffset = 0;
+        PickerFocus.Manage(host, card);
         return card;
     }
 

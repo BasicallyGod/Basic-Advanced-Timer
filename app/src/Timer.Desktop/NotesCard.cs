@@ -299,6 +299,8 @@ public sealed class NotesCard : Border
     private void OpenReminder()
     {
         scope = null;
+        reminderHost.PlacementTarget = this.GetVisualDescendants().OfType<Button>()
+            .FirstOrDefault(b => (b.Name is "FormBell" or "FormReminder") && b.IsVisible) ?? (Control)title;
         var label = string.IsNullOrWhiteSpace(draft) ? "New note" : draft;
         var content = new ReminderPickerCard(model, label, draftReminder, answered => { draftReminder = answered; CloseReminder(); DrawForm(true); }, CloseReminder);
         reminderHost.Child = ReminderPopup.Roomy(content, reminderHost); reminderHost.IsOpen = true;

@@ -156,6 +156,9 @@ public static class ThemeEngine
         // shadow does the work. A raised thing is never given a shade of its own: the page is the card colour's ground, and a sunk thing is a shade under it.
         Put("Well", Color.Parse(lightGround ? ThemeColours.Mix(colours["Surface"], colours["Ink"], .03) : ThemeColours.Mix(colours["Surface"], "#000000", .2)));
         Put("KeyEdge", lightGround ? Color.FromArgb(12, 96, 88, 132) : Color.FromArgb(22, 255, 255, 255));
+        // An empty tick has no words or icon to identify it: its edge must stand on its own, even without shadows.
+        Put("ControlOutline", Color.Parse(TextShade(ThemeColours.Mix(colours["Muted"], colours["Panel"], .35), colours["Ink"],
+            new[] { colours["Panel"], colours["Surface"], colours["Hover"] }, 3.3)));
         Put("KeyHover", Color.Parse(lightGround ? ThemeColours.Mix(colours["Panel"], "#FFFFFF", .4) : ThemeColours.Mix(colours["Panel"], "#FFFFFF", .07)));
         Put("Porcelain", Color.Parse(lightGround ? ThemeColours.Mix(colours["Panel"], "#FFFFFF", .3) : ThemeColours.Mix(colours["Panel"], "#FFFFFF", .06)));
         {
