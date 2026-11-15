@@ -65,7 +65,13 @@ public sealed class TextSizing : AvaloniaObject
     }
 
     /// <summary>The unscaled design size, for a label which copies another label's typography.</summary>
-    public static double BaseFontSize(Control control) => fonts.TryGetValue(control, out var font) ? font.Size : control.GetValue(TextElement.FontSizeProperty) / (GetFixed(control) ? 1 : Factor);
+    public static double BaseFontSize(Control control)
+    {
+        if (fonts.TryGetValue(control, out var font)) return font.Size;
+        var own = control.GetBaseValue(TextElement.FontSizeProperty);
+        // An explicit default-sized font can be copied before Loaded registers it.
+        return own.HasValue ? own.Value : control.GetValue(TextElement.FontSizeProperty) / (GetFixed(control) ? 1 : Factor);
+    }
     public static double DecodeFactor(object? percent) => percent is int value && value is >= 100 and <= 225 ? value / 100.0 : 1;
     private static double ReadWindowsFactor()
     {

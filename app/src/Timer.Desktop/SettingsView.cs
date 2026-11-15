@@ -193,6 +193,13 @@ public sealed class SettingsView : Grid
         syncs.Add(SyncSize); SyncSize();
         var sizeRow = Ui.Grid("Auto,*,Auto"); sizeRow.Margin = new Thickness(0, 10, 0, 0); sizeRow.ColumnSpacing = 14;
         Ui.Put(sizeRow, automatic); Ui.Put(sizeRow, slider, 1); Ui.Put(sizeRow, percent, 2);
+        TextSizing.Follow(sizeRow, () =>
+        {
+            var large = TextSizing.Factor > 1; percent.Width = 112 * TextSizing.Factor;
+            sizeRow.ColumnDefinitions = new ColumnDefinitions(large ? "*,Auto" : "Auto,*,Auto"); sizeRow.RowDefinitions = new RowDefinitions(large ? "Auto,Auto" : "Auto");
+            Grid.SetColumn(percent, large ? 1 : 2); Grid.SetColumn(slider, large ? 0 : 1);
+            Grid.SetRow(slider, large ? 1 : 0); Grid.SetColumnSpan(slider, large ? 2 : 1);
+        });
         var sizeStack = new StackPanel(); sizeStack.Children.Add(stage); sizeStack.Children.Add(sizeRow);
         stack.Children.Add(Section("Size", sizeStack));
 
@@ -347,9 +354,9 @@ public sealed class SettingsView : Grid
         }
         var dark = Time("SunDarkFrom", "Dark from"); var light = Time("SunLightFrom", "Light from");
         var summary = Ui.Text("", 12, "muted"); summary.Name = "SunSummary"; summary.TextWrapping = TextWrapping.Wrap; summary.Margin = new Thickness(0, 4, 0, 0);
-        var hand = Ui.Horizontal(Ui.Text("Dark from", 13), dark, Ui.Text("Light from", 13), light); hand.Name = "SunHandTimes";
+        var hand = new WrapPanel { Name = "SunHandTimes", ItemSpacing = 8, LineSpacing = 8, Children = { Ui.Horizontal(Ui.Text("Dark from", 13), dark), Ui.Horizontal(Ui.Text("Light from", 13), light) } };
         var host = new StackPanel { Name = "SunOptions", Margin = new Thickness(0, 0, 0, 16), Spacing = 8 };
-        host.Children.Add(Ui.Horizontal(Ui.Text("Place", 13), place)); host.Children.Add(hand); host.Children.Add(summary);
+        host.Children.Add(new WrapPanel { ItemSpacing = 8, LineSpacing = 8, Children = { Ui.Text("Place", 13), place } }); host.Children.Add(hand); host.Children.Add(summary);
         var syncing = false;
         void Sync()
         {
@@ -434,7 +441,7 @@ public sealed class SettingsView : Grid
         var export = Ui.DialogButton("Export CSV files", ExportFiles, "ExportCsv"); export.Content = Ui.Horizontal(new IconGlyph(IconKind.Export), Ui.Text("Export CSV files", 14));
         copyHours = Ui.DialogButton("Copy hours table", CopyTable, "CopyHours", false); copyHours.Content = Ui.Horizontal(new IconGlyph(IconKind.Copy), Ui.Text("Copy hours table", 14));
         weekOnly = Ui.Text("The table is for a week.", 12.5, "muted"); weekOnly.Name = "CopyHoursNote"; weekOnly.VerticalAlignment = VerticalAlignment.Center; weekOnly.IsVisible = false;
-        stack.Children.Add(Ui.Horizontal(export, copyHours, weekOnly));
+        stack.Children.Add(new WrapPanel { ItemSpacing = 8, LineSpacing = 8, Children = { export, copyHours, weekOnly } });
         exportResult = Ui.Text("", 13); exportResult.Name = "ExportResult"; exportResult.TextWrapping = TextWrapping.Wrap; exportResult.IsVisible = false;
         exportError = Ui.Text("", 13); exportError.Classes.Add("overtime"); exportError.Name = "ExportError"; exportError.TextWrapping = TextWrapping.Wrap; exportError.IsVisible = false;
         stack.Children.Add(exportResult); stack.Children.Add(exportError);
@@ -524,8 +531,8 @@ public sealed class SettingsView : Grid
         pauseTick.Click += (_, _) => { TimerModel.TickPaused = !TimerModel.TickPaused; pauseTick.Content = TimerModel.TickPaused ? "Resume the 1 s refresh" : "Pause the 1 s refresh"; };
         var fineTimer = Ui.DialogButton(TimerResolution.Requested ? "Give back the 1 ms timer" : "Ask for a 1 ms timer", () => { }, "FrameTimerToggle");
         fineTimer.Click += (_, _) => { TimerResolution.Request(!TimerResolution.Requested); fineTimer.Content = TimerResolution.Requested ? "Give back the 1 ms timer" : "Ask for a 1 ms timer"; };
-        developer.Children.Add(Row("Find the cost", "Draw flat takes every raised and sunk shadow away; pausing the refresh stops routine clock redraws while checkpoint saves, reminder maintenance and important notifications continue. Asking for a 1 ms timer makes Windows tick finely while the app runs (the report names the current tick). Try each on the Timeline for 15 seconds, then copy the report.", Ui.Horizontal(flat, pauseTick, fineTimer)));
-        developer.Children.Add(Row("Frame timing", "How long the dashboard's frames take, for judging smoothness. Switch it on, use the page you want to test for a few seconds, then copy the report.", Ui.Horizontal(frameSwitch, frameCopy), frames));
+        developer.Children.Add(Row("Find the cost", "Draw flat takes every raised and sunk shadow away; pausing the refresh stops routine clock redraws while checkpoint saves, reminder maintenance and important notifications continue. Asking for a 1 ms timer makes Windows tick finely while the app runs (the report names the current tick). Try each on the Timeline for 15 seconds, then copy the report.", new WrapPanel { ItemSpacing = 8, LineSpacing = 8, Children = { flat, pauseTick, fineTimer } }));
+        developer.Children.Add(Row("Frame timing", "How long the dashboard's frames take, for judging smoothness. Switch it on, use the page you want to test for a few seconds, then copy the report.", new WrapPanel { ItemSpacing = 8, LineSpacing = 8, Children = { frameSwitch, frameCopy } }, frames));
         // Preview a season: shows one now whatever the date, so each can be tried on any day. Not saved.
         var seasonNames = new List<string> { "Automatic" }; seasonNames.AddRange(Seasons.All.Select(x => x.Name));
         var seasonPick = new ComboBox { Name = "SeasonPreview", ItemsSource = seasonNames, Width = 170, Height = 36, MinHeight = 36, FontSize = 13.5 };

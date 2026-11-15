@@ -54,6 +54,7 @@ public sealed class TextSizingTests
     {
         using var scale = TextSizing.ForTests(factor);
         var label = Ui.Text("Default-sized explicit label", 12);
+        Assert.Equal(12, TextSizing.BaseFontSize(label));
         var box = new TextBox { FontSize = 13, Width = 118, Height = 38 };
         var window = new Window { Content = new StackPanel { Children = { label, box } } }; window.Show(); Settle(window);
         try
@@ -172,6 +173,9 @@ public sealed class TextSizingTests
             {
                 page.ShowSection(section); Settle(window); Preview(window, $"text-{factor}-{section}");
                 var card = Find<Border>(window, "SettingsCard"); Assert.True(card.Bounds.Width > 300);
+                foreach (var button in card.GetVisualDescendants().OfType<Button>().Where(b => b.IsEffectivelyVisible))
+                    Assert.True(button.TranslatePoint(default, card)!.Value.X + button.Bounds.Width <= card.Bounds.Width + 1, section + ": " + button.Name);
+                if (section == "pill") Assert.Equal(112 * factor, Find<TextBlock>(window, "PillSizeNote").Width);
             }
             page.ShowSection("accounts"); Settle(window);
             var summary = Find<TextBlock>(window, "AccountsSummary"); var edit = Find<Button>(window, "EditAccounts");
