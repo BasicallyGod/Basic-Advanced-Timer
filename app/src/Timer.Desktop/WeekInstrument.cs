@@ -388,6 +388,15 @@ public sealed class WeekInstrument : Panel
                 var d = days[i].Day; var y = f.DayY[i];
                 var b = Zone("WeekDay_" + d.Date.ToString("yyyyMMdd"), new Rect(f.L - 10, y, f.R - f.L + 20, DayH), $"{d.Date.ToString("dddd d MMMM", British)}, {model.Format(d.Working)} working. Open in the Timeline", () => model.OpenDayInTimeline(d.Date));
                 ToolTip.SetTip(b, WeekOverview.DayTip(model, d, British));
+                // A press on a block picks its account (a second press lets go), as pressing the account's own row does; the rest of the day's row opens the day.
+                var line = days[i]; var n = 0;
+                foreach (var bar in line.Bars.Where(x => !x.Break))
+                {
+                    var from = X(f, Math.Clamp((bar.From - line.Origin).TotalHours, axisFrom, axisTo)) + 1; var to = X(f, Math.Clamp((bar.To - line.Origin).TotalHours, axisFrom, axisTo)) - 1; if (to - from < 2) continue;
+                    var account = bar.Account; var shown = model.Label(account);
+                    var block = Zone($"WeekBlock_{d.Date:yyyyMMdd}_{n++}", new Rect(from, y + 6, to - from, 20), $"{shown}, {bar.From:HH:mm} to {bar.To:HH:mm}. Press to trace this account", () => { pick = pick == account ? null : account; Refresh(); });
+                    ToolTip.SetTip(block, $"{shown} · {bar.From:HH:mm}–{bar.To:HH:mm}");
+                }
             }
         else
             for (var i = 0; i < days.Count; i++)

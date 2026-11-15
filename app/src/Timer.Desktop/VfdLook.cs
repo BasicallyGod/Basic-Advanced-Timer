@@ -11,7 +11,7 @@ namespace Timer.Desktop;
 public static class VfdLook
 {
     /// <summary>Words on a lit block: dark ink at about two-thirds strength, so they read clearly but stay part of the glass (solid black was too heavy).</summary>
-    public static readonly Color BlockInk = Color.FromArgb(173, 8, 10, 14);
+    public static readonly Color BlockInk = Color.FromArgb(235, 8, 10, 14);
     /// <summary>The faint unlit track the band and empty slots are drawn with.</summary>
     public static Color Ghost(Color ink) => SoftTint.WithAlpha(ink, .07);
     /// <summary>The soft glow a lit block gives off into the mesh round it, after any ring it already wears.</summary>

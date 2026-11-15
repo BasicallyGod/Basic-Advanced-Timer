@@ -207,4 +207,19 @@ public sealed class WeekOverviewTests
         }
         finally { window.Close(); }
     }
+
+    [AvaloniaFact]
+    public void PressingABlockInADayTracesItsAccountAndLeavesYouOnTheWeek()
+    {
+        var model = Model(e => e.Sessions.AddRange(new[] { Row("09:00:00", "90"), Row("11:00:00", "30", "Account two") }));
+        var window = Open(model, false);
+        try
+        {
+            var instrument = Instrument(window); var before = model.SelectedDate;
+            Click(window, "WeekBlock_20261009_0"); Assert.Equal("Account one", instrument.Traced); Assert.Equal(before, model.SelectedDate); // Still on the Week page.
+            Assert.NotNull(window.GetVisualDescendants().OfType<WeekInstrument>().SingleOrDefault());
+            Click(window, "WeekBlock_20261009_0"); Assert.Null(instrument.Traced);
+        }
+        finally { window.Close(); }
+    }
 }

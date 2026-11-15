@@ -181,4 +181,23 @@ public sealed class DisplayInkTests
         Assert.Equal(new Size(VfdGlyph.InkKeyWidth, VfdGlyph.InkKeyHeight), glyph.DesiredSize); Assert.Equal(glyph.DesiredSize, play.DesiredSize);
         DisplayInk.Style = DisplayStyle.Phosphor;
     }
+
+    [AvaloniaFact]
+    public void TheKeysAndTheLedFollowTheLookAtOnceAndTheWellsCarryPaper()
+    {
+        var model = Demo(); var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs();
+        try
+        {
+            Border Led() => pill.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "PillStateLight");
+            Button Key(string name) => pill.GetVisualDescendants().OfType<Button>().Single(b => b.Name == name);
+            Assert.NotNull(Led().OpacityMask); Assert.Equal(34, Key("PillBreak").Width); Assert.Equal(16, Key("PillBreak").Height); // Phosphor: the honeycomb and the small keys.
+            model.SetDisplayStyle(DisplayStyle.Ink); Dispatcher.UIThread.RunJobs();
+            Assert.Null(Led().OpacityMask); // E-ink: a plain LED, no mesh.
+            Assert.Equal(40, Key("PillBreak").Width); Assert.Equal(20, Key("PillBreak").Height); Assert.Equal(40, Key("PillPause").Width); // Room for the word Break inside its box.
+            Assert.NotEmpty(pill.GetVisualDescendants().OfType<PaperLayer>()); // The well has its paper grain.
+            model.SetDisplayStyle(DisplayStyle.Phosphor); Dispatcher.UIThread.RunJobs();
+            Assert.NotNull(Led().OpacityMask); Assert.Equal(34, Key("PillBreak").Width);
+        }
+        finally { pill.Close(); DisplayInk.Style = DisplayStyle.Phosphor; }
+    }
 }

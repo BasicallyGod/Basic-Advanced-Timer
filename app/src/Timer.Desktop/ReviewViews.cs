@@ -229,21 +229,21 @@ public static partial class ReviewViews
         // The words' own room: the block less the text's margins either side and a little to spare for the round caps (and, in E-ink, the paper plate each line sits on).
         var room = width - (detail == BlockDetail.Full ? (width < 84 ? 14 : 20) : 16) - 6 - (plate is null ? 0 : 8);
         var upper = isBreak ? "BREAK" : LowerDisplay.Drawable(name); var initials = isBreak ? "" : LowerDisplay.Drawable(PillWindow.Initials(name));
-        SegmentText Seg(string words, double height) => new(words, height, ink, weight: 1.12) { Name = "BlockWords", Plate = plate };
+        SegmentText Seg(string words, double height) => new(words, height, ink, weight: 1.3) { Name = "BlockWords", Plate = plate };
         bool Fits(string words, double height) => words.Length >= 2 && SegmentText.Fits(words, height, room);
         switch (detail)
         {
             case BlockDetail.Full:
-                if (Fits(length, 13)) text.Children.Add(Seg(length, 13)); else if (Fits(length, 9)) text.Children.Add(Seg(length, 9));
-                var shown = Fits(upper, 11) ? upper : Fits(initials, 11) ? initials : null;
-                if (shown is not null) text.Children.Add(Seg(shown, 11));
+                if (Fits(length, 15)) text.Children.Add(Seg(length, 15)); else if (Fits(length, 12)) text.Children.Add(Seg(length, 12)); else if (Fits(length, 9)) text.Children.Add(Seg(length, 9));
+                var shown = Fits(upper, 12) ? upper : Fits(initials, 12) ? initials : null;
+                if (shown is not null) text.Children.Add(Seg(shown, 12));
                 text.Spacing = 6; break;
             case BlockDetail.Inline:
-                var line = Fits(length + " " + upper, 9) ? length + " " + upper : Fits(length + " " + initials, 9) ? length + " " + initials : Fits(length, 9) ? length : null;
-                if (line is not null) text.Children.Add(Seg(line, 9)); break;
+                var line = Fits(length + " " + upper, 11) ? length + " " + upper : Fits(length + " " + initials, 11) ? length + " " + initials : Fits(length, 11) ? length : Fits(length, 9) ? length : null;
+                if (line is not null) text.Children.Add(Seg(line, Fits(line, 11) ? 11 : 9)); break;
             default:
-                var small = Fits(initials + " " + length, 8) ? initials + " " + length : Fits(initials, 8) ? initials : null;
-                if (small is not null) text.Children.Add(Seg(small, 8)); break;
+                var small = Fits(initials + " " + length, 10) ? initials + " " + length : Fits(initials, 10) ? initials : Fits(initials, 8) ? initials : null;
+                if (small is not null) text.Children.Add(Seg(small, Fits(small, 10) ? 10 : 8)); break;
         }
         // A break too narrow for its word keeps a cup while there is room for one, and is a plain amber outline below that.
         if (isBreak && text.Children.Count == 0 && width >= 26)
@@ -252,7 +252,7 @@ public static partial class ReviewViews
         {
             // The length fitted but the word did not: a cup beside it says what the block is.
             var length2 = text.Children[0]; text.Children.Clear();
-            var row = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 5 };
+            var row = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 5, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center };
             if (width >= 60) row.Children.Add(new BreakGlyph { Name = "BreakCup", Width = 12, Height = 12, Fixed = new SolidColorBrush(ink), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, IsHitTestVisible = false });
             row.Children.Add(length2); text.Children.Add(row);
         }
@@ -362,7 +362,7 @@ public static partial class ReviewViews
             var ink = isBreak ? model.GlassTheme.Colour("Muted") : look.Text;
             var display = model.Label(interval.Account);
             // What is written on the block depends on the room it has: the whole block, a line, the duration alone, or nothing but the colour.
-            var text = new StackPanel { Spacing = 2, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Margin = detail == BlockDetail.Full ? new Thickness(width < 84 ? 7 : 10, 6) : new Thickness(8, 0) };
+            var text = new StackPanel { Spacing = 2, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, HorizontalAlignment = detail != BlockDetail.Full || width < 84 ? Avalonia.Layout.HorizontalAlignment.Center : Avalonia.Layout.HorizontalAlignment.Left, Margin = detail == BlockDetail.Full ? new Thickness(width < 84 ? 7 : 10, 6) : new Thickness(8, 0) };
             var recording = interval.Row is null && interval.Group is null;
             var note = interval.Group is { } groupNote ? groupNote.Note : recording ? "Recording now" : interval.Row is { } noteRow ? model.Editor.Note(noteRow) : "";
             VfdWords(text, detail, width, model.Format(duration), display, isBreak ? (inkOn ? inkColours.Amber : Color.Parse("#F5B63A")) : blockInk, isBreak, plate);

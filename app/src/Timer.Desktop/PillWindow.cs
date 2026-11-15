@@ -379,11 +379,13 @@ public sealed class PillWindow : Window
         ShapeApplied = Shape; face.SetCompact(model.CompactPill); face.SetTall(model.TallPill);
         surface.Width = CardWidth; surface.Height = CardHeight; if (resized) CloseFlyouts(); EnsureSize();
     }
+    private bool lookApplied = DisplayInk.On;
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (Topmost != model.PillOnTop) Topmost = model.PillOnTop;
         // A new pill size from settings takes effect straight away, even while the pill is hidden behind the dashboard.
         if (model.PillScalePercent != appliedChoice) FitToScreen(Screens.ScreenFromWindow(this));
+        if (lookApplied != DisplayInk.On) { lookApplied = DisplayInk.On; DisplayInk.Repaint(this); } // a new look is drawn at once, not when something next redraws
         if (Shape != ShapeApplied) ApplyShape();
         if (IsVisible) Refresh();
         PeekAtNewAlerts();

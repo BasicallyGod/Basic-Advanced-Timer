@@ -655,7 +655,7 @@ public sealed class AccountList : StackPanel
                 if (reorderable) AttachReorder(row, account.Name);
                 var menu = new MenuItem { Header = "Name and budget…", Name = "AccountSettingsMenu" }; menu.Click += (_, _) => model.OpenAccounts();
                 row.ContextMenu = new ContextMenu { ItemsSource = new Control[] { menu } };
-                Avalonia.Automation.AutomationProperties.SetName(row, account.Display);
+                Avalonia.Automation.AutomationProperties.SetName(row, account.Display); ToolTip.SetTip(row, account.Display); // a name cut short on the display is in full here
                 Children.Add(row); displayRows[account.Name] = drawn;
                 rows.Add((account, row, new TextBlock(), new TextBlock(), new AccountIndicator(account, model), new TextBlock(), null, new TextBlock()));
                 continue;
@@ -1442,7 +1442,7 @@ public sealed class AccountDisplayRow : Control
         // The account's colour: a lamp, lit green while it records (Phosphor), or a textured swatch (E-ink), so the colour is never the only way to tell accounts apart.
         if (inked)
         {
-            var swatch = new Rect(13, 9, 14, 16);
+            var swatch = new Rect(12, 9, 13, 16);
             DisplayInk.Cell(context, paper, new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse(model.ChartColour(account.Colour))), swatch, 3);
             DisplayInk.Texture(context, model.TextureOf(account.Name), swatch, 3, Avalonia.Media.Color.Parse(model.ChartColour(account.Colour)));
         }
@@ -1452,14 +1452,14 @@ public sealed class AccountDisplayRow : Control
             if (recording && dark) new PhosphorBloom(live, 0, .78).Draw(context, new Avalonia.Media.RectangleGeometry(lamp, 2, 2), true);
             context.DrawRectangle(new Avalonia.Media.SolidColorBrush(recording ? live : SoftTint.WithAlpha(Avalonia.Media.Color.Parse(Ui.Visible(account.Colour)), .7)), null, lamp, 2, 2);
         }
-        var textX = inked ? 36.0 : 26.0;
+        var textX = inked ? 33.0 : 26.0;
         // Today's hours at the right, then the name in what is left, cut to fit.
-        const double nameH = 11, hoursH = 13;
+        var nameH = inked ? 9.5 : 11.0; var hoursH = inked ? 11.0 : 13.0; // E-ink type is wider than the segments, so the names and hours are a little smaller to leave the names room
         var hours = model.Format(model.Today(account)); var hoursW = SegmentText.TextWidth(hours, hoursH);
-        SegmentText.Draw(context, hours, w - 14 - hoursW, 9, hoursH, recording ? live : ink, ghosts: true);
+        SegmentText.Draw(context, hours, w - 14 - hoursW, inked ? 10 : 9, hoursH, recording ? live : ink, ghosts: true);
         var name = LowerDisplay.Drawable(account.Display); var room = w - 14 - hoursW - 10 - textX; var cells = name.Length;
         while (cells > 0 && SegmentText.TextWidth(name[..cells], nameH) > room) cells--;
-        SegmentText.Draw(context, cells < name.Length ? (inked ? name[..cells].TrimEnd() + "…" : name[..cells].TrimEnd()) : name, textX, 11, nameH, ink);
+        SegmentText.Draw(context, cells < name.Length ? (inked ? name[..cells].TrimEnd() + "…" : name[..cells].TrimEnd()) : name, textX, inked ? 12 : 11, nameH, ink);
         // The budget as cells under the name, or quiet words when there is none.
         var used = account.Budget is null ? (TimeSpan?)null : model.BudgetUsed(account);
         if (model.BudgetRatio(account, used) is not { } ratio) { SegmentText.Draw(context, "NO BUDGET", textX, 30, 8, quiet); return; }

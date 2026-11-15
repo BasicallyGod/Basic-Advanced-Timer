@@ -928,6 +928,7 @@ public sealed class DashboardWindow : Window
     private void ShowSettings() { settingsMode = !settingsMode; Refresh(true); }
     // The Notes page is built once and kept: it listens to the model itself, so coming back to it finds the search and the form as they were.
     private NotesPage NotesPageInstance() { if (notesPage is null) notesPage = new NotesPage(model) { Query = searchBox.Text ?? "" }; return notesPage; }
+    private bool lookApplied = DisplayInk.On;
     private Avalonia.Controls.ThemeVariantScope? troughScope; private Border? troughHost; private bool troughInk;
     /// <summary>
     /// The timeline's well: dark glass in the Phosphor look, the theme's own paper (with a whisper of grain) in E-ink. The scope's theme variant decides what every colour
@@ -945,6 +946,7 @@ public sealed class DashboardWindow : Window
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (Topmost != model.DashboardOnTop) Topmost = model.DashboardOnTop;
+        if (lookApplied != DisplayInk.On) { lookApplied = DisplayInk.On; DisplayInk.Repaint(this); }
         if (troughInk != DisplayInk.On || (DisplayInk.On && e.PropertyName != TimerModel.PresentationChange && model.GlassTheme.Dark != (troughScope?.RequestedThemeVariant == Avalonia.Styling.ThemeVariant.Dark))) UpdateTrough();
         UpdateShadow(); UpdateOnboarding();
         var rebuild = e.PropertyName is not (nameof(TimerModel.Elapsed) or TimerModel.PresentationChange);
