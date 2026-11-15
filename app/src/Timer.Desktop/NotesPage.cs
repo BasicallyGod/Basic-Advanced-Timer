@@ -39,10 +39,10 @@ public sealed class NotesPage : Grid
     private readonly Popup filterHost = new() { Placement = PlacementMode.Bottom, IsLightDismissEnabled = true, Name = "NotesAccountHost" };
     private NoteView view = NoteView.All; private readonly List<string> accountFilters = new(); private string query = "";
     private string? shown;
-    // The form: one state, drawn in the add line at the top, or in the row that is open for editing.
+    // Local mirrors of the model-owned add forms. Existing rows use RecordEditor and its own lease.
     private bool meeting, important; private long? editing; private string draft = ""; private string startText = "12:00", endText = "12:30"; private string? account; private DateTime? when; private DateTime meetingDay; private RepeatChoice repeat;
     private string? error; private bool allLater; private long? removing; private bool archived;
-    private (bool Meeting, bool Important, string Draft, string Start, string End, string? Account, DateTime? When, DateTime Day, RepeatChoice Repeat)? stash;
+    private bool? stashedKind;
 
     public NotesPage(TimerModel model)
     {
@@ -60,12 +60,12 @@ public sealed class NotesPage : Grid
         var pageScroll = new ScrollViewer { Content = list, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Name = "NotesPageScroll" }; Ui.LeaveRoomForTrack(pageScroll, list);
         Ui.Put(inner, pageScroll, 0, 2);
         inner.Children.Add(whenHost); inner.Children.Add(filterHost); card.Child = inner; Children.Add(card);
-        AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Notes.NoteIdChanged += NoteIdChanged; };
-        DetachedFromVisualTree += (_, _) => { model.PropertyChanged -= Changed; Notes.NoteIdChanged -= NoteIdChanged; };
+        AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Notes.NoteIdChanged += NoteIdChanged; model.CreationDrafts.Reset += ResetComposers; if (editing is null) { RestoreComposer(); DrawForm(); } };
+        DetachedFromVisualTree += (_, _) => { model.PropertyChanged -= Changed; Notes.NoteIdChanged -= NoteIdChanged; model.CreationDrafts.Reset -= ResetComposers; };
         activity = new ViewActivity(this, active => { if (active) Sync(); });
         // Escape puts a row being edited back as it was.
         AddHandler(KeyDownEvent, (_, e) => { if (e.Key == Key.Escape && !whenHost.IsOpen && !filterHost.IsOpen && (editing is not null || removing is not null)) { EndEdit(); Redraw(); e.Handled = true; } }, Avalonia.Interactivity.RoutingStrategies.Bubble);
-        Blank(); DrawForm(); Sync();
+        RestoreComposer(); DrawForm(); Sync();
     }
     private readonly ViewActivity activity;
     private void NoteIdChanged(long previous, long current)
@@ -138,9 +138,21 @@ public sealed class NotesPage : Grid
 
     private void UpdateRows(List<ListRow> next)
     {
+        // Saving a temporary note gives it a positive ID, which changes the normal ID sort order.
+        // Keep its open row anchored until editing ends so recovery cannot virtualize the focused editor.
+        if (editing is { } resolved)
+        {
+            var index = rows.ToList().FindIndex(r => r is NoteRow { DraftVersion: > 0 } n && n.Note.Id != resolved && Notes.Find(n.Note.Id)?.Id == resolved);
+            var replacement = next.FindIndex(r => r is NoteRow n && n.Note.Id == resolved);
+            if (index >= 0 && replacement >= 0 && rows[index] is NoteRow old && next[replacement] is NoteRow updated && old.Removing == updated.Removing)
+            { next.RemoveAt(replacement); next.Insert(Math.Min(index, next.Count), old); }
+        }
         // Replacing just the edited row keeps the scroll anchor and the other realized controls.
         if (rows.Count == next.Count)
         {
+            for (var i = 0; i < next.Count; i++)
+                if (editing is { } id && rows[i] is NoteRow { DraftVersion: > 0 } old && next[i] is NoteRow updated && Notes.Find(old.Note.Id)?.Id == id && updated.Note.Id == id && old.Removing == updated.Removing)
+                    next[i] = old; // The shared draft refreshes the realized editor without replacing its focused controls.
             var changed = new List<int>();
             for (var i = 0; i < next.Count && changed.Count <= 16; i++)
                 if (rows[i] != next[i]) changed.Add(i);
@@ -258,6 +270,8 @@ public sealed class NotesPage : Grid
 
     private Control Row(DayNote note)
     {
+        // A retained virtualized row may still carry a temporary ID after persistence recovers.
+        note = Notes.Find(note.Id) ?? note;
         if (removing == note.Id) return RemoveQuestion(note);
         if (editing == note.Id) return Editor(note);
         var isMeeting = NotesModel.IsMeeting(note); var plain = Notes.Text(note); var acct = Notes.AccountOf(note);
@@ -272,6 +286,7 @@ public sealed class NotesPage : Grid
         Ui.Put(line, main, 1);
         // The chips sit at the right of the line: the account (pressing it filters to that account), the reminder or the meeting's time, and how it repeats.
         var chips = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
+        chips.Children.Add(new DraftBadge(model, note.Id));
         if (acct is not null)
         {
             var chip = Ui.Button("", () => { accountFilters.Clear(); accountFilters.Add(acct); shown = null; Sync(); }, "PageRowAccount_" + note.Id); chip.Classes.Add("pillBare"); chip.Padding = new Thickness(0);
@@ -280,7 +295,8 @@ public sealed class NotesPage : Grid
         if (isMeeting) chips.Children.Add(NoteParts.Chip(NoteDates.Day(note.Day, model.Engine.Now) + ", " + NoteParts.Span(note), "plain"));
         else if (NotesModel.ReminderOf(note) is { } due)
         {
-            var reminder = Ui.Button("", () => { Edit(note); RevealEditor(note.Id, openReminder: true); }, "PageNoteReminder_" + note.Id);
+            Button reminder = null!;
+            reminder = Ui.Button("", () => OpenRowReminder(note, reminder), "PageNoteReminder_" + note.Id);
             reminder.Classes.Add("pillBare"); reminder.Padding = new Thickness(0); reminder.Content = NoteParts.Chip(NoteDates.When(due, model.Engine.Now), Notes.IsLate(note) ? "late" : "accent", IconKind.Bell);
             ToolTip.SetTip(reminder, "Change reminder"); Avalonia.Automation.AutomationProperties.SetName(reminder, "Change reminder for " + plain); chips.Children.Add(reminder);
         }
@@ -330,23 +346,31 @@ public sealed class NotesPage : Grid
 
     // ---- The form's state ----
 
-    private void Blank()
+    private void CaptureComposer()
     {
-        meeting = false; important = false; editing = null; draft = ""; startText = "12:00"; endText = "12:30"; account = null; when = null; meetingDay = model.SelectedDate.Date; repeat = RepeatChoice.None; error = null; allLater = false; removing = null; archived = false; whenHost.IsOpen = false;
+        if (editing is null) model.CreationDrafts.Update("notes", meeting, new(draft, account, meetingDay.Date, startText, endText, when, important, repeat));
     }
+    private void RestoreComposer()
+    {
+        var v = model.CreationDrafts.Get("notes", meeting);
+        draft = v.Words; account = v.Account; meetingDay = v.Day; startText = v.Start; endText = v.End; when = v.Reminder; important = v.Important; repeat = v.Repeat;
+        error = null; allLater = false; removing = null; archived = false;
+    }
+    private void ResetComposers() { if (editing is null) { RestoreComposer(); DrawForm(); } }
     // A note being typed in the add line is kept while a row is open for editing, and comes back when the row is closed.
     private void EndEdit()
     {
         whenHost.IsOpen = false;
-        if (stash is { } kept) { (meeting, important, draft, startText, endText, account, when, meetingDay, repeat) = kept; stash = null; editing = null; error = null; allLater = false; removing = null; archived = false; }
-        else Blank();
+        if (stashedKind is { } kept) { meeting = kept; stashedKind = null; editing = null; RestoreComposer(); }
+        else { editing = null; RestoreComposer(); }
     }
 
     /// <summary>Switches the add line between a note and a meeting, as the kind picker does.</summary>
+    public void ResumeComposer(bool isMeeting) { if (editing is not null) EndEdit(); SetKind(isMeeting); DrawForm(); }
     public void SetKind(bool isMeeting)
     {
         if (editing is not null || meeting == isMeeting) return;
-        meeting = isMeeting; error = null; if (isMeeting) when = null; DrawForm();
+        CaptureComposer(); meeting = isMeeting; RestoreComposer(); DrawForm();
     }
 
     /// <summary>Opens a note (or meeting) for editing, as a press on its row does. A pin on the timeline asks for this.</summary>
@@ -362,16 +386,16 @@ public sealed class NotesPage : Grid
         Dispatcher.UIThread.Post(() =>
         {
             if (editing != id || !activity.Active) return;
-            var row = rows.OfType<NoteRow>().FirstOrDefault(item => item.Note.Id == id);
+            var row = rows.OfType<NoteRow>().FirstOrDefault(item => Notes.Find(item.Note.Id)?.Id == id);
             if (row is null) return;
             list.ScrollIntoView(row);
-            if (openReminder) OpenWhen();
+            if (openReminder) this.GetVisualDescendants().OfType<RecordEditor>().FirstOrDefault(e => e.Draft.NoteId == id)?.PickReminder();
         }, DispatcherPriority.Loaded);
     }
 
     private void Edit(DayNote note)
     {
-        if (editing is null) stash = (meeting, important, draft, startText, endText, account, when, meetingDay, repeat);
+        if (editing is null) { CaptureComposer(); stashedKind = meeting; }
         whenHost.IsOpen = false; removing = null;
         meeting = NotesModel.IsMeeting(note); important = NotesModel.IsImportant(note); editing = note.Id; draft = Notes.Words(note); account = Notes.AccountOf(note); error = null; allLater = false;
         archived = meeting && Notes.IsArchivedRepeat(note);
@@ -391,6 +415,7 @@ public sealed class NotesPage : Grid
 
     private void DrawForm()
     {
+        CaptureComposer();
         if (editing is not null)
         {
             // While a row is open the add line rests, so there is one place to type at a time.
@@ -410,7 +435,7 @@ public sealed class NotesPage : Grid
         var submit = Ui.Ctl("PageSubmit", "Add", null, "Add", Submit, small: true); submit.Classes.Add("primary"); submit.Height = 36; submit.Padding = new Thickness(16, 0); Ui.Put(top, submit, 4);
         column.Children.Add(top); column.Children.Add(suggestions);
         if (!meeting) { var chips = NoteChips(); if (chips is not null) column.Children.Add(chips); }
-        else column.Children.Add(MeetingFields(false));
+        else column.Children.Add(MeetingFields(true));
         if (error is not null) column.Children.Add(ErrorLine());
         formHost.Content = column;
     }
@@ -420,7 +445,7 @@ public sealed class NotesPage : Grid
     {
         var field = new TextBox { Name = "PageNoteField", Text = draft, Height = 36, MinHeight = 36, VerticalContentAlignment = VerticalAlignment.Center, IsEnabled = !archived, Watermark = watermark, HorizontalAlignment = HorizontalAlignment.Stretch };
         NoteLinks.AttachPaste(field);
-        field.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) draft = field.Text ?? ""; };
+        field.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) { draft = field.Text ?? ""; CaptureComposer(); } };
         field.KeyDown += (_, e) => { if (e.Key == Key.Enter) { Submit(); e.Handled = true; } };
         var host = new StackPanel { Name = "PageSuggestions", IsVisible = false }; host.Classes.Add("suggestions"); suggestions = host;
         void Choose(string name, string rest) { account = name; draft = rest; if (editing is not null) Redraw(); else DrawForm(); Avalonia.Threading.Dispatcher.UIThread.Post(() => { if (this.GetVisualDescendants().OfType<TextBox>().FirstOrDefault(t => t.Name == "PageNoteField") is { } again) { again.Focus(); again.CaretIndex = again.Text?.Length ?? 0; } }); }
@@ -429,7 +454,8 @@ public sealed class NotesPage : Grid
         // The arrow keys move the light through the offers, and Tab or Enter take the lit one.
         field.AddHandler(KeyDownEvent, (_, e) =>
         {
-            if (host.IsVisible && e.Key is Key.Down or Key.Up && nav.Move(e.Key == Key.Down ? 1 : -1)) { first = NoteParts.ShowSuggestions(model, field.Text ?? "", host, "PageSuggest_", Choose, nav); e.Handled = true; }
+            if (host.IsVisible && e.Key == Key.Escape) { host.IsVisible = false; e.Handled = true; }
+            else if (host.IsVisible && e.Key is Key.Down or Key.Up && nav.Move(e.Key == Key.Down ? 1 : -1)) { first = NoteParts.ShowSuggestions(model, field.Text ?? "", host, "PageSuggest_", Choose, nav); e.Handled = true; }
             else if (first is { } offer && host.IsVisible && e.Key is Key.Tab or Key.Enter) { Choose(offer.Account, offer.Words); e.Handled = true; }
         }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         return field;
@@ -482,7 +508,7 @@ public sealed class NotesPage : Grid
         TextBox Time(string name, string text, string tip, Action<string> set)
         {
             var box = new TextBox { Name = name, Text = text, Width = 74, Height = 36, MinHeight = 36, TextAlignment = TextAlignment.Center, VerticalContentAlignment = VerticalAlignment.Center, MaxLength = 5, IsEnabled = !archived };
-            box.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) set(box.Text ?? ""); };
+            box.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) { set(box.Text ?? ""); CaptureComposer(); } };
             Avalonia.Automation.AutomationProperties.SetName(box, tip); ToolTip.SetTip(box, tip); return box;
         }
         var start = Time("PageStart", startText, "Start, HH:mm", t => startText = t); var end = Time("PageEnd", endText, "End, HH:mm", t => endText = t);
@@ -500,7 +526,7 @@ public sealed class NotesPage : Grid
         var to = Ui.Text("to", 13, "muted"); to.VerticalAlignment = VerticalAlignment.Center; Add(start); Add(new Border { Child = to, Height = 36 }); Add(end); // The margin goes on the box round the word, which the layout audit would count as squeezing it.
         var repeats = new ChoiceStrip { Name = "PageRepeat", Look = ChoiceLook.Dropdown, AccessibleName = "Repeat", ItemsSource = NotesModel.Offered(repeat), IsEnabled = !archived };
         repeats.SelectedItem = NotesModel.Label(repeat);
-        repeats.SelectionChanged += (_, _) => { if (repeats.SelectedItem is string label) repeat = Enum.GetValues<RepeatChoice>().First(c => NotesModel.Label(c) == label); };
+        repeats.SelectionChanged += (_, _) => { if (repeats.SelectedItem is string label) { repeat = Enum.GetValues<RepeatChoice>().First(c => NotesModel.Label(c) == label); CaptureComposer(); } };
         Add(repeats);
         if (withAccount) Add(AccountBox());
         return row;
@@ -512,7 +538,7 @@ public sealed class NotesPage : Grid
         var accounts = new ChoiceStrip { Name = "PageAccount", Look = ChoiceLook.Dropdown, Width = 168, ItemsSource = names, IsEnabled = !archived,
             DotFor = shown => shown == "No account" ? null : model.Accounts.FirstOrDefault(x => x.Name.Equals(shown, StringComparison.OrdinalIgnoreCase)) is { } found ? Ui.Visible(found.Colour) : null };
         accounts.SelectedItem = account is null ? "No account" : names.FirstOrDefault(n => n.Equals(account, StringComparison.OrdinalIgnoreCase)) ?? "No account";
-        accounts.SelectionChanged += (_, _) => account = accounts.SelectedItem is string chosen && chosen != "No account" ? chosen : null;
+        accounts.SelectionChanged += (_, _) => { account = accounts.SelectedItem is string chosen && chosen != "No account" ? chosen : null; CaptureComposer(); };
         return accounts;
     }
 
@@ -526,41 +552,19 @@ public sealed class NotesPage : Grid
     // ---- The open row ----
 
     // The row you pressed, grown into its own editor with the accent edge: the words, the account, the reminder (or a meeting's day, times and repeat), the star, and
-    // Delete, Cancel and Save. Everything below it moves down a little; nothing else on the page moves.
+    // a header delete action and a Save/Cancel footer. Other rows retain their place.
     private Control Editor(DayNote note)
     {
-        var isMeeting = meeting; var column = new StackPanel { Spacing = 10 };
-        var top = Ui.Grid("Auto,*"); top.ColumnSpacing = 12;
-        Control lead = isMeeting ? new IconGlyph(IconKind.Today) { TintKey = "AccentLit", VerticalAlignment = VerticalAlignment.Center } : NoteParts.Tick(Notes, note);
-        Ui.Put(top, lead); var words = Words(isMeeting ? "Meeting name" : "Write a note", out var suggestions); Ui.Put(top, words, 1);
-        column.Children.Add(top); column.Children.Add(suggestions);
-        var options = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(32, 0, 0, 0) };
-        if (isMeeting) options.Children.Add(MeetingFields(true));
-        else
-        {
-            void Add(Control c) { c.Margin = new Thickness(0, 0, 8, 0); options.Children.Add(c); }
-            Add(AccountBox()); Add(WhenButton(top: false));
-            Add(NeumorphicControls.Important(important, () => { important = !important; Redraw(); }, "PageImportant", 36));
-        }
-        column.Children.Add(options);
-        var repeating = isMeeting && Notes.SeriesOf(note) is not null && !archived;
-        var foot = Ui.Grid(repeating ? "Auto,Auto,*,Auto" : "*,Auto"); foot.Margin = new Thickness(32, 0, 0, 0); foot.ColumnSpacing = 10;
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-        buttons.Children.Add(Ui.Ctl("PageDelete", null, IconKind.Trash, "Delete", () => { if (Notes.Find(note.Id) is { } found) AskRemove(found); }, small: true));
-        buttons.Children.Add(Ui.Ctl("PageCancel", "Cancel", null, "Cancel", () => { EndEdit(); Redraw(); }, small: true));
-        if (!archived) { var save = Ui.Ctl("PageSubmit", "Save", null, "Save", Submit, small: true); save.Classes.Add("primary"); save.Padding = new Thickness(16, 0); buttons.Children.Add(save); }
-        if (repeating)
-        {
-            Ui.Put(foot, ScopeSwitch()); var hint = Ui.Text("What Save and Delete apply to", 12, "muted"); hint.VerticalAlignment = VerticalAlignment.Center; Ui.Put(foot, hint, 1); Ui.Put(foot, buttons, 3);
-        }
-        else Ui.Put(foot, buttons, 1);
-        column.Children.Add(foot);
-        if (archived) { var archivedNote = new TextBlock { Text = "A repeating note from an earlier version. It stays as it is.", FontSize = 12.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(32, 0, 0, 0), Name = "PageArchivedNote" }; archivedNote.Classes.Add("muted"); column.Children.Add(archivedNote); }
-        if (error is not null) { var e = ErrorLine(); e.Margin = new Thickness(32, 0, 0, 0); column.Children.Add(e); }
-        var card = new Border { Child = column, CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1), Padding = new Thickness(12, 12, 12, 10), Name = "PageRow_" + note.Id }; card.Classes.Add("noteRow"); card.Classes.Add("rowSelected");
-        return card;
+        var editor = new RecordEditor(model, model.Drafts.AcquireNote(note.Id), inline: true,
+            close: () =>
+            {
+                var id = editorId(); EndEdit(); Redraw();
+                Dispatcher.UIThread.Post(() => this.GetVisualDescendants().OfType<Button>().FirstOrDefault(b => b.Name == "PageNoteOpen_" + id)?.Focus(NavigationMethod.Tab), DispatcherPriority.Loaded);
+            }, delete: () => { if (Notes.Find(note.Id) is { } found) AskRemove(found); });
+        long editorId() => Notes.Find(note.Id)?.Id ?? note.Id;
+        var card = new Border { Child = editor, CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(1), Padding = new Thickness(12), Name = "PageRow_" + note.Id };
+        card.Classes.Add("noteRow"); card.Classes.Add("rowSelected"); return card;
     }
-
     /// <summary>One choice of a two-way switch. Put the choices in <see cref="Switch"/> so they read as one control.</summary>
     internal static Button Seg(string name, string text, bool on, Action click)
     {
@@ -599,6 +603,16 @@ public sealed class NotesPage : Grid
         }, () => { whenHost.IsOpen = false; whenHost.Child = null; }), whenHost);
         whenHost.IsOpen = true;
     }
+    private void OpenRowReminder(DayNote note, Button target)
+    {
+        whenHost.PlacementTarget = target; ClosePickerOnDetach(target);
+        whenHost.Child = ReminderPopup.Roomy(new ReminderPickerCard(model, Notes.Words(note), NotesModel.ReminderOf(note), value =>
+        {
+            whenHost.IsOpen = false; whenHost.Child = null;
+            if (Notes.Find(note.Id) is { } current) Notes.SetReminder(current.Id, value);
+        }, () => whenHost.IsOpen = false), whenHost);
+        whenHost.IsOpen = true;
+    }
 
     private void OpenDay()
     {
@@ -616,32 +630,9 @@ public sealed class NotesPage : Grid
 
     private void Submit()
     {
-        error = null; var words = draft.Trim();
-        if (words.Length == 0) { error = meeting ? "Name the meeting" : "Write a note first"; Redraw(); return; }
-        if (!meeting)
-        {
-            var problem = editing is { } id ? Notes.EditNote(id, words, account, when, important) : Notes.AddNote(words, account, when, important);
-            if (problem is not null) { error = problem; Redraw(); return; }
-            var said = editing is not null ? "Note saved" : when is { } at ? "Note added · reminder " + NoteDates.When(at, model.Engine.Now) : "Note added";
-            if (editing is not null) EndEdit(); else Blank();
-            Redraw(); model.Tell(said); return;
-        }
-        if (!TimeText.TryParseClock(startText, meetingDay, false, out var start)) { error = "Start: try 09:30"; Redraw(); return; }
-        if (!TimeText.TryParseClockAfter(endText, start, false, true, out var end)) { error = "End: try 10:00"; Redraw(); return; }
-        if (end == start && editing is { } fullDayId && Notes.Find(fullDayId) is { } fullDay && fullDay.End - fullDay.At == TimeSpan.FromDays(1)) end = end.AddDays(1);
-        if (end <= start) { error = "End must be after the start."; Redraw(); return; }
-
-        if (editing is { } meetingId)
-        {
-            var inSeries = Notes.Find(meetingId) is { } before && Notes.SeriesOf(before) is not null;
-            var problem = Notes.EditMeeting(meetingId, words, account, meetingDay.Date, start.TimeOfDay, end - meetingDay.Date, repeat, allLater);
-            if (problem is not null) { error = problem; Redraw(); return; }
-            var said = inSeries ? (allLater ? "Saved for this day and all later" : "Changed for this day only") : "Meeting saved";
-            EndEdit(); Redraw(); model.Tell(said); return;
-        }
-        var failed = Notes.AddMeeting(meetingDay.Date, start.TimeOfDay, end - meetingDay.Date, words, account, repeat);
-        if (failed is not null) { error = failed; Redraw(); return; }
-        var message = repeat == RepeatChoice.None ? "Meeting added" : "Meeting added · repeats " + NotesModel.RepeatWords(repeat);
-        Blank(); Redraw(); model.Tell(message);
+        CaptureComposer();
+        error = model.CreationDrafts.Save("notes", meeting);
+        if (error is not null) { Redraw(); return; }
+        RestoreComposer(); Redraw(); model.Tell(Notes.Unsaved ? "Not saved · retrying" : meeting ? "Meeting added" : "Note added");
     }
 }

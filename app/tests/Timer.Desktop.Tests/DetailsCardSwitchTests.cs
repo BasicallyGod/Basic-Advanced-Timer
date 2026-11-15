@@ -48,13 +48,13 @@ public sealed class DetailsCardSwitchTests
             model.SelectBlock(new[] { row }, true); Settle(window);
             Assert.Empty(model.SelectedRows);
             var updated = model.Engine.Sessions.Single(r => r.Account == row.Account && r.From == row.From);
-            Assert.Equal("Kept on the original block", model.Editor.Note(updated));
+            Assert.NotEqual("Kept on the original block", model.Editor.Note(updated)); Assert.Equal("Kept on the original block", Assert.Single(model.Drafts.Outstanding).Values.Words);
         }
         finally { window.Close(); }
     }
 
     [AvaloniaFact]
-    public void InvalidPendingTimeKeepsTheSelectionAndDayWithItsError()
+    public void InvalidPendingTimeSurvivesChangingTheSelectionAndDay()
     {
         var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 14, 14, 15, 7)); model.CompleteSetup();
         var window = new DashboardWindow(model); window.Show(); Settle(window);
@@ -66,17 +66,16 @@ public sealed class DetailsCardSwitchTests
             box.Focus(); box.Text = "invalid";
             var day = model.SelectedDate;
             model.ChangeDate(1); Settle(window);
-            Assert.Equal(day, model.SelectedDate);
+            Assert.Equal(day.AddDays(1), model.SelectedDate); model.GoToDate(day); model.SelectBlock(new[] { row }, false); Settle(window);
             Assert.Same(row, model.SelectedBlocks.Single().Row);
-            Assert.NotNull(model.EditError);
-            Assert.Equal("invalid", box.Text);
-            Assert.True(box.IsFocused);
+            Assert.Equal("invalid", Assert.Single(model.Drafts.Outstanding).Values.Start);
+            Assert.Equal("invalid", window.GetVisualDescendants().OfType<TextBox>().Single(b => b.Name == "SelectedStart").Text);
         }
         finally { window.Close(); }
     }
 
     [AvaloniaFact]
-    public void MidnightCommitsTheFocusedNoteBeforeClearingTheSelection()
+    public void MidnightRetainsTheFocusedDraftWhenClearingTheSelection()
     {
         var now = new DateTime(2026, 10, 14, 14, 15, 0);
         var model = TimerModel.CreateDemo(() => now); model.CompleteSetup();
@@ -92,7 +91,7 @@ public sealed class DetailsCardSwitchTests
             Assert.Equal(now.Date, model.SelectedDate);
             Assert.Empty(model.SelectedRows);
             var updated = model.Engine.Sessions.Single(r => r.Account == row.Account && r.From == row.From);
-            Assert.Equal("Saved at midnight", model.Editor.Note(updated));
+            Assert.NotEqual("Saved at midnight", model.Editor.Note(updated)); Assert.Equal("Saved at midnight", Assert.Single(model.Drafts.Outstanding).Values.Words);
         }
         finally { window.Close(); }
     }
@@ -117,7 +116,7 @@ public sealed class DetailsCardSwitchTests
             Assert.NotEqual("Press Office", shown.Note); // The words were not carried onto the second block.
             Assert.Equal(shown.Note, after.Text ?? "");   // The box shows the block that is selected.
             model.SelectBlock(new[] { model.Engine.Sessions.First(r => r.Account == first.Account && r.From == first.From) }, false); Settle(window);
-            Assert.Equal("Press Office", model.SelectedBlocks.Single().Note); // What was typed was kept for the first block.
+            Assert.NotEqual("Press Office", model.SelectedBlocks.Single().Note); Assert.Equal("Press Office", window.GetVisualDescendants().OfType<TextBox>().Single(b => b.Name == "SelectedNote").Text); // What was typed was kept for the first block.
         }
         finally { window.Close(); }
     }

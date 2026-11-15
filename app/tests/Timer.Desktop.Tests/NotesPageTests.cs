@@ -81,6 +81,36 @@ public sealed class NotesPageTests
 
     // ---- The model's views ----
 
+    [AvaloniaFact]
+    public void ARecoveredInlineDraftKeepsFocusAndSurvivesBeingVirtualizedAfterItsIdChanges()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "timer-inline-id-" + Guid.NewGuid());
+        try
+        {
+            using var store = new TimerStore(folder); var engine = new TrackingEngine(clock: () => Day.AddHours(10));
+            var model = new TimerModel(engine, store.Load(engine), store); model.CompleteSetup();
+            for (var i = 0; i < 100; i++) model.Notes.AddNote($"Stored {i:000}", null, null);
+            store.Database.Execute("CREATE TRIGGER fail_inline BEFORE INSERT ON day_notes BEGIN SELECT RAISE(ABORT, 'full'); END");
+            model.Notes.AddNote("Recover this row", null, null); var temporary = model.Notes.All.Last().Id; Assert.True(temporary < 0);
+            var page = new NotesPage(model); var window = new Window { Width = 950, Height = 480, Content = page }; window.Show(); Settle(window);
+            try
+            {
+                page.OpenNote(temporary); Settle(window); var box = Find<TextBox>(window, "PageNoteField"); box.Focus(); box.Text = "Keep this inline draft";
+                store.Database.Execute("DROP TRIGGER fail_inline"); model.Notes.RetryUnsaved(); Settle(window);
+                var saved = model.Notes.Find(temporary)!; Assert.True(saved.Id > 0);
+                Assert.Same(box, Find<TextBox>(window, "PageNoteField")); Assert.True(box.IsFocused);
+                var scroll = Find<ScrollViewer>(window, "NotesPageScroll"); var anchor = scroll.Offset;
+                scroll.Offset = new Vector(0, scroll.Extent.Height); Settle(window);
+                Assert.DoesNotContain(window.GetVisualDescendants().OfType<RecordEditor>(), e => e.Name == "PageRecordEditor");
+                scroll.Offset = anchor; Settle(window);
+                Assert.Equal("Keep this inline draft", Find<TextBox>(window, "PageNoteField").Text);
+                Click(window, "PageSubmit"); Assert.Equal("Keep this inline draft", model.Notes.Words(model.Notes.Find(saved.Id)!));
+            }
+            finally { window.Close(); }
+        }
+        finally { if (Directory.Exists(folder)) Directory.Delete(folder, true); }
+    }
+
     [Fact]
     public void SearchReadsTheLedgerAccountCatalogueOnce()
     {
@@ -206,7 +236,7 @@ public sealed class NotesPageTests
 
 
     [AvaloniaFact]
-    public void TheOpenRowHasDeleteCancelAndSaveOnItsFootLineWithDeleteAsAnIcon()
+    public void TheOpenRowKeepsSaveAndCancelTogetherAndDeleteInItsHeader()
     {
         var model = Model(Seed); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
@@ -217,8 +247,8 @@ public sealed class NotesPageTests
                 Click(window, "PageNoteOpen_" + IdOf(model, text));
                 var delete = Find<Button>(window, "PageDelete"); var cancel = Find<Button>(window, "PageCancel"); var save = Find<Button>(window, "PageSubmit");
                 double Mid(Control c) => c.TranslatePoint(new Point(0, c.Bounds.Height / 2), window)!.Value.Y; double Left(Control c) => c.TranslatePoint(default, window)!.Value.X;
-                Assert.Equal(Mid(delete), Mid(cancel), 4); Assert.Equal(Mid(cancel), Mid(save), 4); // One line, in the order Delete, Cancel, Save.
-                Assert.True(Left(delete) < Left(cancel) && Left(cancel) < Left(save));
+                Assert.True(Mid(delete) < Mid(cancel)); Assert.Equal(Mid(cancel), Mid(save), 4); // One line, in the order Delete, Cancel, Save.
+                Assert.True(Left(save) < Left(cancel));
                 Assert.IsType<IconGlyph>(delete.Content); Assert.Equal(IconKind.Trash, ((IconGlyph)delete.Content!).Kind); Assert.Contains("Delete", ToolTip.GetTip(delete)?.ToString());
                 Assert.Contains(save.GetVisualDescendants().OfType<TextBlock>(), x => x.Text == "Save"); Assert.Contains("primary", save.Classes);
             }
@@ -279,7 +309,7 @@ public sealed class NotesPageTests
             Type(window, "PageNoteField", "Tidy the shared drive"); Find<TextBox>(window, "PageNoteField").Focus(); HeadlessWindowExtensions.KeyPressQwerty(window, Avalonia.Input.PhysicalKey.Escape, Avalonia.Input.RawInputModifiers.None); Settle(window);
             Assert.Equal("Tidy the drive", model.Notes.Text(model.Notes.Find(id)!)); Assert.DoesNotContain(window.GetVisualDescendants().OfType<Border>(), b => b.Name == "PageAddResting"); // Escape closed it without saving.
             Click(window, "PageNoteOpen_" + id); Type(window, "PageNoteField", "Tidy the shared drive"); Click(window, "PageSubmit");
-            Assert.Equal("Tidy the shared drive", model.Notes.Text(model.Notes.Find(id)!)); Assert.Equal("Note saved", model.Notice);
+            Assert.Equal("Tidy the shared drive", model.Notes.Text(model.Notes.Find(id)!)); Assert.False(model.Drafts.HasUnsubmittedChanges);
         }
         finally { window.Close(); }
     }

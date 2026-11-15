@@ -7,7 +7,8 @@ namespace Timer.Desktop;
 public sealed class DraftLease : IDisposable
 {
     private Action? release;
-    internal DraftLease(RecordDraft draft, Action release) { Draft = draft; this.release = release; }
+    internal Func<DraftLease> Reopen { get; }
+    internal DraftLease(RecordDraft draft, Action release, Func<DraftLease> reopen) { Draft = draft; this.release = release; Reopen = reopen; }
     public RecordDraft Draft { get; }
     public void Dispose() { var action = release; release = null; action?.Invoke(); }
 }
@@ -37,6 +38,8 @@ public sealed class DraftWorkspace
     public IReadOnlyList<RecordDraft> Outstanding => entries.Values.Select(e => e.Draft)
         .Where(d => d.IsDirty || d.PendingPersistence || d.Conflicts.Count > 0).ToArray();
     public bool HasUnsubmittedChanges => entries.Values.Any(e => e.Draft.IsDirty);
+    public RecordDraft? NoteDraft(long id) => entries.Values.Select(e => e.Draft).FirstOrDefault(d => d.NoteId == id);
+    public DraftLease Acquire(RecordDraft draft) => Owns(draft, out var entry) ? Lease(entry) : throw new ArgumentException("That draft is no longer retained.");
     private sealed class EndBatch(Action end) : IDisposable { private Action? action = end; public void Dispose() { var callback = action; action = null; callback?.Invoke(); } }
     internal IDisposable DeferModelChange()
     {
@@ -82,7 +85,18 @@ public sealed class DraftWorkspace
         draft.Changed += () => { Prune(entry); Changed?.Invoke(); };
         return entry;
     }
-    private DraftLease Lease(Entry entry) { entry.Leases++; RefreshEntry(entry); return new(entry.Draft, () => { entry.Leases--; Prune(entry); }); }
+    private DraftLease Lease(Entry entry)
+    {
+        entry.Leases++; RefreshEntry(entry);
+        return new(entry.Draft, () => { entry.Leases--; Prune(entry); }, () =>
+        {
+            var retained = entries.Values.FirstOrDefault(e => e.Draft.Identity == entry.Draft.Identity
+                || entry.Draft.NoteId is { } id && e.Draft.NoteId == id
+                || entry.Row is not null && ReferenceEquals(entry.Row, e.Row));
+            if (retained is null) entries[entry.Draft.Identity] = retained = entry;
+            return Lease(retained);
+        });
+    }
     private void Prune(Entry entry)
     {
         if (entry.Leases == 0 && !entry.Draft.IsDirty && !entry.Draft.PendingPersistence && !entry.Draft.IsSubmitting && entry.Draft.Conflicts.Count == 0)
@@ -186,7 +200,7 @@ public sealed class DraftWorkspace
         {
             DraftKind.Note => new[] { DraftField.Words, DraftField.Account, DraftField.Reminder, DraftField.Important },
             DraftKind.Meeting => new[] { DraftField.Words, DraftField.Account, DraftField.Day, DraftField.Start, DraftField.End, DraftField.Repeat },
-            _ => new[] { DraftField.Words, DraftField.Account, DraftField.Day, DraftField.Start, DraftField.End }
+            _ => new[] { DraftField.Words, DraftField.Account, DraftField.Day, DraftField.Start, DraftField.End, DraftField.Length }
         };
         foreach (var field in RecordDraft.Fields.Except(fields))
             if (!Equals(v.Get(field), d.Accepted.Get(field))) errors.Add(new(field, "This field is not editable for this item."));
@@ -199,6 +213,7 @@ public sealed class DraftWorkspace
             errors.Add(new(DraftField.Reminder, "Choose a future reminder."));
         if (d.Kind != DraftKind.Note)
         {
+            if (d.Kind == DraftKind.Block && v.Length is not null) errors.Add(new(DraftField.Length, "Length: use 01:30, 1.5h or minutes."));
             if (v.Day.Date == DateTime.MaxValue.Date) { errors.Add(new(DraftField.Day, "Choose an earlier day.")); return errors; }
             if (!TimeText.TryParseClock(v.Start, v.Day, false, out start)) errors.Add(new(DraftField.Start, "Start: try 09:30"));
             else

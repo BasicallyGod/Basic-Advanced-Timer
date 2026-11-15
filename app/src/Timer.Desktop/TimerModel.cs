@@ -267,6 +267,10 @@ public sealed class TimerModel : INotifyPropertyChanged
     private DraftWorkspace? drafts;
     /// <summary>Shared editor foundation; views adopt it together in the editor migration.</summary>
     public DraftWorkspace Drafts => drafts ??= new DraftWorkspace(this);
+    private CreationDrafts? creationDrafts;
+    public CreationDrafts CreationDrafts => creationDrafts ??= new CreationDrafts(this);
+    public event Action? ReviewDraftsRequested;
+    public void ReviewDrafts() => ReviewDraftsRequested?.Invoke();
     internal bool CanEditRecords => !closed && store is not { IsDisposed: true };
     private int ticks;
     public TimerModel(TrackingEngine? engine = null, StoreSettings? preferences = null, TimerStore? store = null)

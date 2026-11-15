@@ -206,14 +206,14 @@ public sealed class Round25Tests
         {
             Press(window, Centre(window, Find<Border>(window, "TimelineMeeting" + id)));
             Assert.Equal("Meeting", Kind(window)); Assert.Null(window.GetVisualDescendants().OfType<Border>().FirstOrDefault(b => b.Name == "DetailsScope")); // It does not repeat: nothing to ask.
-            void Commit(string name, string text) { var box = Find<TextBox>(window, name); box.Text = text; box.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter }); Settle(window); }
+            void Commit(string name, string text) { var box = Find<TextBox>(window, name); box.Text = text; box.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter, KeyModifiers = KeyModifiers.Control }); Settle(window); }
             Commit("DetailsMeetingName", "Vendor demo (long)"); Assert.Equal("Vendor demo (long)", model.Notes.Text(model.Notes.Find(id)!));
             Commit("DetailsMeetingStart", "14:00");
             Assert.Equal(TimeSpan.FromHours(14), model.Notes.Find(id)!.At); Assert.Equal(TimeSpan.FromHours(14.5), model.Notes.Find(id)!.End); // Half an hour long still.
             Commit("DetailsMeetingEnd", "15:00"); Assert.Equal(TimeSpan.FromHours(15), model.Notes.Find(id)!.End);
             Commit("DetailsMeetingStart", "nonsense"); Assert.Equal(TimeSpan.FromHours(14), model.Notes.Find(id)!.At); Assert.Equal("nonsense", Find<TextBox>(window, "DetailsMeetingStart").Text); // Keep refused input available for correction.
             Commit("DetailsMeetingStart", "14:00"); Assert.Null(model.EditError);
-            var account = Find<ChoiceStrip>(window, "DetailsMeetingAccount"); account.SelectedItem = "Account two"; Settle(window);
+            var account = Find<ChoiceStrip>(window, "DetailsMeetingAccount"); account.SelectedItem = "Account two"; Settle(window); Find<Button>(window, "DetailsSave").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent)); Settle(window);
             Assert.Equal("Account two", model.Notes.AccountOf(model.Notes.Find(id)!));
             Press(window, Centre(window, Find<Button>(window, "DeleteMeeting")));
             Assert.Empty(model.Notes.MeetingsOn(Day)); Assert.Null(model.SelectedMeetingId); Assert.Empty(window.GetVisualDescendants().OfType<Border>().Where(b => b.Name == "DetailsKind")); Assert.NotNull(Find<TextBlock>(window, "SelectedEmpty"));
@@ -261,13 +261,20 @@ public sealed class Round25Tests
             AuditTimeline();
             Press(window, Near(window, Tile(window))); Assert.True(model.SelectedBlocks.Count == 1, "Pressing the tile at " + Near(window, Tile(window)) + " selected " + model.SelectedBlocks.Count + "; tile " + Tile(window).Bounds + " in " + window.Bounds); AuditTimeline(); // Selected: the ring is outside the tile, and nothing moves.
             var card = Find<SelectedBlockCard>(window, "SelectedBlockCard"); var inside = new Rect(card.Bounds.Size).Deflate(new Thickness(14, 10));
-            var parts = new[] { "StackScroll", "SelectedAccount", "SelectedStart", "SelectedEnd", "SelectedLength", "SelectedNote" }.Select(n => (n, Find<Control>(window, n))).Select(p => (p.n, new Rect(p.Item2.TranslatePoint(default, card)!.Value, p.Item2.Bounds.Size))).ToList();
-            foreach (var (name, rect) in parts) Assert.True(inside.Contains(rect.TopLeft) && inside.Contains(rect.BottomRight), $"{name} {rect} is not inside the Details card {inside}");
+            Rect VisiblePart(Control control)
+            {
+                var rect = new Rect(control.TranslatePoint(default, card)!.Value, control.Bounds.Size);
+                foreach (var scroll in control.GetVisualAncestors().OfType<ScrollViewer>())
+                    if (scroll.Name == "DetailsScroll") rect = rect.Intersect(new Rect(scroll.TranslatePoint(default, card)!.Value, scroll.Bounds.Size));
+                return rect;
+            }
+            var parts = new[] { "StackScroll", "SelectedAccount", "SelectedStart", "SelectedEnd", "SelectedLength", "SelectedNote" }.Select(n => (n, Find<Control>(window, n))).Select(p => (p.n, VisiblePart(p.Item2))).ToList();
+            foreach (var (name, rect) in parts.Where(p => p.Item2.Width > 0 && p.Item2.Height > 0)) Assert.True(inside.Contains(rect.TopLeft) && inside.Contains(rect.BottomRight), $"{name} {rect} is not inside the Details card {inside}");
             for (var i = 0; i < parts.Count; i++) for (var j = i + 1; j < parts.Count; j++) Assert.False(parts[i].Item2.Intersects(parts[j].Item2), $"{parts[i].n} lies over {parts[j].n}");
             // The meetings' tile, then a meeting from it.
             Press(window, Near(window, Named(window, "TimelineMeetingStack").OfType<Border>().First())); AuditTimeline();
-            var meetingParts = new[] { "StackScroll", "DetailsMeetingName", "DetailsMeetingAccount", "DetailsMeetingDay", "DetailsMeetingStart", "DetailsMeetingEnd", "DetailsMeetingRepeat" }.Select(n => (n, Find<Control>(window, n))).Select(p => (p.n, new Rect(p.Item2.TranslatePoint(default, card)!.Value, p.Item2.Bounds.Size))).ToList();
-            foreach (var (name, rect) in meetingParts) Assert.True(inside.Contains(rect.TopLeft) && inside.Contains(rect.BottomRight), $"{name} {rect} is not inside the Details card {inside}");
+            var meetingParts = new[] { "StackScroll", "DetailsMeetingName", "DetailsMeetingAccount", "DetailsMeetingDay", "DetailsMeetingStart", "DetailsMeetingEnd", "DetailsMeetingRepeat" }.Select(n => (n, Find<Control>(window, n))).Select(p => (p.n, VisiblePart(p.Item2))).ToList();
+            foreach (var (name, rect) in meetingParts.Where(p => p.Item2.Width > 0 && p.Item2.Height > 0)) Assert.True(inside.Contains(rect.TopLeft) && inside.Contains(rect.BottomRight), $"{name} {rect} is not inside the Details card {inside}");
             for (var i = 0; i < meetingParts.Count; i++) for (var j = i + 1; j < meetingParts.Count; j++) Assert.False(meetingParts[i].Item2.Intersects(meetingParts[j].Item2), $"{meetingParts[i].n} lies over {meetingParts[j].n}");
         }
         finally { window.Close(); }

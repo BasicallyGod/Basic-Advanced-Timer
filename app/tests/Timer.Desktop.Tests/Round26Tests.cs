@@ -30,13 +30,13 @@ public sealed class Round26Tests
     private static Border Tile(Window w) => w.GetVisualDescendants().OfType<Border>().Single(b => b.Name?.StartsWith("TimelineStack") == true);
 
     [AvaloniaFact]
-    public void TheNoteBoxKeepsItsTextInTheMiddleAndTheStackBarsHaveAirRoundTheirInitials()
+    public void TheMultilineNoteBoxAlignsAtTheTopAndStackBarsHaveAirRoundTheirInitials()
     {
         var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
             Press(window, Near(window, Tile(window)));
-            Assert.Equal(Avalonia.Layout.VerticalAlignment.Center, Find<TextBox>(window, "SelectedNote").VerticalContentAlignment);
+            Assert.Equal(Avalonia.Layout.VerticalAlignment.Top, Find<TextBox>(window, "SelectedNote").VerticalContentAlignment);
             Assert.Equal("Blocks", Find<Border>(window, "DetailsKind").GetVisualDescendants().OfType<TextBlock>().First().Text); // No counts in the chip.
             foreach (var bar in window.GetVisualDescendants().OfType<Border>().Where(b => b.Name?.StartsWith("Stack_") == true))
             {

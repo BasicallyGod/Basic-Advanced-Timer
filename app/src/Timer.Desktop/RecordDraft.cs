@@ -1,7 +1,7 @@
 namespace Timer.Desktop;
 
 public enum DraftKind { Note, Meeting, Block }
-public enum DraftField { Words, Account, Day, Start, End, Reminder, Important, Repeat }
+public enum DraftField { Words, Account, Day, Start, End, Reminder, Important, Repeat, Length }
 public enum DraftPhase { Clean, Draft, Invalid, Conflict, Submitting, Missing }
 public enum DraftSaveOutcome { NoChanges, Saved, PendingPersistence, Invalid, Conflict, Missing, Refused, Busy }
 public sealed record DraftError(DraftField Field, string Message);
@@ -10,13 +10,13 @@ public sealed record DraftSaveResult(DraftSaveOutcome Outcome, IReadOnlyList<Dra
 
 /// <summary>Editor text is retained verbatim, including intermediate invalid clock values.</summary>
 public sealed record RecordValues(string Words, string? Account, DateTime Day, string Start, string End,
-    DateTime? Reminder, bool Important, RepeatChoice Repeat)
+    DateTime? Reminder, bool Important, RepeatChoice Repeat, string? Length = null)
 {
     internal object? Get(DraftField field) => field switch
     {
         DraftField.Words => Words, DraftField.Account => Account, DraftField.Day => Day,
         DraftField.Start => Start, DraftField.End => End, DraftField.Reminder => Reminder,
-        DraftField.Important => Important, DraftField.Repeat => Repeat, _ => throw new ArgumentOutOfRangeException(nameof(field))
+        DraftField.Important => Important, DraftField.Repeat => Repeat, DraftField.Length => Length, _ => throw new ArgumentOutOfRangeException(nameof(field))
     };
     internal RecordValues With(DraftField field, object? value) => field switch
     {
@@ -24,6 +24,7 @@ public sealed record RecordValues(string Words, string? Account, DateTime Day, s
         DraftField.Day => this with { Day = (DateTime)value! }, DraftField.Start => this with { Start = (string)value! },
         DraftField.End => this with { End = (string)value! }, DraftField.Reminder => this with { Reminder = (DateTime?)value },
         DraftField.Important => this with { Important = (bool)value! }, DraftField.Repeat => this with { Repeat = (RepeatChoice)value! },
+        DraftField.Length => this with { Length = (string?)value },
         _ => throw new ArgumentOutOfRangeException(nameof(field))
     };
 }

@@ -218,6 +218,8 @@ public sealed class WindowCoordinator
     {
         // The close button hides the timer and leaves tracking running. Quitting, or Windows shutting down, saves and really closes.
         if (HideToTray && !quitting && e.CloseReason == WindowCloseReason.WindowClosing) { e.Cancel = true; Hide(); return; }
+        if (!quitting && e.CloseReason == WindowCloseReason.WindowClosing && (model.Drafts.HasUnsubmittedChanges || model.CreationDrafts.Outstanding.Count > 0))
+        { e.Cancel = true; Quit(); return; }
         // Windows closing the timer for a restart or shutdown must never be held up, or crashed, by a failed save.
         try { e.Cancel = !model.StopForClose(); }
         catch (Exception) { e.Cancel = false; }
@@ -302,6 +304,16 @@ public sealed class WindowCoordinator
         catch (Exception) { /* Never let a failed rescue take the timer down. */ }
     }
     public void Quit()
+    {
+        if (model.Drafts.HasUnsubmittedChanges || model.CreationDrafts.Outstanding.Count > 0)
+        {
+            ShowDashboard();
+            if (!Dashboard.Dialogs.Dialogs.OfType<DraftReviewDialog>().Any()) Dashboard.Dialogs.Show(new DraftReviewDialog(model, Dashboard.OpenComposer, FinishQuit));
+            return;
+        }
+        FinishQuit();
+    }
+    private void FinishQuit()
     {
         if (!model.StopForClose()) { ShowTimer(); return; }
         quitting = true;
@@ -399,6 +411,7 @@ public sealed class DashboardWindow : Window
         Ui.Put(root, sidebar);
         model.OpenDayRequested += OpenRequestedDay;
         model.PageRequested += OpenRequestedPage;
+        model.ReviewDraftsRequested += ShowDrafts;
         // A pin on the timeline opens its note for editing in the Notes card; the Notes page's own open request shows that page.
         model.Notes.OpenNoteRequested += OpenRequestedNote;
         var body = Ui.Grid("*", "*");
@@ -584,6 +597,7 @@ public sealed class DashboardWindow : Window
             CancelMorph(); SetPillPicture(null, default);
             model.PropertyChanged -= Changed; model.EntryRequested -= ShowEntry; model.AccountsRequested -= ShowAccounts;
             model.OpenDayRequested -= OpenRequestedDay; model.PageRequested -= OpenRequestedPage; model.Notes.OpenNoteRequested -= OpenRequestedNote;
+            model.ReviewDraftsRequested -= ShowDrafts;
         };
         Refresh(true);
         dashboardReady = true;
@@ -892,6 +906,15 @@ public sealed class DashboardWindow : Window
     internal void OpenRequestedNote(long id) { ShowNotes(); NotesPageInstance().OpenNote(id); }
     private void OpenRequestedDay(DateTime day) => SelectTab(false);
     private void OpenRequestedPage(string page) { if (page == "week") SelectTab(true); else if (page == "notes") ShowNotes(); }
+    private void ShowDrafts()
+    {
+        if (!Dialogs.Dialogs.OfType<DraftReviewDialog>().Any()) Dialogs.Show(new DraftReviewDialog(model, OpenComposer));
+    }
+    internal void OpenComposer(string context, bool meeting)
+    {
+        if (context == "notes") { ShowNotes(); NotesPageInstance().ResumeComposer(meeting); }
+        else { SelectTab(false); model.SetNotesCardShowsMeetings(meeting); }
+    }
     private Popup dateCalendar = null!;
     /// <summary>Opens what is waiting from the sidebar's alert count, hung under it like the pill's card (the same <see cref="PillAlertsCard"/>), and closes it again.</summary>
     private void ToggleAlerts()

@@ -1,6 +1,6 @@
 # Shared record draft foundation
 
-Package C of the UI/UX cohesion work. This provides model/controller infrastructure for existing notes, meetings and individual time blocks. Package D adopts it in the editors together; this package does not change the current visible save-on-blur/explicit-series workflows.
+Packages C and D of the UI/UX cohesion work. Package C supplied the model/controller infrastructure for existing notes, meetings and individual time blocks. Package D adopts it across Details and inline Notes editing, with explicit Save/Cancel and model-owned add drafts.
 
 ## Ownership and lifetime
 
@@ -47,14 +47,26 @@ Account edits defer draft/model refresh until the related account, note-tag and 
 
 Unknown or ambiguous structural replacement remains Missing, with dirty data retained. Do not add a heuristic that guesses another record from a similar name or time.
 
-## Package D handoff
+## Shared editors (Package D)
 
-Adopt the workspace in block Details, note Details, meeting Details and inline Notes editing as a coherent candidate. Editors should acquire/release leases, update immutable values, show both draft and persistence state, and invoke the shared command on explicit Save/Ctrl+Enter. Navigation must release the view while retaining work. Cancel and closing a picker have different boundaries.
+`RecordEditor` owns a lease in block Details, note Details, meeting Details and inline Notes rows. The footer keeps Save and Cancel together outside the editor body's scroll area. Save submits the whole record; Ctrl+Enter uses a tunnelling handler so a multiline TextBox cannot consume it first. Ordinary Enter keeps its multiline meaning. Leaving a clock may derive another clock in the draft, but leaving any field never writes storage.
 
-The visible migration still needs shared Save/Cancel footers, first-error focus, conflict/missing-record resolution, list draft indicators, the grouped quit decision and independent Note/Meeting composer drafts. Existing add-line commands remain one-step Add flows. This foundation does not prematurely add any of those controls or change editor semantics in only one surface.
+Pickers and account suggestions handle their own Escape boundary. A subsequent Escape cancels the editor. Cancel resets local fields to the latest accepted snapshot; it cannot discard accepted queued writes. Editor stars, accounts, reminders, dates and recurrence choices are part of the draft. Row completion, row importance and a row reminder picker remain immediate actions. Stack gestures retain their established immediate behaviour and merge with, or conflict against, outstanding field edits.
+
+Invalid text, including a block's invalid length, stays available for correction. Save shows field errors and focuses the first invalid field. Conflicts show the current and local values with Keep mine / Use current choices. Missing records cannot be submitted; their retained words remain accessible through Drafts. A successful inline save closes that row only if no newer revision is dirty. Details preserves the editor controls and returns focus to the last text field after saving.
+
+Releasing a clean lease prunes the workspace entry. A reused virtualized control can reopen its lease, joining an existing tracked draft if another view acquired that record in the meantime. Dirty drafts never depend on a realized row. Note-ID remapping preserves the focused control. Hidden editors suspend visual refresh; list draft badges subscribe independently, so typing does not invalidate the Notes page's virtualized collection. Stack content is only replaced when its content signature changes.
+
+## Add forms and the outstanding-drafts route
+
+`TimerModel.CreationDrafts` owns independent Note and Meeting forms for the Timeline card and Notes page. Switching kind or temporarily editing an existing row keeps each add form. Accepted creation clears only the submitted form; queued writes belong to Notes persistence after acceptance. A newer reentrant form update is retained. Both contexts offer note importance and meeting date, clocks, account and recurrence. Creation remains a single Add action, not a second editing transaction.
+
+The sidebar shows a concise Drafts count when existing records or add forms have outstanding work. Existing record entries open a shared editor in a dialog, including filtered-out and missing records; add-form entries return to the relevant context and kind. Row draft badges update without rebuilding the list. No per-keystroke model notification or timer was added.
+
+An explicit real quit with unsubmitted work shows one grouped decision: Save changes, Discard changes or Keep editing. Save preflights all add forms and existing-record drafts before submitting any record; storage refusals and newer revisions stay available. Discard cancels only unsubmitted fields and add forms. Accepted retry queues still pass through the existing `StopForClose` persistence gate. Hiding to tray is not a quit. Windows shutdown keeps the existing non-crashing close path; drafts are session state, not crash recovery.
 
 ## Verification
 
 Model tests cover shared leases and cleanup, navigation without submission, whole-record save/no-op behaviour, field merging/conflicts, exact validation text retention, stale reminder validation, batch preflight, reentrant commands, temporary IDs, queued acknowledgements, Cancel with pending writes, unrelated failures, later update/removal receipts, recurrence conflict resolution, block drag/undo/redo replacement, deleted-record safety, fractional/full-day spans, pre/post-edit write failures, account relinking and retention of 200 outstanding drafts.
 
-The full desktop suite and native startup checks remain release gates. There is no new editor UI to visually approve in this package; native interaction acceptance follows when Package D adopts the model.
+Package D adds editor tests for navigation without writes, shared Details/inline state, cancellation, invalid length retention and focus, clean-control reattachment after pruning, independent add forms, grouped save preflight, grouped quit choices, Escape/suggestions, Ctrl+Enter and reachable actions in both themes. Older UI tests now submit explicitly and check retained field errors instead of expecting blur/navigation to write or restore rejected input. The full desktop suite and native startup checks remain release gates; themed headless renders supplement interaction assertions.

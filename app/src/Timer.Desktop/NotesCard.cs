@@ -34,7 +34,7 @@ public sealed class NotesCard : Border
     // The form's state.
     private Form form = Form.None;
     private string draft = "", startText = "12:00", endText = "12:30"; private string? draftAccount; private DateTime? draftReminder; private RepeatChoice draftRepeat;
-    private DateTime formDay;
+    private DateTime formDay; private bool draftImportant;
     private (long Id, bool Delete)? scope; private HashSet<long> tinted = new();
 
     public NotesCard(TimerModel model)
@@ -49,8 +49,8 @@ public sealed class NotesCard : Border
         Ui.Put(body, header); Ui.Put(body, formHost, 0, 1); Ui.Put(body, scroll, 0, 2);
         this.scroll = scroll; Ui.LeaveRoomForTrack(scroll, list); // The slim bar lies over the content, so the rows give it room while the list scrolls.
         overlay.Children.Add(body); overlay.Children.Add(reminderHost); reminderHost.PlacementTarget = title; Child = overlay;
-        AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Notes.NewMeetingRequested += OnNewMeeting; Notes.EditNoteRequested += OnEditNote; Notes.NoteIdChanged += NoteIdChanged; };
-        DetachedFromVisualTree += (_, _) => { model.PropertyChanged -= Changed; Notes.NewMeetingRequested -= OnNewMeeting; Notes.EditNoteRequested -= OnEditNote; Notes.NoteIdChanged -= NoteIdChanged; };
+        AttachedToVisualTree += (_, _) => { model.PropertyChanged += Changed; Notes.NewMeetingRequested += OnNewMeeting; Notes.EditNoteRequested += OnEditNote; Notes.NoteIdChanged += NoteIdChanged; model.CreationDrafts.Reset += ResetComposers; RestoreComposer(); DrawForm(false); };
+        DetachedFromVisualTree += (_, _) => { model.PropertyChanged -= Changed; Notes.NewMeetingRequested -= OnNewMeeting; Notes.EditNoteRequested -= OnEditNote; Notes.NoteIdChanged -= NoteIdChanged; model.CreationDrafts.Reset -= ResetComposers; };
         activity = new ViewActivity(this, active => { if (active) Sync(); });
         Sync();
     }
@@ -66,7 +66,7 @@ public sealed class NotesCard : Border
     public void Sync()
     {
         var want = model.NotesCardShowsMeetings ? Form.Meeting : Form.Note;
-        if (form != want) { form = want; ResetDraft(); DrawForm(false); } // The line follows the switch: a note's, or a meeting's.
+        if (form != want) { CaptureComposer(); form = want; RestoreComposer(); DrawForm(false); } // The line follows the switch: a note's, or a meeting's.
         var signature = Signature();
         if (signature == shown) return;
         shown = signature;
@@ -115,6 +115,7 @@ public sealed class NotesCard : Border
         Avalonia.Automation.AutomationProperties.SetName(edit, (meeting ? "Open meeting in Details: " : "Open note in Details: ") + Notes.Text(note));
         Ui.Put(line, edit, 1);
         var chips = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
+        chips.Children.Add(new DraftBadge(model, note.Id));
         if (account is not null) { var dot = NoteParts.Dot(model, account, 9); ToolTip.SetTip(dot, "#" + account.Replace(" ", "")); chips.Children.Add(dot); }
         if (meeting)
         {
@@ -158,12 +159,21 @@ public sealed class NotesCard : Border
 
     // ---- The quick-add line ----
 
-    private void ResetDraft() { draft = ""; draftAccount = null; draftReminder = null; startText = "12:00"; endText = "12:30"; formDay = model.SelectedDate.Date; draftRepeat = RepeatChoice.None; scope = null; CloseReminder(); DrawOverlay(); }
-
+    private void CaptureComposer()
+    {
+        if (form != Form.None) model.CreationDrafts.Update("timeline", form == Form.Meeting, new(draft, draftAccount, formDay.Date, startText, endText, draftReminder, draftImportant, draftRepeat));
+    }
+    private void RestoreComposer()
+    {
+        var v = model.CreationDrafts.Get("timeline", form == Form.Meeting);
+        draft = v.Words; draftAccount = v.Account; formDay = v.Day; startText = v.Start; endText = v.End; draftReminder = v.Reminder; draftImportant = v.Important; draftRepeat = v.Repeat;
+        scope = null; CloseReminder(); DrawOverlay();
+    }
+    private void ResetComposers() { RestoreComposer(); DrawForm(false); }
     /// <summary>A free place in the timeline's meeting row asks for a new meeting there: the Meetings switch, a start snapped to 15 minutes and half an hour long.</summary>
     private void OnNewMeeting(DateTime start)
     {
-        model.SetNotesCardShowsMeetings(true); form = Form.Meeting; ResetDraft();
+        model.SetNotesCardShowsMeetings(true); if (form != Form.Meeting) { CaptureComposer(); form = Form.Meeting; RestoreComposer(); }
         var snapped = start.Date.AddMinutes(Math.Round(start.TimeOfDay.TotalMinutes / 15) * 15);
         formDay = snapped.Date;
         startText = snapped.ToString("HH:mm"); endText = snapped.AddMinutes(30).ToString("HH:mm"); DrawForm(true);
@@ -174,6 +184,7 @@ public sealed class NotesCard : Border
     private TextBox field = null!;
     private void DrawForm(bool focus)
     {
+        CaptureComposer();
         var meeting = form == Form.Meeting;
         var column = new StackPanel { Spacing = 8 };
         // The words, with the account chip and the reminder chip inside the same box. A lone account chip shares the line with the words. The reminder chip is wide, so with
@@ -200,14 +211,15 @@ public sealed class NotesCard : Border
             chip.Content = NoteParts.Chip(NoteDates.When(reminder, model.Engine.Now), model.Engine.Now > reminder ? "late" : "accent", IconKind.Bell); ToolTip.SetTip(chip, "Change reminder"); PutChip(chip, 2);
         }
         if (chips is not null) Ui.Put(box, chips, 0, 1);
-        var row = Ui.Grid(meeting ? "*,Auto" : "*,Auto,Auto"); row.ColumnSpacing = 6;
+        var row = Ui.Grid(meeting ? "*,Auto" : "*,Auto,Auto,Auto"); row.ColumnSpacing = 6;
         Ui.Put(row, frame);
         if (!meeting)
         {
             var bell = Ui.Ctl("FormBell", null, IconKind.Bell, "Set reminder", () => OpenReminder(), small: true); Ui.Put(row, bell, 1);
+            var star = NeumorphicControls.Important(draftImportant, () => { draftImportant = !draftImportant; DrawForm(false); }, "FormImportant", 30); Ui.Put(row, star, 2);
             bell.IsVisible = draftReminder is null; // Once a reminder is set its chip changes it, so the bell steps aside and the box gets the room.
         }
-        var submit = Ui.Ctl("SubmitNote", "Add", null, "Add", Submit, small: true); submit.Classes.Add("primary"); Ui.Put(row, submit, meeting ? 1 : 2);
+        var submit = Ui.Ctl("SubmitNote", "Add", null, "Add", Submit, small: true); submit.Classes.Add("primary"); Ui.Put(row, submit, meeting ? 1 : 3);
         // Beside a box that has grown to two lines the buttons stay level with its first line.
         if (stacked) foreach (var side in row.Children.Skip(1)) { side.VerticalAlignment = VerticalAlignment.Top; side.Margin = new Thickness(0, 3, 0, 0); }
         column.Children.Add(row);
@@ -216,20 +228,21 @@ public sealed class NotesCard : Border
         field.PropertyChanged += (_, e) =>
         {
             if (e.Property != TextBox.TextProperty) return;
-            draft = field.Text ?? ""; suggestNav.Index = 0; firstSuggestion = ShowSuggestions(suggestions);
+            draft = field.Text ?? ""; CaptureComposer(); suggestNav.Index = 0; firstSuggestion = ShowSuggestions(suggestions);
         };
         // Tab (or Enter) takes the lit match (the top one until the arrow keys move the light), the same as on the Notes page, so #Acc then Tab fills the account in and
         // #Acc, Down, Enter takes the second.
         field.AddHandler(KeyDownEvent, (_, e) =>
         {
-            if (suggestions.IsVisible && e.Key is Key.Down or Key.Up && suggestNav.Move(e.Key == Key.Down ? 1 : -1)) { firstSuggestion = ShowSuggestions(suggestions); e.Handled = true; }
+            if (suggestions.IsVisible && e.Key == Key.Escape) { suggestions.IsVisible = false; e.Handled = true; }
+            else if (suggestions.IsVisible && e.Key is Key.Down or Key.Up && suggestNav.Move(e.Key == Key.Down ? 1 : -1)) { firstSuggestion = ShowSuggestions(suggestions); e.Handled = true; }
             else if (firstSuggestion is { } offer && suggestions.IsVisible && e.Key is Key.Tab or Key.Enter) { draftAccount = offer.Account; draft = offer.Words; DrawForm(true); e.Handled = true; }
             else if (e.Key == Key.Back && draftAccount is not null && string.IsNullOrEmpty(field.Text)) { draftAccount = null; DrawForm(true); e.Handled = true; } // Backspace in an empty box takes the chip off.
         }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         field.KeyDown += (_, e) => { if (e.Key == Key.Enter) { Submit(); e.Handled = true; } };
         if (meeting)
         {
-            // A start and an end beside each other, and the day (the one showing unless another is picked). A repeat is set in Details once the meeting is there.
+            // A start and an end beside each other, and the day (the one showing unless another is picked). Repeat and account choices share the second line.
             var times = Ui.Grid("Auto,Auto,Auto,*"); times.ColumnSpacing = 8;
             var start = TimeBox("MeetingStart", startText, v => startText = v); var end = TimeBox("MeetingEnd", endText, v => endText = v);
             // Moving the start moves the end with it, so the meeting keeps its length (12:00 to 12:30 becomes 16:00 to 16:30). It is applied when the box is
@@ -256,6 +269,13 @@ public sealed class NotesCard : Border
             dayButton.Width = double.NaN; dayButton.Padding = new Thickness(10, 0); dayButton.HorizontalAlignment = HorizontalAlignment.Left; dayButton.Content = Ui.Horizontal(new IconGlyph(IconKind.Today), dayWords);
             Ui.Put(times, dayButton, 3);
             column.Children.Add(times);
+            var optional = new WrapPanel { ItemSpacing = 8, LineSpacing = 6 };
+            var repeats = new ChoiceStrip { Name = "MeetingRepeat", Look = ChoiceLook.Dropdown, AccessibleName = "Repeat", ItemsSource = NotesModel.Offered(draftRepeat), SelectedItem = NotesModel.Label(draftRepeat), Width = 170 };
+            repeats.SelectionChanged += (_, _) => { if (repeats.SelectedItem is string label) { draftRepeat = Enum.GetValues<RepeatChoice>().First(r => NotesModel.Label(r) == label); CaptureComposer(); } };
+            optional.Children.Add(repeats);
+            var accounts = new ChoiceStrip { Name = "MeetingAccount", Look = ChoiceLook.Dropdown, AccessibleName = "Account", Width = 170, ItemsSource = new[] { "No account" }.Concat(model.Accounts.Where(a => !BreakAccount.Is(a.Name)).Select(a => a.Name)).ToArray(), SelectedItem = draftAccount ?? "No account" };
+            accounts.SelectionChanged += (_, _) => { draftAccount = accounts.SelectedItem is string chosen && chosen != "No account" ? chosen : null; CaptureComposer(); };
+            optional.Children.Add(accounts); column.Children.Add(optional);
         }
         formHost.Content = column;
         if (focus) Avalonia.Threading.Dispatcher.UIThread.Post(() => field.Focus());
@@ -265,7 +285,7 @@ public sealed class NotesCard : Border
     {
         var box = new TextBox { Name = name, Text = text, Width = 64, Height = 30, MinHeight = 30, TextAlignment = TextAlignment.Center, FontSize = 13, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(0) };
         Avalonia.Automation.AutomationProperties.SetName(box, name == "MeetingStart" ? "Start time, HH:MM" : "End time, HH:MM");
-        box.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) set(box.Text ?? ""); };
+        box.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty) { set(box.Text ?? ""); CaptureComposer(); } };
         return box;
     }
 
@@ -276,22 +296,10 @@ public sealed class NotesCard : Border
 
     private void Submit()
     {
-        var words = (draft ?? "").Trim(); var meeting = form == Form.Meeting;
-        if (words.Length == 0) { model.Refuse(meeting ? "Name the meeting" : "Write a note first"); return; }
-        if (!meeting)
-        {
-            var error = Notes.AddNote(words, draftAccount, draftReminder);
-            if (error is not null) { model.Refuse(error); return; }
-            var said = draftReminder is { } when ? "Note added · reminder " + NoteDates.When(when, model.Engine.Now) : "Note added";
-            ResetDraft(); DrawForm(true); model.Tell(said); return;
-        }
-        if (!TimeText.TryParseClock(startText, formDay, false, out var start)) { model.Refuse("Start: try 09:30"); return; }
-        if (!TimeText.TryParseClockAfter(endText, start, false, true, out var end)) { model.Refuse("End: try 10:30"); return; }
-        var problem = Notes.AddMeeting(formDay, start.TimeOfDay, end - formDay.Date, words, draftAccount, draftRepeat);
-        if (problem is not null) { model.Refuse(problem); return; }
-        ResetDraft(); DrawForm(true); model.Tell("Meeting added");
+        CaptureComposer();
+        if (model.CreationDrafts.Save("timeline", form == Form.Meeting) is { } problem) { model.Refuse(problem); return; }
+        RestoreComposer(); DrawForm(true); model.Tell(Notes.Unsaved ? "Not saved · retrying" : form == Form.Meeting ? "Meeting added" : "Note added");
     }
-
     // ---- The pop-ups over the card: the reminder and the question about a repeating meeting ----
 
     private readonly Avalonia.Controls.Primitives.Popup reminderHost = new() { Placement = PlacementMode.Bottom, IsLightDismissEnabled = true, Name = "ReminderHost" };
