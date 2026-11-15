@@ -61,7 +61,8 @@ public sealed class OnboardingView : Grid
         layout.Children.Add(footer);
         card.Child = layout; Children.Add(card);
         Focusable = true;
-        KeyDown += (_, e) => { if (e.Key == Key.Escape) { Skip(); e.Handled = true; } };
+        // Skipping is an explicit choice. Escape must not mark an unfinished setup complete.
+        KeyDown += (_, e) => { if (e.Key == Key.Escape) e.Handled = true; };
         Show(0);
     }
 
@@ -93,7 +94,7 @@ public sealed class OnboardingView : Grid
         step = index;
         stepLabel.Text = $"Step {index + 1} of {StepCount}";
         back.IsVisible = index > 0;
-        next.Content = index == StepCount - 1 ? "Start tracking" : "Next";
+        next.Content = index == StepCount - 1 ? "Open timer" : "Next";
         dots.Children.Clear();
         for (var i = 0; i < StepCount; i++)
         {
@@ -105,8 +106,8 @@ public sealed class OnboardingView : Grid
         (title.Text, subtitle.Text, body.Content) = index switch
         {
             0 => ("Your client accounts", "These are the clients you track time against. Rename the examples or add your own. Budgets are optional: leave them blank for no limit.", AccountsStep()),
-            1 => ("Your working hours", "The day clock starts at your start time, and the schedule is what the week overview measures your time against. Overnight shifts are not supported yet.", HoursStep()),
-            2 => ("How you count time", "This changes every total and the exports. You can switch any time from the right-click menu.", FormatStep()),
+            1 => ("Your working hours", "The clock starts with your first recorded or added block. These hours set your working schedule. For overnight work, change Day starts at in Settings, Day and time.", HoursStep()),
+            2 => ("How you count time", "This changes every total and the exports. You can change it later in Settings, Day and time.", FormatStep()),
             _ => ("You are all set", "A few things worth knowing before you start.", ReadyStep())
         };
     }
@@ -233,7 +234,7 @@ public sealed class OnboardingView : Grid
             tile.Classes.Add("choiceTile"); tile.Content = text; tile.HorizontalAlignment = HorizontalAlignment.Stretch; tile.HorizontalContentAlignment = HorizontalAlignment.Left;
             return tile;
         }
-        hoursTile = Tile("Hours and minutes", "1h 30m", "SetupHoursMinutes", false); decimalTile = Tile("Decimal hours", "1.50h", "SetupDecimal", true);
+        hoursTile = Tile("Hours and minutes", "01:30", "SetupHoursMinutes", false); decimalTile = Tile("Decimal hours", "1.50h", "SetupDecimal", true);
         var tiles = Ui.Grid("*,*"); hoursTile.Margin = new Thickness(0, 0, 6, 0); decimalTile.Margin = new Thickness(6, 0, 0, 0);
         Ui.Put(tiles, hoursTile); Ui.Put(tiles, decimalTile, 1);
         panel.Children.Add(tiles);
@@ -266,12 +267,9 @@ public sealed class OnboardingView : Grid
             return block;
         }
         points.Children.Add(Point("Click the time.", "On the pill it opens the dashboard. In the dashboard it collapses back to the pill."));
-        points.Children.Add(Point("The green square.", "It shows the account you are on and pauses or resumes it. With no account chosen it opens the list."));
-        points.Children.Add(Point("Breaks.", "The cup at the end starts a break, and the green square resumes your account."));
-        points.Children.Add(Point("Accounts.", "The dot and arrow beside the green square open the account list below the pill. Choosing an account starts it."));
-        points.Children.Add(Point("Settings.", "The gear at the top right of the dashboard holds the theme, hours, export and Run setup again."));
-        points.Children.Add(Point("The tray.", "Closing a window hides the timer to the notification area and tracking carries on. Quit timer, at the foot of the dashboard, closes it for good."));
-        points.Children.Add(Point("Your data.", model.DataFolder is { } folder ? $"Stays on this computer in {folder}, with a backup each day." : "Stays on this computer, with a backup each day."));
+        points.Children.Add(Point("Choose an account.", "Click the account name on the pill. Choosing an account starts recording to it."));
+        points.Children.Add(Point("Play, pause and BREAK.", "The upper key starts or pauses recording. BREAK starts a break; play resumes your account."));
+        points.Children.Add(Point("Settings.", "The dashboard’s gear holds appearance, hours and export. Your data stays on this computer, with a backup each day."));
         if (model.AutoStart?.Available == true)
         {
             var startup = new CheckBox { Content = "Start the timer when I sign in to Windows", IsChecked = model.AutoStart.IsEnabled, Name = "SetupStartup", Margin = new Thickness(0, 4, 0, 0) };

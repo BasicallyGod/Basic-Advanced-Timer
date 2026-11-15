@@ -1008,6 +1008,12 @@ public sealed class DashboardWindow : Window
         foreach (var control in new Control[] { previous, datePick, next, todayButton }) control.IsVisible = !settingsMode && !notesMode;
         searchHost.IsVisible = notesMode && !settingsMode;
         settingsRail.Classes.Set("on", settingsMode);
+        var settingsKind = settingsMode ? IconKind.Close : IconKind.Gear;
+        if (settingsRail.Content is not IconGlyph currentSettingsIcon || currentSettingsIcon.Kind != settingsKind)
+            settingsRail.Content = new IconGlyph(settingsKind);
+        var settingsAction = settingsMode ? "Close settings" : "Settings";
+        Avalonia.Automation.AutomationProperties.SetName(settingsRail, settingsAction);
+        ToolTip.SetTip(settingsRail, settingsAction);
         // The timeline card and the Selected block card are the Timeline page's alone; the week and the settings fill the workspace.
         timelinePage.IsVisible = !settingsMode && !weekMode && !notesMode; workspace.IsVisible = settingsMode || weekMode || notesMode;
         // The tabs say which page this is; the settings page has its name there instead.

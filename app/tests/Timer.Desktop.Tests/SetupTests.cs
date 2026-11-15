@@ -94,7 +94,7 @@ public sealed class SetupTests
             Press(window, "SetupNext");
             Assert.True(model.DecimalHours); Assert.Equal(DayOfWeek.Sunday, model.WeekStartsOn);
             // Step 4 finishes it, with the pill drawn for show.
-            Settle(window); Assert.Equal("Start tracking", Find<Button>(window, "SetupNext").Content);
+            Settle(window); Assert.Equal("Open timer", Find<Button>(window, "SetupNext").Content);
             Assert.Equal(PillWindow.PillWidth, Find<Border>(window, "SetupPill").Width);
             Assert.False(model.SetupDone);
             Press(window, "SetupNext");
@@ -104,7 +104,7 @@ public sealed class SetupTests
     }
 
     [AvaloniaFact]
-    public void SkippingLeavesTheExampleAccountsAndEscapeSkipsToo()
+    public void SkippingIsExplicitAndEscapeDoesNotCompleteSetup()
     {
         var model = NewModel(); var window = new DashboardWindow(model); window.Show();
         try
@@ -121,7 +121,7 @@ public sealed class SetupTests
             Settle(again);
             Find<Control>(again, "SetupOverlay").RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
             Dispatcher.UIThread.RunJobs();
-            Assert.True(second.SetupDone);
+            Assert.False(second.SetupDone); Assert.True(again.SetupShowing);
         }
         finally { again.Close(); }
     }

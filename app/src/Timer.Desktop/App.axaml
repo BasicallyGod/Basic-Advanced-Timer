@@ -155,7 +155,7 @@
     <!-- Important notes keep a neutral row; the importance button uses a gold stroke star. -->
     <Style Selector="Border.noteRow.importantRow"><Setter Property="Background" Value="{DynamicResource Panel}" /></Style>
     <Style Selector="Border.noteRow.rowSelected"><Setter Property="Background" Value="{DynamicResource Well}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /><Setter Property="BorderBrush" Value="{DynamicResource Accent}" /></Style>
-    <Style Selector="Border.tick"><Setter Property="Background" Value="{DynamicResource Panel}" /><Setter Property="BorderBrush" Value="{DynamicResource KeyEdge}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowThumb}" /></Style>
+    <Style Selector="Border.tick"><Setter Property="Background" Value="{DynamicResource Panel}" /><Setter Property="BorderBrush" Value="{DynamicResource ControlOutline}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowThumb}" /></Style>
     <Style Selector="Border.tick.tickDone"><Setter Property="Background" Value="{DynamicResource Well}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /></Style>
     <Style Selector="Border.tick Path"><Setter Property="Stroke" Value="{DynamicResource AccentText}" /></Style>
     <Style Selector="Border.composer"><Setter Property="Background" Value="{DynamicResource TextControlBackground}" /><Setter Property="BorderBrush" Value="{DynamicResource TextControlBorderBrush}" /><Setter Property="BoxShadow" Value="{DynamicResource ShadowSunk}" /><Setter Property="ClipToBounds" Value="True" /></Style>
