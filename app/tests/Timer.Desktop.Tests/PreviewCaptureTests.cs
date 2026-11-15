@@ -145,7 +145,7 @@ public sealed class PreviewCaptureTests
                 var due = model.Engine.Now.Date.AddHours(14);
                 model.Notes.AddNote("Follow up on the new brief", "Account two", due); model.Notes.AddNote("What if we put a really long reminder in here that ends up breaking the limit on characters", "Account four", due, important: true); Dispatcher.UIThread.RunJobs();
                 Press("TimelineTab"); Shot("timeline");
-                var pin = window.GetVisualDescendants().OfType<Border>().First(b => b.Name?.StartsWith("TimelinePinMark_") == true);
+                var pin = window.GetVisualDescendants().OfType<Border>().First(b => b.Name?.StartsWith("TimelineTag_") == true);
                 var at = pin.TranslatePoint(new Point(pin.Bounds.Width / 2, pin.Bounds.Height / 2), window)!.Value;
                 Avalonia.Headless.HeadlessWindowExtensions.MouseMove(window, at); Dispatcher.UIThread.RunJobs(); Shot("pin-hover");
                 Avalonia.Headless.HeadlessWindowExtensions.MouseMove(window, new Point(5, 5)); Dispatcher.UIThread.RunJobs();
