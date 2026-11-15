@@ -39,7 +39,7 @@ public sealed class FeedbackRound10Tests
             foreach (var index in new[] { 0, 1 })
             {
                 model.SelectBlock(new[] { engine.Sessions[index] }, false); Settle(window);
-                var box = Find<TextBox>(window, "SelectedNote"); box.Text = "Called the client"; Key(box, Avalonia.Input.Key.Enter);
+                var box = Find<TextBox>(window, "SelectedNote"); box.Text = "Called the client"; Find<Button>(window, "DetailsSave").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
             }
             model.SelectBlock(Array.Empty<SessionRow>(), false); Settle(window);
             Ellipse DotOf(string block) => Find<Border>(window, block).GetVisualDescendants().OfType<Ellipse>().Single(e => e.Name == "NoteDot");

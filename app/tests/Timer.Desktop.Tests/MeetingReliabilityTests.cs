@@ -51,7 +51,7 @@ public sealed class MeetingReliabilityTests
     }
 
     [AvaloniaFact]
-    public void UnsavedSeriesDraftRefusesSelectionUntilSaveOrDiscard()
+    public void UnsavedSeriesDraftSurvivesSelectionAndDayChanges()
     {
         var model = Model(); model.GoToDate(Day);
         model.Notes.AddMeeting(Day, TimeSpan.FromHours(9), TimeSpan.FromHours(10), "Original meeting", null, RepeatChoice.Day);
@@ -61,12 +61,12 @@ public sealed class MeetingReliabilityTests
         try
         {
             Commit(window, "DetailsMeetingName", "Unsaved replacement");
-            Assert.Contains("Unsaved changes", Find<TextBlock>(window, "DetailsSaveState").Text);
-            model.SelectNote(note.Id); Settle(window); Assert.Null(model.SelectedNoteId); Assert.Equal(meeting.Id, model.SelectedMeetingId); Assert.Contains("Save or discard", model.EditError);
+            Assert.Equal("Draft", Find<TextBlock>(window, "DetailsSaveState").Text);
+            model.SelectNote(note.Id); Settle(window); Assert.Equal(note.Id, model.SelectedNoteId); Assert.Null(model.SelectedMeetingId); Assert.Equal("Unsaved replacement", model.Drafts.NoteDraft(meeting.Id)!.Values.Words);
             model.SelectMeeting(meeting.Id); Settle(window);
             Assert.Equal("Unsaved replacement", Find<TextBox>(window, "DetailsMeetingName").Text);
             Assert.Equal("Original meeting", model.Notes.Words(model.Notes.Find(meeting.Id)!));
-            model.ChangeDate(-1); Settle(window); Assert.Equal(Day, model.SelectedDate);
+            model.ChangeDate(-1); Settle(window); Assert.Equal(Day.AddDays(-1), model.SelectedDate); model.GoToDate(Day); model.SelectMeeting(meeting.Id); Settle(window);
             Click(window, "DetailsSave"); Assert.Equal("Unsaved replacement", model.Notes.Words(model.Notes.Find(meeting.Id)!));
             Assert.Null(model.EditError); model.SelectNote(note.Id); Settle(window); Assert.Equal(note.Id, model.SelectedNoteId);
         }
@@ -108,7 +108,7 @@ public sealed class MeetingReliabilityTests
             try
             {
                 Commit(window, "DetailsMeetingName", "Queued change");
-                if (repeating) Click(window, "DetailsSave");
+                Click(window, "DetailsSave");
                 Assert.True(model.Notes.Unsaved); Assert.NotNull(model.SaveError);
                 Assert.Equal("Not saved · retrying", Find<TextBlock>(window, "DetailsSaveState").Text);
                 Assert.Equal("Original", store.LoadDayNotes().Single(n => n.Id == meeting.Id).Text);

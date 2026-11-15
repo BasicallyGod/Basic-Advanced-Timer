@@ -60,7 +60,7 @@ public sealed class FeedbackRound5Tests
         var model = Model(out var engine); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            model.SelectBlock(new[] { engine.Sessions[0] }, false); Settle(window); var noteBox = Find<TextBox>(window, "SelectedNote"); noteBox.Text = "Called the client"; noteBox.RaiseEvent(new Avalonia.Input.KeyEventArgs { RoutedEvent = Avalonia.Input.InputElement.KeyDownEvent, Key = Avalonia.Input.Key.Enter }); model.SelectBlock(new[] { engine.Sessions[0] }, false); model.SelectBlock(new[] { engine.Sessions[2] }, false); Settle(window);
+            model.SelectBlock(new[] { engine.Sessions[0] }, false); Settle(window); var noteBox = Find<TextBox>(window, "SelectedNote"); noteBox.Text = "Called the client"; noteBox.RaiseEvent(new Avalonia.Input.KeyEventArgs { RoutedEvent = Avalonia.Input.InputElement.KeyDownEvent, Key = Avalonia.Input.Key.Enter, KeyModifiers = Avalonia.Input.KeyModifiers.Control }); model.SelectBlock(new[] { engine.Sessions[0] }, false); model.SelectBlock(new[] { engine.Sessions[2] }, false); Settle(window);
             var noted = Find<Border>(window, "TimelineEntry0");
             Assert.Contains(noted.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Ellipse>(), p => p.Name == "NoteDot"); // At 90 pixels an hour half an hour is too narrow for the page mark.
             Assert.DoesNotContain(Find<Border>(window, "TimelineEntry1").GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Ellipse>(), p => p.Name == "NoteDot"); // And a block with no note has none.
@@ -92,7 +92,7 @@ public sealed class FeedbackRound5Tests
             Assert.Equal("12:00", Find<TextBox>(window, "MeetingStart").Text); Assert.Equal("12:30", Find<TextBox>(window, "MeetingEnd").Text); // Midday, half an hour.
             Assert.Equal("Today", Find<TextBlock>(window, "MeetingDayWords").Text); // The day showing, on a button that opens the day's calendar; a repeat is set in Details once it is there.
             var day = Find<Button>(window, "MeetingDay"); Assert.Contains(day.GetVisualDescendants().OfType<TextBlock>(), t => t.Name == "MeetingDayWords");
-            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Control>(), c => c.Name is "MeetingRepeat");
+            Assert.NotNull(Find<ChoiceStrip>(window, "MeetingRepeat"));
             Click(window, "MeetingDay"); Assert.NotNull(Find<TextBox>(window, "MeetingStart")); // Pressing it opens the calendar over the card and leaves the line as it was.
         }
         finally { window.Close(); }

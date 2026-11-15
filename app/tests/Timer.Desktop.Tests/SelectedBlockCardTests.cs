@@ -25,7 +25,7 @@ public sealed class SelectedBlockCardTests
     }
     private static T Find<T>(Control root, string name) where T : Control => root.GetVisualDescendants().OfType<T>().Single(c => c.Name == name);
     private static void Settle(Window window) { for (var pass = 0; pass < 3; pass++) { Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame(); } Dispatcher.UIThread.RunJobs(); }
-    private static void Enter(Control box) => box.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter });
+    private static void Enter(Control box) => box.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter, KeyModifiers = KeyModifiers.Control });
     private static void Click(Control root, string name) { Find<Button>(root, name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs(); }
 
     // Quick edits: the box the user moves to is the one that was on screen before the first edit's row replaced the block's, so it must still be live, and every box
@@ -56,7 +56,7 @@ public sealed class SelectedBlockCardTests
     }
 
     [AvaloniaFact]
-    public void AnEditTypedInABoxIsNotOverwrittenByARefreshButARefusedOneRestoresEveryBox()
+    public void AnEditTypedInABoxSurvivesRefreshAndInvalidInputStaysAvailable()
     {
         var model = Model(out var engine); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
@@ -66,9 +66,10 @@ public sealed class SelectedBlockCardTests
             end.Focus(); Dispatcher.UIThread.RunJobs(); Assert.True(end.IsFocused);
             end.Text = "11:3"; // Half typed in the box that has the focus,
             Assert.True(model.NudgeSelection(1)); // while the block changes under it.
-            Assert.Equal("11:3", end.Text); Assert.Equal("00:31", length.Text); Assert.Equal("11:00:00", start.Text);
-            end.Text = "banana"; Enter(end); // Not a time: refused, so every box goes back to what is saved. (An end before the start is the next day's, since a block may cross midnight.)
-            Assert.Equal("11:31:00", end.Text); Assert.Equal("11:00:00", start.Text);
+            Assert.Equal("11:3", end.Text); Assert.Equal("00:30", length.Text); Assert.Equal("11:00:00", start.Text);
+            Find<RecordEditor>(window, "DetailsRecordEditor").Draft.Resolve(DraftField.End, true); end.Text = "banana"; Enter(end); // Invalid input remains local and visible for correction. (An end before the start is the next day's, since a block may cross midnight.)
+            Assert.Equal("banana", end.Text); Assert.Equal("11:00:00", start.Text);
+            var draft = Find<RecordEditor>(window, "DetailsRecordEditor").Draft; Assert.NotEmpty(draft.Errors); draft.Resolve(DraftField.End, true);
             end.Text = "11:40"; Enter(end); Assert.Equal("00:40", length.Text); // And the same box takes the next edit.
         }
         finally { window.Close(); }
@@ -96,22 +97,22 @@ public sealed class SelectedBlockCardTests
         {
             var row = engine.Sessions[0]; model.SelectBlock(new[] { row }, false); Settle(window);
             var account = Find<ChoiceStrip>(window, "SelectedAccount"); Assert.Contains("Break", account.ItemsSource!.Cast<string>());
-            account.SelectedItem = "Account two"; Settle(window);
-            Assert.Equal("Account two", engine.Sessions[0].Account); Assert.Equal("30", engine.Sessions[0].Minutes); Assert.Equal("09:00:00", engine.Sessions[0].Start);
+            account.SelectedItem = "Account two"; Assert.Equal("Account one", engine.Sessions[0].Account); Click(window, "DetailsSave"); Settle(window);
+            Assert.Equal("Account two", engine.Sessions[0].Account); Assert.Equal(TimeSpan.FromMinutes(30), engine.Sessions[0].Duration); Assert.Equal("09:00:00", engine.Sessions[0].Start);
             Assert.True(model.UndoEdit()); Assert.Equal("Account one", engine.Sessions[0].Account);
         }
         finally { window.Close(); }
     }
 
     [AvaloniaFact]
-    public void TheNoteIsEditedInTheCardAndSavedWhenEnterIsPressed()
+    public void TheNoteIsEditedInTheCardAndSavedWithControlEnter()
     {
         var model = Model(out var engine); model.SetTimelineScale(320, 0, 0); model.TimelineOffset = null; var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
             model.SelectBlock(new[] { engine.Sessions[0] }, false); Settle(window);
             var note = Find<TextBox>(window, "SelectedNote"); note.Text = "Drafting"; Enter(note); Settle(window);
-            Assert.Equal("Drafting", model.Editor.Note(engine.Sessions[0])); Assert.Equal("30", engine.Sessions[0].Minutes);
+            Assert.Equal("Drafting", model.Editor.Note(engine.Sessions[0])); Assert.Equal(TimeSpan.FromMinutes(30), engine.Sessions[0].Duration);
             Assert.Contains(window.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Ellipse>(), e => e.Name == "NoteDot"); // The block on the timeline carries a small dot for its note.
         }
         finally { window.Close(); }

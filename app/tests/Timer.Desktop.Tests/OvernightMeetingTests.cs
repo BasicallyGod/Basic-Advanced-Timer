@@ -41,7 +41,7 @@ public sealed class OvernightMeetingTests
             Find<TextBox>(window, "MeetingEnd").Text = "02:00"; Click(window, "SubmitNote");
             var first = Assert.Single(model.Notes.All); Assert.Equal(TimeSpan.FromHours(26), first.End);
             Assert.Contains("(+1 day)", NoteParts.Span(first));
-            model.SelectMeeting(first.Id); Settle(window); Commit(window, "DetailsMeetingEnd", "01:00");
+            model.SelectMeeting(first.Id); Settle(window); Commit(window, "DetailsMeetingEnd", "01:00"); Click(window, "DetailsSave");
             Assert.Equal(TimeSpan.FromHours(25), model.Notes.Find(first.Id)!.End);
             window.ShowNotes(); Settle(window); var page = window.GetVisualDescendants().OfType<NotesPage>().Single();
             page.SetKind(true); Settle(window); Find<TextBox>(window, "PageNoteField").Text = "Page night";
@@ -93,7 +93,7 @@ public sealed class OvernightMeetingTests
         var window = new DashboardWindow(model); window.Show(); model.SelectMeeting(meeting.Id); Settle(window);
         try
         {
-            Commit(window, "DetailsMeetingName", "Updated Details"); Assert.Null(model.EditError);
+            Commit(window, "DetailsMeetingName", "Updated Details"); Click(window, "DetailsSave"); Assert.Null(model.EditError);
             Assert.Equal("Updated Details", model.Notes.Words(model.Notes.Find(meeting.Id)!));
             Assert.Equal(TimeSpan.FromHours(hour + 24), model.Notes.Find(meeting.Id)!.End);
             window.ShowNotes(); Settle(window); var page = window.GetVisualDescendants().OfType<NotesPage>().Single();
@@ -149,12 +149,12 @@ public sealed class OvernightMeetingTests
         try
         {
             Commit(window, "DetailsMeetingName", "Keep this draft"); Commit(window, "DetailsMeetingEnd", "nonsense");
-            Click(window, "DetailsSave"); Assert.NotNull(model.EditError);
+            Click(window, "DetailsSave"); Assert.NotEmpty(Find<RecordEditor>(window, "DetailsRecordEditor").Draft.Errors);
             Assert.Equal("Keep this draft", Find<TextBox>(window, "DetailsMeetingName").Text); Assert.Equal("nonsense", Find<TextBox>(window, "DetailsMeetingEnd").Text);
             Commit(window, "DetailsMeetingEnd", "03:00"); Click(window, "DetailsSave");
             Assert.Null(model.EditError); Assert.Equal(TimeSpan.FromHours(27), model.Notes.Find(first.Id)!.End);
             Commit(window, "DetailsMeetingName", "Discard me"); Click(window, "DetailsDiscard");
-            Assert.Equal("Keep this draft", Find<TextBox>(window, "DetailsMeetingName").Text); Assert.False(Find<Button>(window, "DetailsSave").IsVisible);
+            Assert.Equal("Keep this draft", Find<TextBox>(window, "DetailsMeetingName").Text); Assert.False(Find<Button>(window, "DetailsSave").IsEnabled);
         }
         finally { window.Close(); }
     }

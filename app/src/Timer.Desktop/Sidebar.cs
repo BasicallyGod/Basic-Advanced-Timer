@@ -56,7 +56,12 @@ public sealed class Sidebar : Border
         QuitButton.Classes.Add("ctl"); QuitButton.Classes.Add("quit"); QuitButton.Height = 38; QuitButton.Padding = new Thickness(4, 0); QuitButton.FontSize = 13; QuitButton.HorizontalAlignment = HorizontalAlignment.Stretch; QuitButton.Click += (_, _) => quit();
         QuitButton.PointerEntered += (_, _) => quitGlyph.TintKey = "Finish"; QuitButton.PointerExited += (_, _) => quitGlyph.TintKey = null;
         Avalonia.Automation.AutomationProperties.SetName(QuitButton, "Quit timer");
-        var foot = new Grid { Margin = new Thickness(0, 8, 0, 0) }; foot.Children.Add(QuitButton);
+        var drafts = Ui.Ctl("ReviewDrafts", "Drafts", null, "Review drafts", model.ReviewDrafts, small: true);
+        void DraftCount() { var count = model.Drafts.Outstanding.Count + model.CreationDrafts.Outstanding.Count; drafts.IsVisible = count > 0; drafts.Content = $"Drafts · {count}"; }
+        AttachedToVisualTree += (_, _) => { model.Drafts.Changed += DraftCount; model.CreationDrafts.Changed += DraftCount; DraftCount(); };
+        DetachedFromVisualTree += (_, _) => { model.Drafts.Changed -= DraftCount; model.CreationDrafts.Changed -= DraftCount; };
+        DraftCount();
+        var foot = new StackPanel { Margin = new Thickness(0, 8, 0, 0), Spacing = 8 }; foot.Children.Add(drafts); foot.Children.Add(QuitButton);
         Ui.Put(grid, foot, 0, 3);
         Child = grid;
         ActualThemeVariantChanged += (_, _) => Refresh(model);

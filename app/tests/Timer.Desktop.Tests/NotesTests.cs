@@ -352,16 +352,16 @@ public sealed class NotesTests
             model.SelectMeeting(today.Id); Settle(window);
             Assert.Equal("Meeting", Find<Border>(window, "DetailsKind").GetVisualDescendants().OfType<TextBlock>().First().Text);
             Assert.NotNull(Find<Border>(window, "DetailsScope"));
-            Assert.Equal("No changes", Find<TextBlock>(window, "DetailsSaveState").Text); Assert.False(Find<Button>(window, "DetailsSave").IsVisible);
+            Assert.Equal("No changes", Find<TextBlock>(window, "DetailsSaveState").Text); Assert.False(Find<Button>(window, "DetailsSave").IsEnabled);
             // A change is kept, not saved, so what it applies to can be chosen after making it.
             Type(window, "DetailsMeetingEnd", "10:30"); Find<TextBox>(window, "DetailsMeetingEnd").RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter }); Settle(window);
             Assert.Equal(TimeSpan.FromHours(10), model.Notes.Find(today.Id)!.End); // Nothing written yet.
-            Assert.Contains("Unsaved changes", Find<TextBlock>(window, "DetailsSaveState").Text); Assert.True(Find<Button>(window, "DetailsSave").IsVisible); Assert.True(Find<Button>(window, "DetailsDiscard").IsVisible);
-            Click(window, "DetailsScopeAll"); Settle(window);
-            Assert.Contains("this and all later", Find<TextBlock>(window, "DetailsSaveState").Text); Assert.Equal("10:30", Find<TextBox>(window, "DetailsMeetingEnd").Text); // The choice does not lose the change.
+            Assert.Equal("Draft", Find<TextBlock>(window, "DetailsSaveState").Text); Assert.True(Find<Button>(window, "DetailsSave").IsVisible); Assert.True(Find<Button>(window, "DetailsDiscard").IsVisible);
+            Click(window, "DetailsScope_Thisandalllater"); Settle(window);
+            Assert.Equal(1, Find<ChoiceStrip>(window, "DetailsScope").SelectedIndex); Assert.Equal("10:30", Find<TextBox>(window, "DetailsMeetingEnd").Text); // The choice does not lose the change.
             Click(window, "DetailsSave"); Settle(window);
             Assert.Equal(TimeSpan.FromHours(10.5), model.Notes.Find(today.Id)!.End); Assert.Equal(TimeSpan.FromHours(10.5), model.Notes.MeetingsOn(Day.AddDays(1)).Single().End);
-            Assert.Contains("all later", model.Notice);
+            Assert.False(model.Drafts.HasUnsubmittedChanges);
         }
         finally { window.Close(); }
     }
@@ -381,22 +381,22 @@ public sealed class NotesTests
             Type(window, "DetailsMeetingEnd", "10:30"); Find<TextBox>(window, "DetailsMeetingEnd").RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter }); Settle(window);
             Click(window, "DetailsSave"); Settle(window); // This one only is chosen to begin with.
             Assert.Equal(TimeSpan.FromHours(10.5), model.Notes.MeetingsOn(Day).Single().End); Assert.Equal(TimeSpan.FromHours(10), model.Notes.MeetingsOn(Day.AddDays(1)).Single().End);
-            Assert.Contains("this day only", model.Notice);
+            Assert.False(model.Drafts.HasUnsubmittedChanges);
         }
         finally { window.Close(); }
     }
 
     [AvaloniaFact]
-    public void APlainMeetingSavesAsItGoesAndSaysSo()
+    public void APlainMeetingKeepsItsDraftUntilExplicitlySaved()
     {
         var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
             model.Notes.AddMeeting(Day, TimeSpan.FromHours(9), TimeSpan.FromHours(10), "Review", null, RepeatChoice.None); Settle(window);
             model.SelectMeeting(model.Notes.MeetingsOn(Day).Single().Id); Settle(window);
-            Assert.Equal("Changes save as you make them", Find<TextBlock>(window, "DetailsSaveState").Text); Assert.False(Find<Button>(window, "DetailsSave").IsVisible);
+            Assert.Equal("No changes", Find<TextBlock>(window, "DetailsSaveState").Text); Assert.False(Find<Button>(window, "DetailsSave").IsEnabled);
             Type(window, "DetailsMeetingEnd", "10:30"); Find<TextBox>(window, "DetailsMeetingEnd").RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter }); Settle(window);
-            Assert.Equal(TimeSpan.FromHours(10.5), model.Notes.MeetingsOn(Day).Single().End); Assert.Equal("Saved", Find<TextBlock>(window, "DetailsSaveState").Text);
+            Assert.Equal(TimeSpan.FromHours(10), model.Notes.MeetingsOn(Day).Single().End); Click(window, "DetailsSave"); Assert.Equal(TimeSpan.FromHours(10.5), model.Notes.MeetingsOn(Day).Single().End); Assert.Equal("Saved", Find<TextBlock>(window, "DetailsSaveState").Text);
         }
         finally { window.Close(); }
     }
@@ -440,11 +440,11 @@ public sealed class NotesTests
         {
             model.SelectNote(id); Settle(window); Click(window, "DetailsNoteReminder"); // The reminder is set from Details.
             Assert.True(Find<Avalonia.Controls.Primitives.Popup>(window, "DetailsNoteReminderPopup").IsOpen);
-            Click(window, "RescheduleDay_20261010"); var strip = Find<ReminderPickerCard>(window, "ReminderPicker").Picker.Strip; strip.PinAt(Day.AddDays(1).AddHours(9)); strip.Commit(); Settle(window); // Letting go of the pin sets it.
+            Click(window, "RescheduleDay_20261010"); var strip = Find<ReminderPickerCard>(window, "ReminderPicker").Picker.Strip; strip.PinAt(Day.AddDays(1).AddHours(9)); strip.Commit(); Settle(window); Assert.Null(NotesModel.ReminderOf(model.Notes.Find(id)!)); Click(window, "DetailsSave"); // The picker updates the draft; Save commits the whole record.
             Assert.Equal(Day.AddDays(1).AddHours(9), NotesModel.ReminderOf(model.Notes.Find(id)!)); Assert.False(Find<Avalonia.Controls.Primitives.Popup>(window, "DetailsNoteReminderPopup").IsOpen);
             Assert.Equal(0, Listed(window)); // Today's card no longer lists it.
             model.ChangeDate(1); Settle(window); Assert.Equal(1, Listed(window));
-            model.SelectNote(id); Settle(window); Click(window, "DetailsNoteReminder"); Click(window, "ReminderRemove");
+            model.SelectNote(id); Settle(window); Click(window, "DetailsNoteReminder"); Click(window, "ReminderRemove"); Click(window, "DetailsSave");
             Assert.False(model.Notes.Find(id)!.HasDate); Assert.Null(NotesModel.ReminderOf(model.Notes.Find(id)!));
         }
         finally { window.Close(); }
@@ -477,7 +477,7 @@ public sealed class NotesTests
         {
             Click(window, "CardKindNotes"); Type(window, "NoteField", "Call back"); Click(window, "FormBell"); Click(window, "RescheduleDay_20261010"); var strip = Find<ReminderPickerCard>(window, "ReminderPicker").Picker.Strip; strip.PinAt(Day.AddDays(1).AddHours(12)); strip.Commit(); Settle(window);
             Assert.NotNull(Find<Button>(window, "FormReminder")); Click(window, "SubmitNote");
-            var note = model.Notes.All.Single(); Assert.Equal(Day.AddDays(1).AddHours(12), NotesModel.ReminderOf(note)); Assert.Contains("reminder Tomorrow, 12:00", model.Notice);
+            var note = model.Notes.All.Single(); Assert.Equal(Day.AddDays(1).AddHours(12), NotesModel.ReminderOf(note)); Assert.Equal("Note added", model.Notice);
         }
         finally { window.Close(); }
     }

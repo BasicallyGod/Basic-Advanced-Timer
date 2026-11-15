@@ -22,10 +22,10 @@ public sealed class NoteDetailsTests
     private static T Find<T>(Visual root, string name) where T : Control => root.GetVisualDescendants().OfType<T>().Single(c => c.Name == name);
     private static void Settle(Window window) { for (var i = 0; i < 3; i++) { Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame(); } }
     private static void Click(Window window, string name) { Find<Button>(window, name).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Settle(window); }
-    private static void Commit(Window window, string name, string text) { var box = Find<TextBox>(window, name); box.Text = text; box.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter }); Settle(window); }
+    private static void Commit(Window window, string name, string text) { var box = Find<TextBox>(window, name); box.Text = text; box.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter, KeyModifiers = KeyModifiers.Control }); Settle(window); }
 
     [AvaloniaFact]
-    public void SwitchingBetweenNotesAndBlocksCommitsEachDraftToItsOwnItem()
+    public void SwitchingBetweenNotesAndBlocksRetainsEachDraftOnItsOwnItem()
     {
         var model = Model();
         var row = new SessionRow("2026-10-09", "Account one", "09:00:00", "added", "30");
@@ -40,11 +40,11 @@ public sealed class NoteDetailsTests
             model.SelectNote(id); Settle(window);
             Assert.Empty(model.SelectedRows);
             Assert.Equal(id, model.SelectedNoteId);
-            Assert.Equal("Block draft", model.Editor.Note(model.Engine.Sessions.Single()));
+            Assert.Equal("", model.Editor.Note(model.Engine.Sessions.Single()));
             var noteBox = Find<TextBox>(window, "DetailsNoteWords"); noteBox.Focus(); noteBox.Text = "Note draft";
             model.SelectBlock(new[] { model.Engine.Sessions.Single() }, false); Settle(window);
             Assert.Null(model.SelectedNoteId);
-            Assert.Equal("Note draft", model.Notes.Text(model.Notes.Find(id)!));
+            Assert.Equal("Original note", model.Notes.Text(model.Notes.Find(id)!)); Assert.Equal("Note draft", model.Drafts.NoteDraft(id)!.Values.Words);
             Assert.Equal("Account two", model.Notes.AccountOf(model.Notes.Find(id)!));
             Assert.Equal("Block draft", Find<TextBox>(window, "SelectedNote").Text);
         }
@@ -77,7 +77,8 @@ public sealed class NoteDetailsTests
                 Assert.Equal("Draft after recovery", box.Text);
                 model.ClearSelection(); Settle(window);
                 Assert.Null(model.SelectedNoteId);
-                Assert.Equal("Draft after recovery", model.Notes.Text(model.Notes.Find(id)!));
+                Assert.Equal("Retained note", model.Notes.Text(model.Notes.Find(id)!));
+                model.SelectNote(model.Notes.Find(id)!.Id); Settle(window); Assert.Equal("Draft after recovery", Find<TextBox>(window, "DetailsNoteWords").Text); Click(window, "DetailsSave"); Assert.Equal("Draft after recovery", model.Notes.Text(model.Notes.Find(id)!));
                 Assert.False(model.Notes.Unsaved);
             }
             finally { window.Close(); }
@@ -111,15 +112,15 @@ public sealed class NoteDetailsTests
         {
             model.SelectNote(id); Settle(window);
             Assert.Contains(Find<Button>(window, "DetailsNoteReminder").GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "No reminder");
-            Find<ChoiceStrip>(window, "DetailsNoteAccount").SelectedItem = "Account two"; Settle(window); Assert.Equal("Account two", model.Notes.AccountOf(model.Notes.Find(id)!));
-            Click(window, "DetailsNoteImportant"); Assert.True(NotesModel.IsImportant(model.Notes.Find(id)!)); Assert.Equal(id, model.SelectedNoteId); // Still selected, the box follows.
+            Find<ChoiceStrip>(window, "DetailsNoteAccount").SelectedItem = "Account two"; Settle(window); Click(window, "DetailsSave"); Assert.Equal("Account two", model.Notes.AccountOf(model.Notes.Find(id)!));
+            Click(window, "DetailsNoteImportant"); Click(window, "DetailsSave"); Assert.True(NotesModel.IsImportant(model.Notes.Find(id)!)); Assert.Equal(id, model.SelectedNoteId); // Still selected, the box follows.
             Assert.Equal("Ring the bank", Find<TextBox>(window, "DetailsNoteWords").Text);
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => b.Name == "DetailsNoteDone");
             var star = Find<Button>(window, "DetailsNoteImportant"); var delete = Find<Button>(window, "DeleteNote");
             Assert.True(star.TranslatePoint(new Point(0, 0), window)!.Value.X < delete.TranslatePoint(new Point(0, 0), window)!.Value.X);
             Assert.Equal(star.TranslatePoint(new Point(0, 0), window)!.Value.Y, delete.TranslatePoint(new Point(0, 0), window)!.Value.Y, 1);
             Click(window, "NoteDone_" + id); Assert.True(model.Notes.Find(id)!.Done);
-            Commit(window, "DetailsNoteWords", ""); Assert.Equal("Write a note first", model.EditError); Assert.Equal("Ring the bank", Find<TextBox>(window, "DetailsNoteWords").Text); // A refused edit puts the saved words back.
+            Commit(window, "DetailsNoteWords", ""); Assert.Contains("Write a note", Find<TextBlock>(window, "DetailsNoteWordsError").Text); Assert.Equal("", Find<TextBox>(window, "DetailsNoteWords").Text); Click(window, "DetailsDiscard"); // A refused edit puts the saved words back.
             Click(window, "DeleteNote"); Assert.Empty(model.Notes.All); Assert.Null(model.SelectedNoteId); Assert.True(model.NoticeHasUndo);
             model.UndoNotice(); Assert.Single(model.Notes.All); // The toast's Undo brings it back.
         }
