@@ -361,6 +361,9 @@ public sealed class SegmentName : SteppedControl
     private string ribbon;
     private int offset;
     private double stepClock;
+    /// <summary>Render-only illustrations keep a deterministic first window without starting a timer.</summary>
+    public bool Animate { get; set; } = true;
+    public void SetAccount(string? name, int number = 0) => Text = name is null ? DisplayInk.On ? "Choose" : "CHOOSE" : ForAccount(name, number);
     public string Text
     {
         get => text;
@@ -384,10 +387,17 @@ public sealed class SegmentName : SteppedControl
     /// <summary>Gives E-ink's name the room it has to fill; Phosphor keeps its whole cells.</summary>
     public void SetInkWindow(double width)
     {
-        if (inkWindow == width) { RefreshWidth(); return; }
+        if (inkWindow == width) { RefreshWidth(); Wake(); return; }
         inkWindow = width; pixelOffset = 0; holdClock = 0; RefreshWidth(); Wake();
     }
-    private void RefreshWidth() { var want = DisplayInk.On && inkWindow is { } w ? w : VisibleCells * CellWidth + CellHeight * Slant; if (Math.Abs(Width - want) > .01) Width = want; InvalidateVisual(); }
+    private (DisplayStyle Style, int Strength)? painted;
+    private void RefreshWidth()
+    {
+        var want = DisplayInk.On && inkWindow is { } w ? w : VisibleCells * CellWidth + CellHeight * Slant;
+        var look = (DisplayInk.Style, DisplayInk.Percent); var changed = Math.Abs(Width - want) > .01;
+        if (changed) Width = want;
+        if (changed || painted != look) { painted = look; InvalidateVisual(); }
+    }
     /// <summary>How far E-ink's name has slid, in pixels (it moves a few at a time, not a cell).</summary>
     public double InkOffset => pixelOffset;
     private bool InkOverflows => inkWindow is { } w && text.Length * CellWidth > w;
@@ -396,7 +406,8 @@ public sealed class SegmentName : SteppedControl
     public string VisibleText => ribbon.Substring(Scrolling ? offset : 0, VisibleCells);
     /// <summary>Long names loop continuously unless reduced motion is enabled.</summary>
     public bool Scrolling => Animating;
-    public Color Colour { get; set; } = Colors.Gray;
+    private Color colour = Colors.Gray;
+    public Color Colour { get => colour; set { if (colour == value) return; colour = value; InvalidateVisual(); } }
     public SegmentName() : this(Cells) { }
     public SegmentName(int cells)
     {
@@ -408,16 +419,15 @@ public sealed class SegmentName : SteppedControl
         VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
         IsHitTestVisible = false;
     }
-    protected override bool Animating => Overflows && !Motion.Reduced;
+    protected override bool Animating => Animate && Overflows && !Motion.Reduced;
     protected override void Advance(double milliseconds)
     {
         if (!Animating) { offset = 0; pixelOffset = 0; return; }
         if (DisplayInk.On && inkWindow is not null)
         {
             // A rest at the start so the beginning can be read, then a steady slide; the end of the ribbon joins its start after a gap.
-            if (pixelOffset == 0 && holdClock < InkHoldMilliseconds) { holdClock += milliseconds; return; }
-            pixelOffset += milliseconds * InkSpeed / 1000;
-            if (pixelOffset >= InkRibbon) { pixelOffset = 0; holdClock = 0; }
+            if (holdClock < InkHoldMilliseconds) { var hold = Math.Min(milliseconds, InkHoldMilliseconds - holdClock); holdClock += hold; milliseconds -= hold; if (milliseconds <= 0) return; }
+            pixelOffset = (pixelOffset + milliseconds * InkSpeed / 1000) % InkRibbon;
             return;
         }
         stepClock += milliseconds;
@@ -436,7 +446,7 @@ public sealed class SegmentName : SteppedControl
         var window = Bounds.Width; if (window <= 0) window = inkWindow ?? Width;
         using var clip = context.PushClip(new Rect(0, 0, window, Height));
         var brush = new SolidColorBrush(Colour); var size = DotPitch * .86;
-        var scrolling = InkOverflows; var shift = scrolling ? pixelOffset : 0;
+        var scrolling = InkOverflows; var shift = scrolling && !Motion.Reduced ? pixelOffset : 0;
         // The ribbon is the name, a gap and the name again, so a window across the join reads whole.
         var span = text.Length + (scrolling ? (int)InkGapCells : 0);
         var first = Math.Max(0, (int)Math.Floor(shift / CellWidth));

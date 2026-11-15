@@ -83,7 +83,7 @@ public sealed class AuditRegressionTests
         try
         {
             Color Colour() => card.GetVisualDescendants().OfType<Border>()
-                .Where(b => Equals(ToolTip.GetTip(b), "#Accountone"))
+                .Where(b => Equals(ToolTip.GetTip(b), "Account one"))
                 .Select(b => Assert.IsType<LinearGradientBrush>(b.Background).GradientStops[0].Color).Single();
             var before = Colour();
             model.SetAccounts(model.AccountSettings.Select(a => a.Name == "Account one" ? a with { Colour = "#E5484D" } : a));

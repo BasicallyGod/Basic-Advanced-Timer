@@ -129,7 +129,7 @@ public sealed class FeedbackRound8Tests
             field.Text = "Ring them #acc"; Dispatcher.UIThread.RunJobs(); Settle(window);
             Assert.Equal(2, window.GetVisualDescendants().OfType<Button>().Count(b => b.Name?.StartsWith("PageSuggest_") == true));
             Click(window, "PageSuggest_Accounttwo");
-            Assert.Equal("Ring them", Find<TextBox>(window, "PageNoteField").Text); Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "#Accounttwo"); Assert.NotNull(Find<Button>(window, "FormAccountChip"));
+            Assert.Equal("Ring them", Find<TextBox>(window, "PageNoteField").Text); Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Account two"); Assert.NotNull(Find<Button>(window, "FormAccountChip"));
             Assert.Empty(window.GetVisualDescendants().OfType<Button>().Where(b => b.Name?.StartsWith("PageSuggest_") == true));
         }
         finally { window.Close(); }

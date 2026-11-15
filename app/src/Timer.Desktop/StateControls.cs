@@ -7,6 +7,26 @@ using Avalonia.Input;
 
 namespace Timer.Desktop;
 
+/// <summary>A model-owned pressed state using the existing Button material and native toggle semantics.</summary>
+internal sealed class ModelToggleButton : ToggleButton
+{
+    protected override Type StyleKeyOverride => typeof(Button);
+}
+
+/// <summary>A drawn data cell's actual value, also an explicit route to its day.</summary>
+internal sealed class ReadoutButton : Button
+{
+    public string Value { get; set; } = "";
+    protected override Type StyleKeyOverride => typeof(Button);
+    protected override AutomationPeer OnCreateAutomationPeer() => new ReadoutPeer(this);
+    private sealed class ReadoutPeer(ReadoutButton owner) : ButtonAutomationPeer(owner), IValueProvider
+    {
+        public bool IsReadOnly => true;
+        public string Value => owner.Value;
+        public void SetValue(string? value) => throw new InvalidOperationException("This value is read-only.");
+    }
+}
+
 /// <summary>Keep the existing button material while exposing the native checked state.</summary>
 internal sealed class CompletionButton : ToggleButton
 {

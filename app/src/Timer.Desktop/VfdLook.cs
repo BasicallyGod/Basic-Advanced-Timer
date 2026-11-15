@@ -42,6 +42,7 @@ public sealed class SegmentText : Control
     public Color Colour { get => GetValue(ColourProperty); set => SetValue(ColourProperty, value); }
     /// <summary>Whether the unlit segments are drawn faintly.</summary>
     public bool Ghosts { get; set; }
+    public bool PreserveCase { get; set; }
     /// <summary>In E-ink, a paper plate drawn behind the words (so they stay readable over a texture); none in Phosphor.</summary>
     public Color? Plate { get; set; }
     /// <summary>How much heavier than the name's bars the strokes are (block words are a little heavier, so the ink reads).</summary>
@@ -52,26 +53,31 @@ public sealed class SegmentText : Control
     /// <summary>Whether <paramref name="text"/> fits in <paramref name="room"/> at <paramref name="height"/>.</summary>
     public static bool Fits(string text, double height, double room) => TextWidth(text, height) <= room;
     /// <summary>The width <paramref name="text"/> takes at <paramref name="height"/>: its cells in Phosphor, its type in E-ink.</summary>
-    public static double TextWidth(string text, double height) => DisplayInk.On ? InkType.Width(text, DisplaySkin.RoleFor(height)) : WidthOf(text.Length, height);
-    protected override Size MeasureOverride(Size availableSize) => new(TextWidth(Text, CellHeight), CellHeight);
+    private static InkRole TypeRole(double height, double weight)
+    {
+        var role = DisplaySkin.RoleFor(height);
+        return weight > 1.1 && role.Weight < FontWeight.Bold ? role with { Weight = FontWeight.Bold } : role;
+    }
+    public static double TextWidth(string text, double height, bool preserveCase = false, double weight = 1) => DisplayInk.On ? InkType.Width(text, TypeRole(height, weight), preserveCase) : WidthOf(text.Length, height);
+    protected override Size MeasureOverride(Size availableSize) => new(TextWidth(Text, CellHeight, PreserveCase, Weight), CellHeight);
 
     public override void Render(DrawingContext context)
     {
         if (Plate is { } paper && DisplayInk.On && !string.IsNullOrEmpty(Text))
         {
-            var width = TextWidth(Text, CellHeight); var plate = new Rect(-4, -2, width + 8, CellHeight + 4);
+            var width = TextWidth(Text, CellHeight, PreserveCase, Weight); var plate = new Rect(-4, -2, width + 8, CellHeight + 4);
             context.DrawRectangle(new SolidColorBrush(paper), new Pen(new SolidColorBrush(SoftTint.WithAlpha(Colour, .35)), 1), plate, 4, 4);
         }
-        Draw(context, Text, 0, 0, CellHeight, Colour, Ghosts, Weight);
+        Draw(context, Text, 0, 0, CellHeight, Colour, Ghosts, Weight, PreserveCase);
     }
     /// <summary>Draws <paramref name="text"/> in segment cells with its top left at (<paramref name="x"/>, <paramref name="y"/>); returns its width. Used by drawn panels too.</summary>
-    public static double Draw(DrawingContext context, string text, double x, double y, double h, Color colour, bool ghosts = false, double weight = 1)
+    public static double Draw(DrawingContext context, string text, double x, double y, double h, Color colour, bool ghosts = false, double weight = 1, bool preserveCase = false)
     {
         if (DisplayInk.On)
         {
             // E-ink: the same words in normal type, tabular figures, with a little ink speckle; the weight asks for a heavier face.
-            var role = DisplaySkin.RoleFor(h); if (weight > 1.1 && role.Weight < FontWeight.Bold) role = role with { Weight = FontWeight.Bold };
-            return InkType.Draw(context, text, role, new SolidColorBrush(colour), x, y + h / 2 + role.Size * .365);
+            var role = TypeRole(h, weight);
+            return InkType.Draw(context, text, role, new SolidColorBrush(colour), x, y + h / 2 + role.Size * .365, preserveCase: preserveCase);
         }
         var cw = CellWidth(h); var gw = h * 13.4 / 28; var th = Math.Max(1.1, SegmentName.Thickness * h / 20) * weight;
         var ins = th / 2; var inner = h - 2 * ins; var trimMax = 1.1 * h / 20;

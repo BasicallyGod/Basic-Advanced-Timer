@@ -39,6 +39,24 @@ public sealed class LowerDisplay : SteppedControl
     public PillLower Shown => shown;
     /// <summary>The ribbon the ticker scrolls, as of the last draw (for tests and the accessible name).</summary>
     public string Ribbon { get; private set; } = "";
+    private (PillLower Mode, long Minute, long Notes, DateTime Day, TimeSpan DayStart)? described;
+    private string description = "";
+    public string Description
+    {
+        get
+        {
+            var key = (shown, model.Engine.Now.Ticks / TimeSpan.TicksPerMinute, model.Notes.Revision, model.TodayKey, model.DayStart);
+            if (described == key) return description;
+            described = key;
+            return description = shown switch
+            {
+                PillLower.Next => string.Concat(UpNext(drawable: false).Select(p => p.Words)).Trim(),
+                PillLower.Both => $"Day strip for {model.TodayKey:ddd d MMM}. " + string.Concat(UpNext(drawable: false).Select(p => p.Words)).Trim(),
+                PillLower.Week => $"Week of {model.WeekStart(model.TodayKey):d MMM}",
+                PillLower.Bat => "Night bat animation", _ => $"Day strip for {model.TodayKey:dddd d MMMM}"
+            };
+        }
+    }
 
     public LowerDisplay(TimerModel model) { this.model = model; IsHitTestVisible = false; Height = RowHeight; }
 
@@ -67,7 +85,7 @@ public sealed class LowerDisplay : SteppedControl
     private sealed class Painter
     {
         public readonly List<Op> Ops = new();
-        public readonly List<(string Text, double X, double Y, double H, Color Colour)> Texts = new();
+        public readonly List<(string Text, double X, double Y, double H, Color Colour, bool PreserveCase)> Texts = new();
         public Color Ghost;
         public void Line(Point a, Point b, double width, Color colour, bool lit) => Ops.Add(new Op(new LineGeometry(a, b), colour, width, false, lit));
         public void Box(Rect r, double radius, Color colour, bool lit) => Ops.Add(new Op(new RectangleGeometry(r, radius, radius), colour, 0, true, lit));
@@ -76,7 +94,7 @@ public sealed class LowerDisplay : SteppedControl
         public void Shape(Geometry g, Color colour, bool lit) => Ops.Add(new Op(g, colour, 0, true, lit));
 
         /// <summary>A run of sixteen-segment cells, slanted like the account name, at any height: the name's cell scaled (19 wide for 28 tall). Returns its width.</summary>
-        public double Text(string text, double x, double y, double h, Func<int, Color> colour, bool ghosts = true)
+        public double Text(string text, double x, double y, double h, Func<int, Color> colour, bool ghosts = true, bool preserveCase = false)
         {
             if (DisplayInk.On)
             {
@@ -85,7 +103,7 @@ public sealed class LowerDisplay : SteppedControl
                 while (run < text.Length)
                 {
                     var end = run + 1; var c0 = colour(run); while (end < text.Length && colour(end) == c0) end++;
-                    var piece = text[run..end]; Texts.Add((piece, at, y, h, c0)); at += SegmentText.TextWidth(piece, h); run = end;
+                    var piece = text[run..end]; Texts.Add((piece, at, y, h, c0, preserveCase)); at += SegmentText.TextWidth(piece, h, preserveCase); run = end;
                 }
                 return at - x;
             }
@@ -169,7 +187,7 @@ public sealed class LowerDisplay : SteppedControl
                 else context.DrawGeometry(null, new Pen(brush, op.Width, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), op.Shape);
             }
             using (context.PushClip(new Rect(Bounds.Size)))
-                foreach (var (text, x, y, h, colour) in p.Texts) InkType.Draw(context, text, DisplaySkin.RoleFor(h), new SolidColorBrush(colour), x, y + h / 2 + DisplaySkin.RoleFor(h).Size * .365);
+                foreach (var (text, x, y, h, colour, preserveCase) in p.Texts) InkType.Draw(context, text, DisplaySkin.RoleFor(h), new SolidColorBrush(colour), x, y + h / 2 + DisplaySkin.RoleFor(h).Size * .365, preserveCase: preserveCase);
             frameAccounts = null; return;
         }
         // Bloom first, outside the mesh, so it fills the gaps between the cells; then the ghosts and the lit phosphor through the honeycomb.
@@ -232,19 +250,20 @@ public sealed class LowerDisplay : SteppedControl
     public const double TickerHeight = 15, TickerLeft = 32;
     private int TickerCells => (int)Math.Max(1, Math.Floor((Bounds.Width - TickerLeft - Pad) / (DisplayInk.On ? InkType.Width("e", DisplaySkin.RoleFor(TickerHeight)) : TickerHeight * 19 / 28)));
     /// <summary>What the ticker says, with the colour role of each piece: the next meeting and the next reminder today, or that nothing is coming up.</summary>
-    public IReadOnlyList<(string Words, string Role)> UpNext()
+    public IReadOnlyList<(string Words, string Role)> UpNext(bool drawable = true)
     {
         var now = model.Engine.Now; var day = model.TodayKey; var parts = new List<(string, string)>();
+        string Words(string text) => drawable ? Drawable(text) : text;
         string In(DateTime t) { var m = (int)Math.Ceiling((t - now).TotalMinutes); return m < 60 ? $"IN {m} MIN" : $"IN {m / 60}H {m % 60:00}"; }
         var todayMeetings = model.Notes.MeetingsOn(day);
         var meeting = todayMeetings.Concat(model.Notes.MeetingsOn(day.AddDays(1))).FirstOrDefault(m => ReviewViews.MeetingStart(m) >= now);
         var going = todayMeetings.FirstOrDefault(m => ReviewViews.MeetingStart(m) < now && ReviewViews.MeetingEnd(m) > now);
-        if (going is not null) parts.AddRange(new[] { ("NOW ", "quiet"), ($"{Drawable(model.Notes.Text(going))} TILL {ReviewViews.MeetingEnd(going):HH:mm}", "ink"), ("   ", "ink") });
-        if (meeting is not null) parts.AddRange(new[] { ("NEXT ", "quiet"), ($"{ReviewViews.MeetingStart(meeting):HH:mm} {Drawable(model.Notes.Text(meeting))}", "ink"), (" " + In(ReviewViews.MeetingStart(meeting)), "accent"), ("   ", "ink") });
+        if (going is not null) parts.AddRange(new[] { ("NOW ", "quiet"), ($"{Words(model.Notes.Text(going))} TILL {ReviewViews.MeetingEnd(going):HH:mm}", "ink"), ("   ", "ink") });
+        if (meeting is not null) parts.AddRange(new[] { ("NEXT ", "quiet"), ($"{ReviewViews.MeetingStart(meeting):HH:mm} {Words(model.Notes.Text(meeting))}", "ink"), (" " + In(ReviewViews.MeetingStart(meeting)), "accent"), ("   ", "ink") });
         var reminder = model.Notes.PinnedOn(day).FirstOrDefault(n => NotesModel.ReminderOf(n) >= now);
-        if (reminder is not null && NotesModel.ReminderOf(reminder) is { } due) parts.AddRange(new[] { ("REMIND ", "quiet"), ($"{due:HH:mm} {Drawable(model.Notes.Text(reminder))}", "ink"), ("   ", "ink") });
+        if (reminder is not null && NotesModel.ReminderOf(reminder) is { } due) parts.AddRange(new[] { ("REMIND ", "quiet"), ($"{due:HH:mm} {Words(model.Notes.Text(reminder))}", "ink"), ("   ", "ink") });
         var overdue = model.Notes.Overdue;
-        if (overdue.Count > 0) parts.AddRange(new[] { ("LATE ", "red"), (Drawable(model.Notes.Text(overdue[0])), "ink"), ("   ", "ink") });
+        if (overdue.Count > 0) parts.AddRange(new[] { ("LATE ", "red"), (Words(model.Notes.Text(overdue[0])), "ink"), ("   ", "ink") });
         if (parts.Count == 0) parts.Add(("NOTHING COMING UP TODAY", "quiet"));
         return parts;
     }
@@ -264,8 +283,8 @@ public sealed class LowerDisplay : SteppedControl
         for (var i = 0; i < cells; i++) { var k = offset + i; var (ch, col) = scroll ? chars[k % chars.Count] : k < chars.Count ? chars[k] : (' ', roles["ink"]); text[i] = ch; colours[i] = col; }
         // E-ink type is not a fixed width, so the window is cut to the characters that really fit (the cell count is only an average) and never runs past the display.
         var shown = text.Length; var room = Bounds.Width - TickerLeft - Pad;
-        if (DisplayInk.On) while (shown > 1 && SegmentText.TextWidth(new string(text, 0, shown), TickerHeight) > room) shown--;
-        p.Text(new string(text, 0, shown), TickerLeft, y0 + 7, TickerHeight, i => colours[i]);
+        if (DisplayInk.On) while (shown > 1 && SegmentText.TextWidth(new string(text, 0, shown), TickerHeight, preserveCase: true) > room) shown--;
+        p.Text(new string(text, 0, shown), TickerLeft, y0 + 7, TickerHeight, i => colours[i], preserveCase: true);
     }
 
     // ---------- the week ----------

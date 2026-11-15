@@ -212,7 +212,9 @@ public sealed class NotesPage : Grid
     private void DrawAccountButton()
     {
         var text = accountFilters.Count == 0 ? "All accounts" : accountFilters.Count == 1 ? accountFilters[0] : accountFilters.Count + " accounts";
-        accountButton.Content = Ui.Horizontal(new IconGlyph(IconKind.Accounts), Ui.Text(text, 13), new Chevron());
+        var caption = Ui.Text(text, 13); caption.MaxWidth = 150; caption.TextTrimming = TextTrimming.CharacterEllipsis;
+        accountButton.Content = Ui.Horizontal(new IconGlyph(IconKind.Accounts), caption, new Chevron());
+        Avalonia.Automation.AutomationProperties.SetName(accountButton, "Filter by account: " + text);
         accountButton.Classes.Set("on", accountFilters.Count > 0);
     }
 
@@ -235,7 +237,7 @@ public sealed class NotesPage : Grid
             if (on) tick.Child = new Avalonia.Controls.Shapes.Path { Data = Geometry.Parse("M 3.2,8.2 L 6.6,11.4 L 12.2,4.6"), StrokeThickness = 1.8, StrokeLineCap = PenLineCap.Round, StrokeJoin = PenLineJoin.Round };
             var line = Ui.Grid("Auto,Auto,*,Auto"); line.ColumnSpacing = 9;
             Ui.Put(line, tick); Ui.Put(line, NoteParts.Dot(model, a.Name), 1);
-            Ui.Put(line, new TextBlock { Text = "#" + a.Display.Replace(" ", ""), FontSize = 13, VerticalAlignment = VerticalAlignment.Center }, 2); Ui.Put(line, NoteParts.Ink(count.ToString(CultureInfo.InvariantCulture), "Muted", 12), 3);
+            Ui.Put(line, new TextBlock { Text = a.Display, FontSize = 13, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center }, 2); Ui.Put(line, NoteParts.Ink(count.ToString(CultureInfo.InvariantCulture), "Muted", 12), 3);
             var row = new CompletionButton { Name = "NotesAccount_" + a.Name.Replace(" ", ""), IsChecked = on };
             row.Click += (_, _) =>
             {
@@ -290,7 +292,7 @@ public sealed class NotesPage : Grid
         if (acct is not null)
         {
             var chip = Ui.Button("", () => { accountFilters.Clear(); accountFilters.Add(acct); shown = null; Sync(); }, "PageRowAccount_" + note.Id); chip.Classes.Add("pillBare"); chip.Padding = new Thickness(0);
-            chip.Content = NoteParts.Chip("#" + acct.Replace(" ", ""), "plain", null, NoteParts.Dot(model, acct)); ToolTip.SetTip(chip, "Show only " + acct); Avalonia.Automation.AutomationProperties.SetName(chip, "Show only " + acct); chips.Children.Add(chip);
+            chip.Content = NoteParts.AccountChip(model, acct); ToolTip.SetTip(chip, "Show only " + acct); Avalonia.Automation.AutomationProperties.SetName(chip, "Show only " + acct); chips.Children.Add(chip);
         }
         if (isMeeting) chips.Children.Add(NoteParts.Chip(NoteDates.Day(note.Day, model.Engine.Now) + ", " + NoteParts.Span(note), "plain"));
         else if (NotesModel.ReminderOf(note) is { } due)
@@ -490,7 +492,7 @@ public sealed class NotesPage : Grid
         if (account is not null)
         {
             var chip = Ui.Button("", () => { account = null; if (editing is not null) Redraw(); else DrawForm(); }, "FormAccountChip"); chip.Classes.Add("pillBare"); chip.Padding = new Thickness(0);
-            chip.Content = NoteParts.Chip("#" + account.Replace(" ", ""), "plain", null, NoteParts.Dot(model, account), IconKind.Close); ToolTip.SetTip(chip, "Take the account off"); row.Children.Add(chip);
+            chip.Content = NoteParts.AccountChip(model, account, IconKind.Close); ToolTip.SetTip(chip, "Take the account off"); row.Children.Add(chip);
         }
         if (when is { } w) row.Children.Add(NoteParts.Chip(NoteDates.When(w, model.Engine.Now), "accent", IconKind.Bell));
         return row;

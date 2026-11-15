@@ -116,7 +116,7 @@ public sealed class NotesCard : Border
         Ui.Put(line, edit, 1);
         var chips = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
         chips.Children.Add(new DraftBadge(model, note.Id));
-        if (account is not null) { var dot = NoteParts.Dot(model, account, 9); ToolTip.SetTip(dot, "#" + account.Replace(" ", "")); chips.Children.Add(dot); }
+        if (account is not null) { var dot = NoteParts.Dot(model, account, 9); ToolTip.SetTip(dot, AccountPresentation.Label(account)); chips.Children.Add(dot); }
         if (meeting)
         {
             chips.Children.Add(NoteParts.Chip(NoteParts.Span(note), "plain"));
@@ -198,7 +198,7 @@ public sealed class NotesCard : Border
         if (draftAccount is { } account)
         {
             var chip = Ui.Button("", () => { draftAccount = null; DrawForm(true); }, "FormAccountChip"); chip.Classes.Add("pillBare"); chip.Padding = new Thickness(0); chip.VerticalAlignment = VerticalAlignment.Center;
-            chip.Content = NoteParts.Chip("#" + account.Replace(" ", ""), "plain", null, NoteParts.Dot(model, account), IconKind.Close); ToolTip.SetTip(chip, "Remove account");
+            chip.Content = NoteParts.AccountChip(model, account, IconKind.Close); ToolTip.SetTip(chip, "Remove account");
             Avalonia.Automation.AutomationProperties.SetName(chip, "Remove account " + account);
             PutChip(chip, 0);
         }

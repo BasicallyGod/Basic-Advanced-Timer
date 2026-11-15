@@ -172,16 +172,16 @@ public static class InkType
     private static double Zero(InkRole role) => Format("0", role, Brushes.Black).Width;
     private static double Colon(InkRole role) => Format(":", role, Brushes.Black).Width * .9;
     /// <summary>The width of <paramref name="text"/> set in <paramref name="role"/>, with figures tabular.</summary>
-    public static double Width(string text, InkRole role)
+    public static double Width(string text, InkRole role, bool preserveCase = false)
     {
-        text = Sentence(text); double zero = Zero(role), colon = Colon(role), total = 0;
+        if (!preserveCase) text = Sentence(text); double zero = Zero(role), colon = Colon(role), total = 0;
         foreach (var (part, number) in Runs(text)) total += number ? part.Sum(ch => ch is ':' or '.' ? colon : zero) : RunWidth(part, role);
         return total;
     }
     /// <summary>Draws <paramref name="text"/> with its baseline at <paramref name="baseline"/>, starting at <paramref name="x"/>, or ending or centred there; returns its width.</summary>
-    public static double Draw(DrawingContext context, string text, InkRole role, IBrush brush, double x, double baseline, TextAlignment align = TextAlignment.Left)
+    public static double Draw(DrawingContext context, string text, InkRole role, IBrush brush, double x, double baseline, TextAlignment align = TextAlignment.Left, bool preserveCase = false)
     {
-        text = Sentence(text); var total = Width(text, role); var left = align == TextAlignment.Right ? x - total : align == TextAlignment.Center ? x - total / 2 : x;
+        if (!preserveCase) text = Sentence(text); var total = Width(text, role, preserveCase); var left = align == TextAlignment.Right ? x - total : align == TextAlignment.Center ? x - total / 2 : x;
         var bounds = new Rect(left - 2, baseline - role.Size * 1.1, total + 4, role.Size * 1.5);
         {
             double zero = Zero(role), colon = Colon(role), px = left;

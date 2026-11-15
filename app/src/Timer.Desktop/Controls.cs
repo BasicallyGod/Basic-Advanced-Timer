@@ -825,8 +825,9 @@ public sealed class AccountList : StackPanel
         foreach (var row in rows)
         {
             row.Row.Classes.Set("active", model.ActiveAccount == row.Account.Name);
-            row.Today.Text = model.Format(model.Today(row.Account));
+            var today = model.Today(row.Account); row.Today.Text = model.Format(today);
             var used = row.Account.Budget is null ? (TimeSpan?)null : model.BudgetUsed(row.Account);
+            Avalonia.Automation.AutomationProperties.SetName(row.Row, row.Account.Display + ", " + row.Today.Text + " today, " + AccountPresentation.BudgetDescription(model, row.Account, used));
             row.Budget.Text = bars ? model.BudgetUsage(row.Account, used) : model.BudgetSummary(row.Account, used);
             if (bars) { row.Period.Text = model.BudgetPeriodLabel(row.Account); ToolTip.SetTip(row.Row, model.BudgetRowTip(row.Account, used)); }
             if (row.Bar is { } bar && model.BudgetRatio(row.Account, used) is { } ratio)
@@ -838,7 +839,7 @@ public sealed class AccountList : StackPanel
                 row.Budget.Classes.Set("overtime", ratio >= 1);
             }
             row.Icon.InvalidateVisual();
-            if (displayRows.TryGetValue(row.Account.Name, out var drawnRow)) { drawnRow.InvalidateVisual(); continue; }
+            if (displayRows.TryGetValue(row.Account.Name, out var drawnRow)) { drawnRow.Show(today, used); continue; }
             // The live dot pulses beside the account that is recording.
             var live = model.ActiveAccount == row.Account.Name;
             row.Dot.IsVisible = live; row.Dot.Classes.Set("break", model.IsOnBreak); row.Dot.Classes.Set("live", !model.IsOnBreak);
@@ -1420,6 +1421,13 @@ public sealed class AccountDisplayRow : Control
 {
     public const double RowHeight = 46;
     private readonly TimerAccount account; private readonly TimerModel model; private readonly bool rule;
+    private TimeSpan today, budgetUsed; private int? pattern;
+    public void Show(TimeSpan today, TimeSpan? used)
+    {
+        this.today = today; budgetUsed = used ?? TimeSpan.Zero;
+        if (DisplayInk.On) pattern ??= model.TextureOf(account.Name);
+        InvalidateVisual();
+    }
     public AccountDisplayRow(TimerAccount account, TimerModel model, bool rule)
     {
         this.account = account; this.model = model; this.rule = rule; IsHitTestVisible = false;
@@ -1445,7 +1453,7 @@ public sealed class AccountDisplayRow : Control
         {
             var swatch = new Rect(12, 9, 13, 16);
             DisplayInk.Cell(context, paper, new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse(model.ChartColour(account.Colour))), swatch, 3);
-            DisplayInk.Texture(context, model.TextureOf(account.Name), swatch, 3, Avalonia.Media.Color.Parse(model.ChartColour(account.Colour)));
+            DisplayInk.Texture(context, pattern ?? 0, swatch, 3, Avalonia.Media.Color.Parse(model.ChartColour(account.Colour)));
         }
         else
         {
@@ -1456,14 +1464,13 @@ public sealed class AccountDisplayRow : Control
         var textX = inked ? 33.0 : 26.0;
         // Today's hours at the right, then the name in what is left, cut to fit.
         var nameH = inked ? 9.5 : 11.0; var hoursH = inked ? 11.0 : 13.0; // E-ink type is wider than the segments, so the names and hours are a little smaller to leave the names room
-        var hours = model.Format(model.Today(account)); var hoursW = SegmentText.TextWidth(hours, hoursH);
+        var hours = model.Format(today); var hoursW = SegmentText.TextWidth(hours, hoursH);
         SegmentText.Draw(context, hours, w - 14 - hoursW, inked ? 10 : 9, hoursH, recording ? live : ink, ghosts: true);
         var name = LowerDisplay.Drawable(account.Display); var room = w - 14 - hoursW - 10 - textX; var cells = name.Length;
-        while (cells > 0 && SegmentText.TextWidth(name[..cells], nameH) > room) cells--;
-        SegmentText.Draw(context, cells < name.Length ? (inked ? name[..cells].TrimEnd() + "…" : name[..cells].TrimEnd()) : name, textX, inked ? 12 : 11, nameH, ink);
+        while (cells > 0 && SegmentText.TextWidth(name[..cells].TrimEnd() + (inked && cells < name.Length ? "…" : ""), nameH, preserveCase: true) > room) cells--;
+        SegmentText.Draw(context, cells < name.Length ? (inked && cells > 0 ? name[..cells].TrimEnd() + "…" : name[..cells].TrimEnd()) : name, textX, inked ? 12 : 11, nameH, ink, preserveCase: true);
         // The budget as cells under the name, or quiet words when there is none.
-        var used = account.Budget is null ? (TimeSpan?)null : model.BudgetUsed(account);
-        if (model.BudgetRatio(account, used) is not { } ratio) { SegmentText.Draw(context, "NO BUDGET", textX, 30, 8, quiet); return; }
+        if (model.BudgetRatio(account, budgetUsed) is not { } ratio) { SegmentText.Draw(context, "NO BUDGET", textX, 30, 8, quiet); return; }
         var amber = inked ? paper.Amber : Avalonia.Media.Color.Parse("#F5B63A"); var red = inked ? paper.Red : C("Overtime", "#FF6B6B");
         var tone = recording ? live : ratio >= 1 ? red : ratio >= .8 ? amber : ink;
         const int n = 23; var x0 = textX; var cw = (w - 14 - x0) / n; var lit = (int)Math.Round(Math.Min(1, ratio) * n);

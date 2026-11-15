@@ -113,7 +113,8 @@ public sealed class PillWindow : Window
         Deactivated += (_, _) => { if (!overList) CloseFlyouts(); };
         KeyDown += (_, e) =>
         {
-            if (AlertsOpen && alertsCard is not null && alertsCard.HandleKey(e.Key)) e.Handled = true;
+            if (e.Key == Avalonia.Input.Key.A && e.KeyModifiers == Avalonia.Input.KeyModifiers.Alt) { ToggleAccounts(); e.Handled = true; }
+            else if (AlertsOpen && alertsCard is not null && alertsCard.HandleKey(e.Key)) e.Handled = true;
             else if (e.Key == Avalonia.Input.Key.Escape && PanelOpen) { CloseFlyouts(); e.Handled = true; }
         };
         peeked.UnionWith(model.Alerts.Select(a => a.Key)); // What was already waiting when the pill came up is not shown again by itself.

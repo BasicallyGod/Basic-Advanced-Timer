@@ -118,7 +118,8 @@ public static partial class ReviewViews
             return new StackLines.Line(Math.Max(6, (i.Start - start).TotalHours * pixelsPerHour - BlockInset), Math.Min(width - 6, ((i.End < end ? i.End : end) - start).TotalHours * pixelsPerHour - BlockInset), placed[i].Lane, LineColour(model, i.Account, catalogue), lit, selectedIn && !lit);
         }).ToList();
         var title = Words(members.Count, "block", "blocks") + " · " + model.Format(total);
-        var card = new Border { Name = "TimelineStack" + start.ToString("HHmmss"), Width = width, Height = height, CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1.5), Tag = new StackTag(members.Count), Cursor = new Cursor(StandardCursorType.Hand) };
+        var card = new DisplayItem { Name = "TimelineStack" + start.ToString("HHmmss"), Width = width, Height = height, CornerRadius = new CornerRadius(12), BorderThickness = new Thickness(1.5), Tag = new StackTag(members.Count), Cursor = new Cursor(StandardCursorType.Hand), Selected = selectedIn,
+            Activate = _ => { if (selectedIn) model.ClearSelection(); else model.SelectBlock(SourcesOf(members.OrderBy(i => i.Start).First(i => SourcesOf(i).Count > 0)), false); } };
         card.Classes.Add("stackTile");
         // On the display a stack is a dimmer grey-lit panel, so its coloured lines stand out as the blocks it holds.
         card.Classes.Add("vfd");
@@ -153,7 +154,8 @@ public static partial class ReviewViews
         var lines = stack.Select(m => new StackLines.Line(Math.Max(8, ((MeetingStart(m)) - start).TotalHours * pixelsPerHour), Math.Min(width - 8, ((MeetingEnd(m)) - start).TotalHours * pixelsPerHour), placed[m].Lane,
             ink, selectedIn && m.Id == model.SelectedMeetingId, selectedIn && m.Id != model.SelectedMeetingId)).ToList();
         var title = Words(stack.Count, "meeting", "meetings");
-        var card = new Border { Name = "TimelineMeetingStack" + start.ToString("HHmm"), Width = width, Height = MeetingHeight, CornerRadius = new CornerRadius(12), Tag = new StackTag(stack.Count), Cursor = new Cursor(StandardCursorType.Hand) };
+        var card = new DisplayItem { Name = "TimelineMeetingStack" + start.ToString("HHmm"), Width = width, Height = MeetingHeight, CornerRadius = new CornerRadius(12), Tag = new StackTag(stack.Count), Cursor = new Cursor(StandardCursorType.Hand), Selected = selectedIn,
+            Activate = _ => { if (selectedIn) model.ClearSelection(); else model.SelectMeeting(stack.OrderBy(MeetingStart).First().Id); } };
         card.Classes.Add("meetingCard");
         card.Classes.Add("vfd"); card.BorderBrush = new SolidColorBrush(SoftTint.WithAlpha(Color.Parse(model.GlassTheme.Colour("Muted")), .9)); card.BorderThickness = new Thickness(1.2);
         FillTile(card, width, MeetingHeight, title, $"{start:HH:mm}–{end:HH:mm}", lines, rows, false, new IconGlyph(IconKind.Today) { VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center }, ink);

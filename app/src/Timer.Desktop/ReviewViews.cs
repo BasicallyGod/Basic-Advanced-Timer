@@ -229,8 +229,8 @@ public static partial class ReviewViews
         // The words' own room: the block less the text's margins either side and a little to spare for the round caps (and, in E-ink, the paper plate each line sits on).
         var room = width - (detail == BlockDetail.Full ? (width < 84 ? 14 : 20) : 16) - 6 - (plate is null ? 0 : 2);
         var upper = isBreak ? "BREAK" : LowerDisplay.Drawable(name); var initials = isBreak ? "" : LowerDisplay.Drawable(PillWindow.Initials(name));
-        SegmentText Seg(string words, double height) => new(words, height, ink, weight: 1.3) { Name = "BlockWords", Plate = plate };
-        bool Fits(string words, double height) => words.Length >= 2 && SegmentText.Fits(words, height, room);
+        SegmentText Seg(string words, double height) => new(words, height, ink, weight: 1.3) { Name = "BlockWords", Plate = plate, PreserveCase = true };
+        bool Fits(string words, double height) => words.Length >= 2 && SegmentText.TextWidth(words, height, preserveCase: true, weight: 1.3) <= room;
         // E-ink sets every block's words in one size (12 for the length, 11 for the line under it), dropping a line before shrinking it, so neighbouring blocks never differ.
         if (DisplayInk.On)
         {
@@ -387,7 +387,7 @@ public static partial class ReviewViews
             var note = interval.Group is { } groupNote ? groupNote.Note : recording ? "Recording now" : interval.Row is { } noteRow ? model.Editor.Note(noteRow) : "";
             VfdWords(text, detail, width, model.Format(duration), display, isBreak ? (inkOn ? inkColours.Amber : Color.Parse("#F5B63A")) : outlined ? tone : blockInk, isBreak, plate);
             // The card itself is not clipped, or the selection ring round it would be cut off; what is inside it is clipped instead.
-            var card = new Border { Width = width, Height = height, CornerRadius = new CornerRadius(CornerFor(laneCount, width, height)) };
+            var card = new DisplayItem { Width = width, Height = height, CornerRadius = new CornerRadius(CornerFor(laneCount, width, height)) };
             if (isBreak) { card.Background = Brushes.Transparent; card.BorderBrush = new SolidColorBrush(inkOn ? inkColours.Amber : Color.Parse("#F5B63A")); card.BorderThickness = new Thickness(1.4); }
             else card.Background = Brushes.Transparent; // The lit fill is a layer of its own under the words, seen through the honeycomb (below).
             if (outlined) { card.BorderBrush = new SolidColorBrush(tone); card.BorderThickness = new Thickness(1.6); }
@@ -422,6 +422,9 @@ public static partial class ReviewViews
             card.Child = content;
             var addedEarly = false;
             var selectionSources = interval.Group?.Sources ?? (interval.Row is { } source ? new[] { source } : Array.Empty<SessionRow>());
+            card.Selected = model.IsSelected(selectionSources); card.CanSelect = !recording;
+            card.Activate = modifiers => { if (recording) model.ExplainRunning(); else model.SelectBlock(selectionSources, modifiers.HasFlag(KeyModifiers.Shift)); };
+            Avalonia.Automation.AutomationProperties.SetName(card, $"{(recording ? "Recording" : interval.Group is null ? "Block" : "Merged block")}, {display}, {interval.Start:HH:mm:ss} to {end:HH:mm:ss}, {model.Format(duration)}" + (string.IsNullOrWhiteSpace(note) ? "" : ", " + note));
             if (model.IsSelected(selectionSources))
             {
                 // A selected block has a ring in the theme's accent colour round it, and the `mergeSelected` class so it can be found.
@@ -514,12 +517,12 @@ public static partial class ReviewViews
                     // The name in as many whole cells as fit inside the outline (its margins and slant counted), and none below three: a letter or two cut off
                     // at the edge read as a fault, and the tooltip and Details have the name.
                     var words = LowerDisplay.Drawable(model.Notes.Text(meeting)); var room = width - 16 - 6; var cells = words.Length;
-                    while (cells > 0 && !SegmentText.Fits(new string('8', cells), 9, room)) cells--;
+                    while (cells > 0 && SegmentText.TextWidth(words[..cells], 9, preserveCase: true) > room) cells--;
                     // Cut short, it stops at the last whole word where one fits ("TEAM SYNC" becomes "TEAM", not "TEAM S"), and only cuts inside a word when no word fits.
                     var cut = words.Length > cells ? words[..cells] : words;
                     if (words.Length > cells && cut.LastIndexOf(' ') is var space && space >= 3) cut = cut[..space];
                     cut = cut.TrimEnd();
-                    if (cut.Length >= 3) { var head = Ui.Grid("*"); Ui.Put(head, new SegmentText(cut, 9, glassInk) { Name = "MeetingWords" }); body.Children.Add(head); }
+                    if (cut.Length >= 3) { var head = Ui.Grid("*"); Ui.Put(head, new SegmentText(cut, 9, glassInk) { Name = "MeetingWords", PreserveCase = true }); body.Children.Add(head); }
                 }
                 TextBlock? span = null;
                 // On the display the times show only where they fit whole, as the name does; a cut "13…" told nothing.
@@ -527,7 +530,7 @@ public static partial class ReviewViews
                 // A meeting is a quiet block of its own, a light grey with no outline, so it reads as a plan beside the coloured time that was tracked; the pointer over it turns it to
                 // the selected tint.
                 // The card itself is not clipped, so the guide's ring (the card's own shadow) shows; its content is.
-                var card = new Border { Width = width, Height = height, CornerRadius = new CornerRadius(12), Child = new Border { ClipToBounds = true, CornerRadius = new CornerRadius(12), Child = body }, Name = "TimelineMeeting" + meeting.Id, Tag = meeting, Cursor = new Cursor(StandardCursorType.Hand) };
+                var card = new DisplayItem { Width = width, Height = height, CornerRadius = new CornerRadius(12), Child = new Border { ClipToBounds = true, CornerRadius = new CornerRadius(12), Child = body }, Name = "TimelineMeeting" + meeting.Id, Tag = meeting, Cursor = new Cursor(StandardCursorType.Hand), Selected = model.SelectedMeetingId == meeting.Id, Activate = _ => model.SelectMeeting(meeting.Id) };
                 card.Classes.Add("meetingCard");
                 card.Classes.Add("vfd"); card.BorderBrush = new SolidColorBrush(SoftTint.WithAlpha(glassQuiet, .9)); card.BorderThickness = new Thickness(1.2);
                 ToolTip.SetTip(card, model.Notes.Text(meeting) + "\n" + Hm(meeting.At) + "–" + Hm(meeting.End) + " · planned");

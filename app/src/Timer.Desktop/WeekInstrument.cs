@@ -5,6 +5,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
+using Avalonia.VisualTree;
 using Timer.Core;
 
 namespace Timer.Desktop;
@@ -49,24 +50,24 @@ public sealed class DisplaySkin(bool ink, bool dark, Color text, Color quiet, Co
     /// <summary>The height of the line a cell of this size stands for. E-ink type is taller than the segments it replaces, so layouts keep a little slack.</summary>
     public static double Line(double cell) => cell;
 
-    public double Width(string text, double cell) => Ink ? InkType.Width(text, RoleFor(cell)) : SegmentText.WidthOf(LowerDisplay.Drawable(text).Length, cell);
+    public double Width(string text, double cell, bool preserveCase = false) => Ink ? InkType.Width(text, RoleFor(cell), preserveCase) : SegmentText.WidthOf(LowerDisplay.Drawable(text).Length, cell);
     /// <summary>Draws <paramref name="text"/> with its top at <paramref name="top"/> and its cell height <paramref name="cell"/>; returns its width. Right and centre align about x.</summary>
-    public double Draw(DrawingContext c, string text, double x, double top, double cell, Color colour, bool ghosts = false, TextAlignment align = TextAlignment.Left)
+    public double Draw(DrawingContext c, string text, double x, double top, double cell, Color colour, bool ghosts = false, TextAlignment align = TextAlignment.Left, bool preserveCase = false)
     {
         if (string.IsNullOrEmpty(text)) return 0;
-        var width = Width(text, cell); var left = align == TextAlignment.Right ? x - width : align == TextAlignment.Center ? x - width / 2 : x;
+        var width = Width(text, cell, preserveCase); var left = align == TextAlignment.Right ? x - width : align == TextAlignment.Center ? x - width / 2 : x;
         if (Ink)
         {
-            var role = RoleFor(cell); InkType.Draw(c, text, role, new SolidColorBrush(colour), left, top + cell / 2 + role.Size * .365);
+            var role = RoleFor(cell); InkType.Draw(c, text, role, new SolidColorBrush(colour), left, top + cell / 2 + role.Size * .365, preserveCase: preserveCase);
         }
         else SegmentText.Draw(c, LowerDisplay.Drawable(text), left, top, cell, colour, ghosts);
         return width;
     }
     /// <summary>The longest start of <paramref name="text"/> that fits in <paramref name="room"/>, with an ellipsis in E-ink where it was cut.</summary>
-    public string Fit(string text, double cell, double room)
+    public string Fit(string text, double cell, double room, bool preserveCase = false)
     {
-        if (Width(text, cell) <= room) return text;
-        for (var n = text.Length - 1; n > 0; n--) { var cut = Ink ? text[..n].TrimEnd() + "…" : text[..n]; if (Width(cut, cell) <= room) return cut; }
+        if (Width(text, cell, preserveCase) <= room) return text;
+        for (var n = text.Length - 1; n > 0; n--) { var cut = Ink ? text[..n].TrimEnd() + "…" : text[..n]; if (Width(cut, cell, preserveCase) <= room) return cut; }
         return "";
     }
 
@@ -119,12 +120,16 @@ public sealed class WeekInstrument : Panel
     private const double Pad = 24, RowH = 30, DayH = 40, ScrollColumn = 4;
     private readonly TimerModel model; private readonly WeekFigures w; private readonly WeekTable grid; private readonly DisplaySkin skin;
     private readonly Surface surface; private readonly Canvas overlay = new();
-    private int scroll; private bool showQuiet; private string? pick;
+    private int scroll { get => model.WeekPresentation.Scroll; set => model.WeekPresentation.Scroll = value; }
+    private bool showQuiet { get => model.WeekPresentation.ShowQuiet; set => model.WeekPresentation.ShowQuiet = value; }
+    private string? pick { get => model.WeekPresentation.TracedAccount; set => model.WeekPresentation.TracedAccount = value; }
+    private readonly Dictionary<string, Button> zones = new();
+    private AccountCatalogue catalogue = null!;
     private static readonly CultureInfo British = CultureInfo.GetCultureInfo("en-GB");
 
     private sealed record Bar(DateTime From, DateTime To, string Account, bool Break);
     private sealed record DayLine(WeekDay Day, List<Bar> Bars, DateTime Origin);
-    private sealed record AccountLine(TimerAccount Account, TimeSpan Week, BudgetTableRow? Budget, double Elapsed, string Pace, TimeSpan[] PerDay);
+    private sealed record AccountLine(TimerAccount Account, TimeSpan Week, BudgetTableRow? Budget, double Elapsed, string Pace, TimeSpan[] PerDay, WeekTableRow? Table, string Description);
     private sealed record Row(AccountLine? Account, int Folded);
 
     private readonly List<DayLine> days = new(); private readonly List<AccountLine> accounts = new(); private List<Row> rows = new();
@@ -151,6 +156,7 @@ public sealed class WeekInstrument : Panel
     // ---- the data, gathered once per build
     private void Gather()
     {
+        var allAccounts = model.ReviewAccounts; catalogue = AccountCatalogue.Capture(model, allAccounts, patterns: skin.Ink);
         var engine = model.Engine; double lo = 24, hi = 0;
         foreach (var d in w.Days)
         {
@@ -165,19 +171,20 @@ public sealed class WeekInstrument : Panel
         axisFrom = lo >= hi ? 7 : Math.Floor(lo); axisTo = lo >= hi ? 19 : Math.Ceiling(hi);
         if (axisTo - axisFrom < 8) { var extra = (8 - (axisTo - axisFrom)) / 2; axisFrom = Math.Max(0, Math.Floor(axisFrom - extra)); axisTo = Math.Min(24, axisFrom + 8); }
         axisFrom = Math.Clamp(axisFrom, 0, 22); axisTo = Math.Clamp(axisTo, axisFrom + 2, 24);
-        foreach (var a in model.ReviewAccounts.Where(a => !BreakAccount.Is(a.Name)))
+        foreach (var a in allAccounts.Where(a => !BreakAccount.Is(a.Name)))
         {
             var perDay = Enumerable.Range(0, 7).Select(i => model.OnDay(a, w.Start.AddDays(i))).ToArray();
             var week = perDay.Aggregate(TimeSpan.Zero, (s, t) => s + t);
             var budget = a.Budget is not null ? grid.Budgets.FirstOrDefault(b => b.Account == a.Display) : null;
-            double elapsed = 0; var pace = "";
+            double elapsed = 0; var pace = ""; var description = "No budget";
             if (budget is not null && a.Budget is { } target)
             {
                 var reference = model.BudgetReference(w.Start); var used = model.BudgetUsedAt(a, reference); var (from, to) = model.BudgetWindowAt(a, reference);
                 elapsed = Math.Clamp((Min(model.Engine.Now, Min(w.Start.AddDays(7), to)) - from).TotalSeconds / Math.Max(1, (to - from).TotalSeconds), 0, 1);
                 pace = WeekOverview.PaceOf(used, target, elapsed, model.FormatShort);
+                description = AccountPresentation.BudgetDescription(model, a, used, reference);
             }
-            accounts.Add(new AccountLine(a, week, budget, elapsed, pace, perDay));
+            accounts.Add(new AccountLine(a, week, budget, elapsed, pace, perDay, grid.Rows.FirstOrDefault(r => r.Account == a.Name), description));
         }
         BuildRows();
     }
@@ -236,7 +243,7 @@ public sealed class WeekInstrument : Panel
     private Color Tone(string colour) { var c = Color.Parse(model.ChartColour(colour)); return skin.Pale ? Color.Parse(ThemeColours.Mix(ColorHex(c), "#10141B", .16)) : c; }
     private static string ColorHex(Color c) => $"#{c.R:X2}{c.G:X2}{c.B:X2}";
     private Color Account(AccountLine a) => Tone(a.Account.Colour);
-    private Color Account(string name) => Tone(model.ReviewAccounts.FirstOrDefault(a => a.Name == name)?.Colour ?? "#91B7D5");
+    private Color Account(string name) => Tone(catalogue.Find(name).Colour);
     private bool Dimmed(string account) => pick is not null && !account.Equals(pick, StringComparison.OrdinalIgnoreCase);
     private string Hm(TimeSpan t) => model.FormatShort(t);
 
@@ -279,6 +286,7 @@ public sealed class WeekInstrument : Panel
         // The foot: the two views.
         s.Rule(c, new Rect(f.L - 8, f.FootY - 10, f.R - f.L + 16, 1));
         s.Key(c, "Week", new Rect(f.L, f.FootY - 3, 70, 28), !Sheet); s.Key(c, "Timesheet", new Rect(f.L + 76, f.FootY - 3, 104, 28), Sheet);
+        if (pick is not null) s.Key(c, "Clear trace", new Rect(f.L + 200, f.FootY - 3, 110, 28), false);
     }
     private double ElapsedScheduled()
     {
@@ -348,12 +356,12 @@ public sealed class WeekInstrument : Panel
         {
             if (!dim && pick is not null) c.DrawRectangle(new SolidColorBrush(SoftTint.WithAlpha(s.Accent, .1)), null, new Rect(f.L - 10, ry - 3, f.R - f.L + 20, 28), 5, 5);
             var colour = Account(a);
-            s.Lit(c, colour, new Rect(f.L, ry + 3, s.Ink ? 14 : 4, 16), s.Ink ? 3 : 2, model.TextureOf(a.Account.Name), false);
+            s.Lit(c, colour, new Rect(f.L, ry + 3, s.Ink ? 14 : 4, 16), s.Ink ? 3 : 2, catalogue.Find(a.Account.Name).Pattern ?? 0, false);
             var nameX = f.L + (s.Ink ? 24 : 12);
-            s.Draw(c, s.Fit(a.Account.Display, 12, f.B0 - 12 - nameX), nameX, ry + 3, 12, s.Text);
+            s.Draw(c, s.Fit(a.Account.Display, 12, f.B0 - 12 - nameX, preserveCase: true), nameX, ry + 3, 12, s.Text, preserveCase: true);
             if (Sheet)
             {
-                for (var i = 0; i < days.Count; i++) { var v = a.PerDay[(int)(days[i].Day.Date - w.Start).TotalDays]; s.Draw(c, v > TimeSpan.Zero ? Hm(v) : "--", f.ColumnX[i] + 16, ry + 3, 12, v > TimeSpan.Zero ? s.Text : SoftTint.WithAlpha(s.Quiet, .5), v > TimeSpan.Zero); }
+                for (var i = 0; i < days.Count; i++) { var v = a.PerDay[(int)(days[i].Day.Date - w.Start).TotalDays]; var cell = Array.IndexOf(grid.Dates, days[i].Day.Date); var value = cell >= 0 && a.Table is { } table ? table.Cells[cell] : Hm(v); s.Draw(c, v > TimeSpan.Zero ? value : "--", f.ColumnX[i] + 16, ry + 3, 12, v > TimeSpan.Zero ? s.Text : SoftTint.WithAlpha(s.Quiet, .5), v > TimeSpan.Zero); }
             }
             else if (a.Budget is { } budget)
             {
@@ -361,7 +369,7 @@ public sealed class WeekInstrument : Panel
                 var tone = over ? s.Red : warn || ahead ? s.Amber : s.Text; const int n = 40; var cw = (f.B1 - f.B0) / n;
                 for (var q = 0; q < n; q++) { var r = new Rect(f.B0 + q * cw, ry + 6, cw - 2.5, 10); if ((q + .5) / n <= Math.Min(1, budget.Fraction)) s.Lit(c, tone, r, 1, 0, false); else s.Unlit(c, r, 1); }
                 var tick = f.B0 + (f.B1 - f.B0) * a.Elapsed; c.DrawLine(new Pen(new SolidColorBrush(SoftTint.WithAlpha(s.Live, .6)), 1.5), new Point(tick, ry + 1), new Point(tick, ry + 21));
-                var pct = Math.Round(budget.Fraction * 100) + "%"; var pctEnd = f.S + 56;
+                var pct = Math.Round(budget.Fraction * 100) + (s.Ink ? "%" : " pct"); var pctEnd = f.S + 56;
                 s.Draw(c, pct, pctEnd, ry + 5, 10, over ? s.Red : s.Text, align: TextAlignment.Right); s.Draw(c, a.Account.Period switch { "day" => "day", "month" => "month", "quarter" => "quarter", _ => "week" }, pctEnd + 7, ry + 6, 9, s.Quiet);
                 s.Badge(c, over ? "Over" : ahead ? "Ahead" : "On pace", f.S + 126, ry + 1, 72, over ? s.Red : s.Amber, over || ahead);
             }
@@ -369,20 +377,37 @@ public sealed class WeekInstrument : Panel
             {
                 s.Unlit(c, new Rect(f.B0, mid - 1, f.B1 - f.B0, 2), 1); s.Draw(c, "--", f.S + 56, ry + 6, 10, SoftTint.WithAlpha(s.Quiet, .6), align: TextAlignment.Right);
             }
-            s.Draw(c, Hm(a.Week), f.Fr, ry + 3, 13, a.Week > TimeSpan.Zero ? s.Text : SoftTint.WithAlpha(s.Quiet, .7), true, TextAlignment.Right);
+            s.Draw(c, a.Table?.Total is { } total && total != "–" ? total : Hm(a.Week), f.Fr, ry + 3, 13, a.Week > TimeSpan.Zero ? s.Text : SoftTint.WithAlpha(s.Quiet, .7), true, TextAlignment.Right);
         }
     }
 
     // ---- real buttons over the drawing, for the pointer, the keyboard and screen readers
     private void PlaceButtons()
     {
-        overlay.Children.Clear(); var size = surface.Bounds.Size; if (size.Width < 200 || size.Height < 200) return;
-        var f = Layout(size);
-        Button Zone(string name, Rect r, string label, Action click)
+        var size = surface.Bounds.Size; if (size.Width < 200 || size.Height < 200) return;
+        var f = Layout(size); var used = new HashSet<string>();
+        Button Zone(string name, Rect r, string label, Action click, bool? selected = null, string? identity = null, string? value = null)
         {
-            var b = new Button { Name = name, Width = Math.Max(1, r.Width), Height = Math.Max(1, r.Height), Background = Brushes.Transparent, BorderThickness = new Thickness(0), Padding = new Thickness(0), Cursor = new Cursor(StandardCursorType.Hand) };
-            b.Classes.Add("pillBare"); Avalonia.Automation.AutomationProperties.SetName(b, label); b.Click += (_, _) => click();
-            Canvas.SetLeft(b, r.X); Canvas.SetTop(b, r.Y); overlay.Children.Add(b); return b;
+            var key = identity ?? name; used.Add(key);
+            if (!zones.TryGetValue(key, out var b))
+            {
+                b = value is not null ? new ReadoutButton() : selected is not null ? new ModelToggleButton() : new Button();
+                b.Name = name; b.Background = Brushes.Transparent; b.BorderThickness = new Thickness(0); b.Padding = new Thickness(0); b.Cursor = new Cursor(StandardCursorType.Hand);
+                b.FocusAdorner = DisplayFocus.For(b);
+                b.Classes.Add("pillBare"); b.Click += (_, _) => ((Action)b.Tag!).Invoke(); zones[key] = b; overlay.Children.Add(b);
+            }
+            b.Tag = click; b.Width = Math.Max(1, r.Width); b.Height = Math.Max(1, r.Height);
+            b.TabIndex = used.Count; Avalonia.Automation.AutomationProperties.SetAutomationId(b, key);
+            Avalonia.Automation.AutomationProperties.SetName(b, label);
+            if (b is Avalonia.Controls.Primitives.ToggleButton toggle) toggle.IsChecked = selected == true;
+            if (b is ReadoutButton readout) readout.Value = value ?? "";
+            Canvas.SetLeft(b, r.X); Canvas.SetTop(b, r.Y); return b;
+        }
+        void Trace(string account) { pick = string.Equals(pick, account, StringComparison.OrdinalIgnoreCase) ? null : account; Refresh(); }
+        void Mode(bool sheet)
+        {
+            var root = TopLevel.GetTopLevel(this); model.SetWeekAsTable(sheet);
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => root?.GetVisualDescendants().OfType<Button>().FirstOrDefault(b => b.Name == (sheet ? "WeekKeySheet" : "WeekKeyWeek"))?.Focus(NavigationMethod.Tab), Avalonia.Threading.DispatcherPriority.Loaded);
         }
         if (!Sheet)
             for (var i = 0; i < days.Count; i++)
@@ -390,36 +415,49 @@ public sealed class WeekInstrument : Panel
                 var d = days[i].Day; var y = f.DayY[i];
                 var b = Zone("WeekDay_" + d.Date.ToString("yyyyMMdd"), new Rect(f.L - 10, y, f.R - f.L + 20, DayH), $"{d.Date.ToString("dddd d MMMM", British)}, {model.Format(d.Working)} working. Open in the Timeline", () => model.OpenDayInTimeline(d.Date));
                 ToolTip.SetTip(b, WeekOverview.DayTip(model, d, British));
-                // A press on a block picks its account (a second press lets go), as pressing the account's own row does; the rest of the day's row opens the day.
                 var line = days[i]; var n = 0;
                 foreach (var bar in line.Bars.Where(x => !x.Break))
                 {
                     var from = X(f, Math.Clamp((bar.From - line.Origin).TotalHours, axisFrom, axisTo)) + 1; var to = X(f, Math.Clamp((bar.To - line.Origin).TotalHours, axisFrom, axisTo)) - 1; if (to - from < 2) continue;
-                    var account = bar.Account; var shown = model.Label(account);
-                    var block = Zone($"WeekBlock_{d.Date:yyyyMMdd}_{n++}", new Rect(from, y + 6, to - from, 20), $"{shown}, {bar.From:HH:mm} to {bar.To:HH:mm}. Press to trace this account", () => { pick = pick == account ? null : account; Refresh(); });
+                    var account = bar.Account; var shown = catalogue.Find(account).DisplayName; var chosen = string.Equals(pick, account, StringComparison.OrdinalIgnoreCase);
+                    var block = Zone($"WeekBlock_{d.Date:yyyyMMdd}_{n++}", new Rect(from, y + 6, to - from, 20), $"{shown}, {bar.From:HH:mm} to {bar.To:HH:mm}. {(chosen ? "Clear trace" : "Trace account")}", () => Trace(account), chosen);
                     ToolTip.SetTip(block, $"{shown} · {bar.From:HH:mm}–{bar.To:HH:mm}");
                 }
             }
         else
             for (var i = 0; i < days.Count; i++)
             {
-                var d = days[i].Day;
-                Zone("WeekDay_" + d.Date.ToString("yyyyMMdd"), new Rect(f.ColumnX[i] + 8, f.DaysTop - 2, Math.Max(40, (f.B1 + 40 - f.B0) / Math.Max(1, days.Count) - 8), 22), $"{d.Date.ToString("dddd d MMMM", British)}. Open in the Timeline", () => model.OpenDayInTimeline(d.Date));
+                var d = days[i].Day; var width = Math.Max(40, (f.B1 + 40 - f.B0) / Math.Max(1, days.Count) - 8);
+                Zone("WeekDay_" + d.Date.ToString("yyyyMMdd"), new Rect(f.ColumnX[i] + 8, f.DaysTop - 2, width, 22), $"{d.Date.ToString("dddd d MMMM", British)}. Open in the Timeline", () => model.OpenDayInTimeline(d.Date));
+                Zone("TimesheetWorking_" + d.Date.ToString("yyyyMMdd"), new Rect(f.ColumnX[i] + 8, f.DayY[i] - 3, width, 28), $"Working time, {d.Date.ToString("dddd d MMMM", British)}, {model.Format(d.Working)}" + (d.Overlaps ? ", some blocks overlap" : ""), () => model.OpenDayInTimeline(d.Date), value: model.Format(d.Working));
             }
         var first = Math.Min(scroll, Math.Max(0, rows.Count - f.Capacity));
         for (var k = first; k < Math.Min(rows.Count, first + f.Capacity); k++)
         {
             var row = rows[k]; var ry = f.AccountsTop + (k - first) * RowH;
             if (row.Account is null) { Zone("WeekShowQuiet", new Rect(f.S + 126, ry + 3, 72, 20), (showQuiet ? "Hide" : "Show") + " the accounts with no time or budget", () => { showQuiet = !showQuiet; BuildRows(); Refresh(); }); continue; }
-            var a = row.Account; var name = a.Account.Name;
-            var z = Zone("WeekAccount_" + name.Replace(" ", ""), new Rect(f.L - 10, ry - 3, f.S - f.L - 12, 28), $"{a.Account.Display}, {Hm(a.Week)} this week. Press to trace its blocks", () => { pick = pick == name ? null : name; Refresh(); });
-            if (a.Budget is { } budget)
-            {
-                var pct = w.Working > TimeSpan.Zero ? $"\n{Math.Round(a.Week.TotalSeconds / w.Working.TotalSeconds * 100):0}% of the week" : "";
-                ToolTip.SetTip(z, $"{budget.Used} of {budget.Budget} · {a.Pace}" + pct);
-            }
+            var a = row.Account; var name = a.Account.Name; var chosen = string.Equals(pick, name, StringComparison.OrdinalIgnoreCase);
+            var summary = a.Table?.CopyTotal ?? model.Format(a.Week);
+            var budgetWords = a.Description;
+            var z = Zone("WeekAccount_" + name.Replace(" ", ""), new Rect(f.L - 10, ry - 3, Sheet ? f.B0 - f.L - 10 : f.S - f.L - 12, 28), $"{catalogue.Find(name).DisplayName}, {summary} week of {w.Start.ToString("d MMM", British)}. {budgetWords}. {(chosen ? "Clear trace" : "Trace account")}", () => Trace(name), chosen, "account:" + name);
+            if (a.Budget is { } budget) ToolTip.SetTip(z, $"{budget.Used} of {budget.Budget} · {budget.Period} · {a.Pace}");
+            if (Sheet)
+                for (var i = 0; i < days.Count; i++)
+                {
+                    var date = days[i].Day.Date; var at = Array.IndexOf(grid.Dates, date);
+                    var value = at >= 0 && a.Table is { } table ? table.CopyCells[at] : model.Format(a.PerDay[(int)(date - w.Start).TotalDays]);
+                    var width = Math.Max(40, (f.B1 + 40 - f.B0) / Math.Max(1, days.Count) - 8);
+                    Zone($"TimesheetCell_{name.Replace(" ", "")}_{date:yyyyMMdd}", new Rect(f.ColumnX[i] + 8, ry - 3, width, 28), $"{a.Account.Display}, {date.ToString("dddd d MMMM", British)}, {value}", () => model.OpenDayInTimeline(date), identity: $"cell:{name}:{date:yyyyMMdd}", value: value);
+                }
         }
-        var keyWeek = Zone("WeekKeyWeek", new Rect(f.L, f.FootY - 3, 70, 28), "Week", () => model.SetWeekAsTable(false));
-        var keySheet = Zone("WeekKeySheet", new Rect(f.L + 76, f.FootY - 3, 104, 28), "Timesheet", () => model.SetWeekAsTable(true));
+        Zone("WeekKeyWeek", new Rect(f.L, f.FootY - 3, 70, 28), "Week", () => Mode(false), !Sheet);
+        Zone("WeekKeySheet", new Rect(f.L + 76, f.FootY - 3, 104, 28), "Timesheet", () => Mode(true), Sheet);
+        if (pick is not null) Zone("WeekClearTrace", new Rect(f.L + 200, f.FootY - 3, 110, 28), "Clear account trace", () =>
+        {
+            var previous = pick; pick = null; Refresh();
+            if (previous is not null && zones.TryGetValue("account:" + previous, out var row)) row.Focus(NavigationMethod.Tab);
+            else if (zones.TryGetValue("WeekKeyWeek", out var week)) week.Focus(NavigationMethod.Tab);
+        });
+        foreach (var stale in zones.Keys.Where(key => !used.Contains(key)).ToArray()) { overlay.Children.Remove(zones[stale]); zones.Remove(stale); }
     }
 }

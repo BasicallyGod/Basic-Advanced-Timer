@@ -251,7 +251,7 @@ public sealed class DisplayInkTests
             var run = pill.GetVisualDescendants().OfType<SegmentName>().Single();
             Assert.Equal(StatusFace.NameZone, run.Width, 1); // The whole box, not six whole cells.
             run.Text = "A very long account name indeed";
-            Assert.True(run.Scrolling); run.Step(1500); Assert.Equal(0, run.InkOffset); // A rest at the start first,
+            Assert.True(run.Scrolling); run.Step(1400); Assert.Equal(0, run.InkOffset); // A rest at the start first,
             run.Step(100); Assert.InRange(run.InkOffset, 1, SegmentName.CellWidth - 1); // then a slide in pixels, not a jump of a cell.
             model.SetDisplayStyle(DisplayStyle.Phosphor); Dispatcher.UIThread.RunJobs();
             Assert.Equal(SegmentName.Cells * SegmentName.CellWidth + SegmentName.CellHeight * SegmentName.Slant, run.Width, 1); // Phosphor goes back to its cells.

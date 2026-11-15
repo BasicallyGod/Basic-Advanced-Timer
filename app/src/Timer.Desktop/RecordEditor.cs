@@ -19,8 +19,8 @@ public sealed class RecordEditor : Grid
     private DraftLease? lease;
     private readonly Func<DraftLease> reopen;
     private readonly ViewActivity activity;
-    private IReadOnlyList<TimerAccount>? accountCatalogue;
-    private IReadOnlyList<TimerAccount> Accounts => accountCatalogue ??= model.ReviewAccounts;
+    private AccountCatalogue? accountCatalogue;
+    private IReadOnlyList<AccountPresentation> Accounts => (accountCatalogue ??= AccountCatalogue.Capture(model)).Items;
     private TextBox? lastTextFocus;
     private readonly bool inline;
     private readonly Action? close;
@@ -77,7 +77,7 @@ public sealed class RecordEditor : Grid
         GotFocus += (_, e) => { if (e.Source is TextBox box) lastTextFocus = box; };
         var options = new WrapPanel { Orientation = Orientation.Horizontal, ItemSpacing = 10, LineSpacing = 10 };
         account = new ChoiceStrip { Name = inline ? "PageAccount" : Draft.Kind == DraftKind.Note ? "DetailsNoteAccount" : Draft.Kind == DraftKind.Meeting ? "DetailsMeetingAccount" : "SelectedAccount", Look = ChoiceLook.Dropdown, AccessibleName = "Account", Width = 170,
-            DotFor = a => Accounts.FirstOrDefault(x => x.Name.Equals(BreakAccount.Stored(a), StringComparison.OrdinalIgnoreCase)) is { } found ? Ui.Visible(found.Colour) : null };
+            DotFor = a => Accounts.FirstOrDefault(x => x.Key.Equals(BreakAccount.Stored(a), StringComparison.OrdinalIgnoreCase)) is { } found ? Ui.Visible(found.Colour) : null };
         AddField(options, DraftField.Account, "Account", account);
         account.SelectionChanged += (_, _) => { if (!settling) Change(Draft.Values with { Account = account.SelectedItem is string a && a != "No account" ? BreakAccount.Stored(a) : null }); };
         if (Draft.Kind == DraftKind.Block) account.Width = 140;
@@ -192,7 +192,7 @@ public sealed class RecordEditor : Grid
                 if (v.Length is { } invalid) Text(length, invalid);
                 else if (TimeText.TryParseClock(v.Start, v.Day, false, out var from) && TimeText.TryParseClockAfter(v.End, from, true, true, out var until)) length.SetDuration(until - from);
             }
-            var names = Accounts.Where(a => Draft.Kind == DraftKind.Block || !BreakAccount.Is(a.Name)).Select(a => BreakAccount.Display(a.Name)).ToList();
+            var names = Accounts.Where(a => Draft.Kind == DraftKind.Block || !BreakAccount.Is(a.Key)).Select(a => a.DisplayName).ToList();
             if (Draft.Kind != DraftKind.Block) names.Insert(0, "No account");
             var chosen = v.Account is null ? "No account" : BreakAccount.Display(v.Account); if (!names.Contains(chosen)) names.Add(chosen);
             if (!(account.ItemsSource ?? Array.Empty<string>()).SequenceEqual(names)) account.ItemsSource = names;
