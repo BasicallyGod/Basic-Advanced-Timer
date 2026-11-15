@@ -55,3 +55,16 @@ Copy report includes expected and actual native dimensions in pixels and the res
 - In Light/Dark, focus and resize ordinary, short/narrow, multiline and borderless text fields. There should be no blue focus boundary, no geometry jump, and no inset shadow outside the field. The Timeline card's inline note editor should rely on its enclosing form rather than drawing a second shadow inside it.
 - Check the Timeline's left/right edge shading: narrower and lighter, without changing scrolling, selection or block editing. With nothing selected, Details should contain just a short prompt.
 - Keyboard ownership, ordinary removal Undo/storage retries, visible budget periods and direct week copy/export from Alpha 639 are retained. Spot-check those workflows alongside expansion/collapse. Intermittent dispatcher stalls remain a separate investigation.
+
+## E-ink display style (Windows checks)
+
+The look is built and tested headless (pictures are written into `TIMER_PREVIEW_DIR` by `DisplayInkTests.PicturesOfTheWeekAndTimelineInBothLooks`), but none of it has been looked at on real Windows. Check, with Settings, Look, Display style set to E-ink and the Effect at 60, 0 and 100:
+
+- **Speckle and dot matrix at 100, 125, 150 and 200 per cent display scale, Light and Dark.** Letters should keep their shape (the speckle is a tiled mask over normal type, not a bitmap of the letters; if it blurs, fall back to per-string bitmaps as `docs/design/eink-display-plan.md` describes). The account name is GNU Unifont's 8 by 16 dots at 1.69 pixels a dot, bold: check no dot lands half a pixel off and the six cells read at the pill's size.
+- **Windows high contrast and the contrast tests in practice:** ink on paper, quiet words, the green, amber and red of the status colours and the keys' outlines.
+- **The pill:** the clock's 30 pixel type and the two digit alert count never change width; the pill is a little wider in E-ink than in Phosphor (type is wider than segments), and the window follows when the look is changed in Settings while the pill is showing. The play and break keys are 34 by 16 in E-ink (the plan's 44 by 20 was not built; look at whether they are big enough to press). The compact pill now keeps both keys in both looks: check its width and that Reset position and a screen change still size it correctly.
+- **The tall pill:** Budgets are gone, the bat is Phosphor-only, and a saved `pilllower=budgets` or (in E-ink) `pilllower=bat` shows the day strip. Press the lower display through its cycle in both looks; in E-ink the change is two steps, and with Windows' animations off it is instant.
+- **The timeline and Week page:** blocks with textures, plated words, the recording block's inset green ring, the selection ring, reminder tags and the ruler readout; the Week instrument's accounts folding, scrolling by rows with the wheel, tracing an account, and Week and Timesheet keys. Compare the frame monitor (Settings, About, Development) on the Timeline and Week pages in E-ink against Phosphor: grain over every block should cost little, but measure it.
+- **Phosphor Dark's bright CRT account colours** and the pale Week display in Phosphor Light.
+- Reduced motion: the ticker, the name scroller and the lower display's change stand still or jump.
+- **Seasonal decorations** on the wider E-ink pill and the new compact pill.

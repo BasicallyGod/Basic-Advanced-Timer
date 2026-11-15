@@ -109,7 +109,13 @@ internal readonly struct PhosphorBloom
 /// <summary>Play, pause and break badges drawn through the display's shared honeycomb and bloom.</summary>
 public abstract class VfdGlyph : SteppedControl
 {
-    public const double BadgeWidth = 30, BadgeHeight = 14, StrokeWidth = 1.4, BadgeRadius = 3.5;
+    public const double BadgeWidth = 30, BadgeHeight = 14, StrokeWidth = 1.4, BadgeRadius = 3.5, InkKeyWidth = 34, InkKeyHeight = 16;
+    /// <summary>E-ink keys: a rounded outline in the key's colour, 1.5 pixels, with its symbol or word in normal type.</summary>
+    protected void InkOutline(DrawingContext context, double alpha, bool filled = false)
+    {
+        var rect = new Rect(0, 0, Bounds.Width, Bounds.Height).Deflate(.75); var brush = new SolidColorBrush(SoftTint.WithAlpha(Colour, alpha));
+        context.DrawRectangle(filled ? new SolidColorBrush(SoftTint.WithAlpha(Colour, .16)) : null, new Pen(brush, 1.5), rect, 5, 5);
+    }
     private Color colour = Colors.Green;
     public Color Colour
     {
@@ -167,6 +173,13 @@ internal sealed class AlertBellGlyph : Control
     public override void Render(DrawingContext context)
     {
         var scale = Matrix.CreateScale(.5, .5);
+        if (DisplayInk.On)
+        {
+            // E-ink: a plain outline, firm when alerts are waiting and quiet when none are; no bloom, no mesh.
+            var ink = new Pen(new SolidColorBrush(lit ? colour : SoftTint.WithAlpha(colour, .6)), IconGlyph.StrokeWidth * 1.15, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
+            using (context.PushTransform(scale)) context.DrawGeometry(null, ink, IconGlyph.BellOutline);
+            return;
+        }
         if (lit)
         {
             var bloom = new PhosphorBloom(colour, IconGlyph.StrokeWidth, SoftTint.IsDark(this) ? 1 : .45);
@@ -204,7 +217,9 @@ public sealed class TransportGlyph : VfdGlyph
     public bool Paused => pause;
     /// <summary>0 with the triangle showing, 1 with the bars, and between while one fades into the other.</summary>
     public double Progress => progress;
-    public TransportGlyph() { Width = BadgeWidth; Height = BadgeHeight; }
+    public TransportGlyph() { }
+    /// <summary>The Phosphor badge is 30 by 14; the E-ink key is 34 by 16, so its word and symbol have room in normal type.</summary>
+    protected override Size MeasureOverride(Size availableSize) => DisplayInk.On ? new Size(InkKeyWidth, InkKeyHeight) : new Size(BadgeWidth, BadgeHeight);
     /// <summary>Shows the pause bars (true) or the play triangle (false), fading between them unless <paramref name="instant"/>.</summary>
     public void Show(bool pauseBars, bool instant)
     {
@@ -217,10 +232,18 @@ public sealed class TransportGlyph : VfdGlyph
     protected override void Advance(double milliseconds) { var step = milliseconds / WipeMilliseconds; progress = pause ? Math.Min(1, progress + step) : Math.Max(0, progress - step); }
     public override void Render(DrawingContext context)
     {
+        if (DisplayInk.On)
+        {
+            InkOutline(context, 1);
+            double cx = Bounds.Width / 2, cy = Bounds.Height / 2;
+            var play = Fill((cx - 3, cy - 4), (cx + 4, cy), (cx - 3, cy + 4)); var pauseBars = Build(c => { foreach (var x in new[] { cx - 4.2, cx + 1.2 }) { c.BeginFigure(new Point(x, cy - 4), true); c.LineTo(new Point(x + 3, cy - 4)); c.LineTo(new Point(x + 3, cy + 4)); c.LineTo(new Point(x, cy + 4)); c.EndFigure(true); } });
+            Ink(context, play, 0, 1 - progress, true); Ink(context, pauseBars, 0, progress, true);
+            return;
+        }
         Bloom(context, BadgeOutline, StrokeWidth, 1);
         Bloom(context, Triangle, 0, 1 - progress, true);
         Bloom(context, Bars, 0, progress, true);
-        using (Honeycomb.Meshed(context, new Rect(0, 0, Width, Height)))
+        using (Honeycomb.Meshed(context, new Rect(0, 0, BadgeWidth, BadgeHeight)))
         {
             Ink(context, BadgeOutline, StrokeWidth, 1);
             Ink(context, Triangle, 0, 1 - progress, true);
@@ -243,7 +266,8 @@ public sealed class BreakBadgeGlyph : VfdGlyph
     });
     public bool Highlighted { get; private set; }
     public double Lit { get; private set; }
-    public BreakBadgeGlyph() { Width = BadgeWidth; Height = BadgeHeight; }
+    public BreakBadgeGlyph() { }
+    protected override Size MeasureOverride(Size availableSize) => DisplayInk.On ? new Size(InkKeyWidth, InkKeyHeight) : new Size(BadgeWidth, BadgeHeight);
 
     public void Show(bool highlighted, bool instant)
     {
@@ -266,12 +290,21 @@ public sealed class BreakBadgeGlyph : VfdGlyph
     {
         const double idleStrength = .62;
         var strength = idleStrength + (1 - idleStrength) * Lit;
+        if (DisplayInk.On)
+        {
+            // The word in normal type in a box; amber and a little filled while a break is on, hovered or focused, muted at rest.
+            InkOutline(context, strength, Lit > .5);
+            var role = new InkRole(11, FontWeight.SemiBold);
+            InkType.Draw(context, "Break", role, new SolidColorBrush(SoftTint.WithAlpha(Colour, Math.Min(1, strength + .2))), Bounds.Width / 2, Bounds.Height / 2 + role.Size * .365, TextAlignment.Center);
+            return;
+        }
         var label = Label.Value;
-        var shift = Matrix.CreateTranslation(Width / 2 - label.Bounds.Center.X, Height / 2 - label.Bounds.Center.Y);
+        // The badge is 30 by 14 (a little more room round it in the key), so the label is centred on the badge, not on the control.
+        var shift = Matrix.CreateTranslation(BadgeWidth / 2 - label.Bounds.Center.X, BadgeHeight / 2 - label.Bounds.Center.Y);
         Bloom(context, BadgeOutline, StrokeWidth, strength);
         using (context.PushTransform(shift))
             Bloom(context, label, 0, strength, true);
-        using (Honeycomb.Meshed(context, new Rect(0, 0, Width, Height)))
+        using (Honeycomb.Meshed(context, new Rect(0, 0, BadgeWidth, BadgeHeight)))
         {
             Ink(context, BadgeOutline, StrokeWidth, strength);
             using (context.PushTransform(shift))
@@ -319,7 +352,9 @@ public sealed class SegmentName : SteppedControl
         return text.Length < 2 || drawn * 2 < seen ? null : text;
     }
     /// <summary>What the display shows for an account: its normalised name, or ACCT and its number when it can't be drawn.</summary>
-    public static string ForAccount(string name, int number) => Normalise(name) ?? "ACCT " + (number + 1).ToString("00");
+    public static string ForAccount(string name, int number) => DisplayInk.On
+        ? DotFont.Normalise(name) ?? "Acct " + (number + 1).ToString("00")
+        : Normalise(name) ?? "ACCT " + (number + 1).ToString("00");
 
     private string text = "";
     private const string ScrollGap = "   ";
@@ -355,7 +390,8 @@ public sealed class SegmentName : SteppedControl
         VisibleCells = cells;
         ribbon = new string(' ', cells);
         Width = cells * CellWidth + CellHeight * Slant;
-        Height = CellHeight;
+        Height = InkHeight; // tall enough for E-ink's 16 dot rows; the segment name is drawn in the middle of it
+        VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
         IsHitTestVisible = false;
     }
     protected override bool Animating => Overflows && !Motion.Reduced;
@@ -368,8 +404,29 @@ public sealed class SegmentName : SteppedControl
         stepClock %= StepMilliseconds;
         offset = (int)((offset + steps) % (text.Length + ScrollGap.Length));
     }
+    /// <summary>E-ink's name is 16 dot rows at <see cref="DotPitch"/>: a dot is a little under its pitch, and a bold letter lights each dot's right neighbour too.</summary>
+    public const double DotPitch = CellWidth / 8, InkHeight = 16 * CellWidth / 8 + 1;
+    private void RenderDots(DrawingContext context)
+    {
+        var brush = new SolidColorBrush(Colour); var size = DotPitch * .86;
+        var shown = VisibleText;
+        for (var i = 0; i < VisibleCells; i++)
+        {
+            if (DotFont.Rows(shown[i]) is not { } rows) continue;
+            for (var row = 0; row < DotFont.Height; row++)
+            {
+                var bits = rows[row] | rows[row] >> 1; // bold: the stroke doubled
+                if (bits == 0) continue;
+                for (var col = 0; col < DotFont.Width; col++)
+                    if ((bits >> (DotFont.Width - 1 - col) & 1) != 0)
+                        context.DrawRectangle(brush, null, new Rect(i * CellWidth + col * DotPitch, .5 + row * DotPitch, size, size), size * .3, size * .3);
+            }
+        }
+    }
     public override void Render(DrawingContext context)
     {
+        if (DisplayInk.On) { RenderDots(context); return; }
+        using var centred = context.PushTransform(Matrix.CreateTranslation(0, (InkHeight - CellHeight) / 2));
         var ink = Ui.ThemeColour(this, "Ink", Colors.Gray);
         var unlit = new Pen(new SolidColorBrush(SoftTint.WithAlpha(ink, .09)), Thickness, lineCap: PenLineCap.Round);
         var lit = new Pen(new SolidColorBrush(Colour), Thickness, lineCap: PenLineCap.Round);

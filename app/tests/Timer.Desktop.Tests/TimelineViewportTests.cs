@@ -36,14 +36,14 @@ public sealed class TimelineViewportTests
         {
             var scroll = Find<ScrollViewer>(window, "TimelineScroll");
             var card = Find<Border>(window, "TimelineEntry0"); var originalLeft = Canvas.GetLeft(card); var originalWidth = card.Width;
-            var label = Find<TextBlock>(window, "TimelineHour_10");
+            var label = Find<SegmentText>(window, "TimelineHour_10");
             // Scroll until the 10:00 label is cut by the left edge: its centre, where the block starts, is just outside.
             scroll.Offset = new Vector(Canvas.GetLeft(label) + label.Bounds.Width * .75, 0); Settle(window);
             Assert.True(label.TranslatePoint(default, scroll)!.Value.X >= 0);
             Assert.True(((TranslateTransform)label.RenderTransform!).X > 0);
             Assert.Equal(originalLeft, Canvas.GetLeft(card)); Assert.Equal(originalWidth, card.Width);
             Assert.True(card.TranslatePoint(default, scroll)!.Value.X < 0); // The block is clipped, not shifted along with the label.
-            label = Find<TextBlock>(window, "TimelineHour_12");
+            label = Find<SegmentText>(window, "TimelineHour_12");
             scroll.Offset = new Vector(Canvas.GetLeft(label) - scroll.Viewport.Width + label.Bounds.Width / 4, 0); Settle(window);
             var right = label.TranslatePoint(new Point(label.Bounds.Width, 0), scroll)!.Value.X;
             Assert.True(right <= scroll.Viewport.Width);

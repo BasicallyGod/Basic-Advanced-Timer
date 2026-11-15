@@ -290,6 +290,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         // Only Light and Dark are offered now, so a saved choice of a retired theme or one of the user's own becomes Light or Dark (the theme stays in the file).
         this.preferences = this.preferences with { Theme = AppThemes.Resolve(this.preferences.Theme, this.preferences.Themes) };
         ApplyTheme(); Ui.ApplyTooltips(this.preferences.Tooltips);
+        DisplayInk.Style = DisplayStyle; DisplayInk.Percent = InkPercent;
         // When the computer switches between light and dark, System follows it.
         if (Application.Current?.PlatformSettings is { } platform)
             platform.ColorValuesChanged += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(() => { appliedVariant = null; Notify(); });
@@ -528,6 +529,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         {
             if (noticeUndo is not null) Notice = null; // A removed item's old account tag must not be restored after relinking.
             Notes.Relink(preferences.Accounts.Select(a => a.Name), renames, deleted);
+            FollowTextures(renamed.Select(r => (r.Key, r.Value)).ToList(), deleted); // an account keeps its E-ink texture through a rename
         }
         if (renamed.Count > 0)
         {
@@ -677,7 +679,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     public bool MoveEntries(IReadOnlyList<SessionRow> rows, string account)
         => ChangeLog(() => KeepingSelection(rows, () => { ValidateAccount(account); Editor.Reassign(rows, account); }));
     /// <summary>The colour for an account's slice in a chart or its legend dot. A dark theme tints its blocks down into the surface, which makes thin slices vanish, so charts there use the account's own colour (the block's edge).</summary>
-    public string ChartColour(string accountColour) => AccountTones.Chart(Ui.Visible(accountColour), CurrentTheme.Dark);
+    public string ChartColour(string accountColour) => CurrentTheme.Dark && !DisplayInk.On ? AccountTones.Crt(accountColour) : AccountTones.Chart(Ui.Visible(accountColour), CurrentTheme.Dark);
     /// <summary>The fill, left edge and text colour of a timeline block for an account colour, by the selected theme's block rules.</summary>
     /// <summary>How a block of this account is drawn: a livelier, deeper shade of its colour that holds white words (or a bright one with dark words for a pale yellow), and a deeper edge.</summary>
     public ThemeDerivation.BlockLook BlockLook(string accountColour)
@@ -685,8 +687,8 @@ public sealed class TimerModel : INotifyPropertyChanged
         var (fill, ink) = AccountTones.Vivid(Ui.Visible(accountColour));
         return new ThemeDerivation.BlockLook(fill, ThemeColours.Mix(fill, "#000000", .2), ink);
     }
-    /// <summary>The timeline is dark glass in both looks, so everything drawn in code on it reads its colours from the Dark theme whatever the page wears.</summary>
-    public ThemeDefinition GlassTheme => AppThemes.Dark;
+    /// <summary>The timeline is dark glass in Phosphor, so everything drawn in code on it reads its colours from the Dark theme whatever the page wears; in E-ink it is the theme's own paper.</summary>
+    public ThemeDefinition GlassTheme => DisplayInk.On ? (CurrentTheme.Dark ? AppThemes.Dark : AppThemes.Light) : AppThemes.Dark;
     public void SetTheme(string theme)
     {
         if (theme != ThemeLibrary.System && theme != AppThemes.Sun && Themes.All(t => t.Name != theme)) throw new ArgumentException("Unknown theme", nameof(theme));
@@ -1091,14 +1093,46 @@ public sealed class TimerModel : INotifyPropertyChanged
         SetAppearanceFlag(TallPillLine, on ? "on" : null, true); Notify(PresentationChange);
     }
     /// <summary>What the tall pill's lower display shows. Pressing it steps to the next; saved as pilllower=strip and so on (the day strip has no line).</summary>
-    public PillLower PillLower => Enum.TryParse<PillLower>(AppearanceValue(PillLowerLine), true, out var shown) && Enum.IsDefined(shown) ? shown : PillLower.Strip;
+    // A saved budgets (gone) or, in E-ink, bat (Phosphor's alone) falls back to the day strip.
+    public PillLower PillLower => LowerDisplay.Available(Enum.TryParse<PillLower>(AppearanceValue(PillLowerLine), true, out var shown) && Enum.IsDefined(shown) ? shown : PillLower.Strip);
     public void SetPillLower(PillLower shown) { if (shown == PillLower) return; SetAppearanceFlag(PillLowerLine, shown == PillLower.Strip ? null : shown.ToString().ToLowerInvariant(), true); Notify(PresentationChange); }
-    public void CyclePillLower() { var all = Enum.GetValues<PillLower>(); SetPillLower(all[(Array.IndexOf(all, PillLower) + 1) % all.Length]); }
-    // ---- the display look for the timeline and the week
-    private const string DisplayTimelineLine = "displaytimeline=";
-    /// <summary>Whether the timeline (and later the week) is drawn as the pill's vacuum-fluorescent display. Off until chosen, saved as displaytimeline=on.</summary>
-    public bool DisplayTimeline => AppearanceValue(DisplayTimelineLine) == "on";
-    public void SetDisplayTimeline(bool on) { if (on == DisplayTimeline) return; SetAppearanceFlag(DisplayTimelineLine, on ? "on" : null, true); Notify(); }
+    public void CyclePillLower() { var all = LowerDisplay.Cycle; SetPillLower(all[(all.ToList().IndexOf(PillLower) + 1) % all.Count]); }
+    // A saved displaytimeline= line is ignored and left alone: the display look is the only one now.
+    // ---- the display style: Phosphor (the vacuum-fluorescent look) or E-ink (normal type, grain, calm motion), for the whole application
+    private const string DisplayStyleLine = "displaystyle=", InkStrengthLine = "inkstrength=", TexturesLine = "textures=";
+    /// <summary>Which look every display wears. Saved as displaystyle=ink; Phosphor, the original, has no line.</summary>
+    public DisplayStyle DisplayStyle => AppearanceValue(DisplayStyleLine) == "ink" ? DisplayStyle.Ink : DisplayStyle.Phosphor;
+    /// <summary>How strong the e-ink effect is, 0 to 100 in steps of ten (60 until chosen). Saved as inkstrength=NN.</summary>
+    public int InkPercent => int.TryParse(AppearanceValue(InkStrengthLine), NumberStyles.Integer, CultureInfo.InvariantCulture, out var p) ? Math.Clamp((int)Math.Round(p / 10.0) * 10, 0, 100) : DisplayInk.DefaultPercent;
+    public void SetDisplayStyle(DisplayStyle style) { if (style == DisplayStyle) return; SetAppearanceFlag(DisplayStyleLine, style == DisplayStyle.Ink ? "ink" : null, true); ApplyDisplayInk(); Notify(); }
+    public void SetInkPercent(int percent) { percent = Math.Clamp((int)Math.Round(percent / 10.0) * 10, 0, 100); if (percent == InkPercent) return; SetAppearanceFlag(InkStrengthLine, percent == DisplayInk.DefaultPercent ? null : percent.ToString(CultureInfo.InvariantCulture), true); ApplyDisplayInk(); Notify(); }
+    // The drawing code reads the style and strength from DisplayInk, so they are pushed there, and the theme's resources (the display well and its edge) are written again.
+    private void ApplyDisplayInk() { DisplayInk.Style = DisplayStyle; DisplayInk.Percent = InkPercent; if (Application.Current is { } app && Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) ThemeEngine.Register(app, AppThemes.BuiltIn); }
+    /// <summary>
+    /// The texture drawn over an account's colour in E-ink (0 to 5: plain, diagonal, dots, lines, the other diagonal, cross-hatch). One is given the first time an account is seen and
+    /// then saved with the appearance lines (textures=name:n;...), so reordering the list never changes it; a rename or a delete is followed in <see cref="SetAccounts"/>.
+    /// </summary>
+    public int TextureOf(string account)
+    {
+        var map = Textures(); if (map.TryGetValue(account, out var known)) return known;
+        var used = map.Values.ToHashSet(); var next = Enumerable.Range(0, DisplayInk.TextureCount).FirstOrDefault(n => !used.Contains(n), map.Count % DisplayInk.TextureCount);
+        map[account] = next; SaveTextures(map); return next;
+    }
+    private Dictionary<string, int> Textures()
+    {
+        var map = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var pair in (AppearanceValue(TexturesLine) ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries))
+            if (pair.Split(':') is [var name, var n] && int.TryParse(n, out var number)) map[Uri.UnescapeDataString(name)] = Math.Abs(number) % DisplayInk.TextureCount;
+        return map;
+    }
+    private void SaveTextures(Dictionary<string, int> map) => SetAppearanceFlag(TexturesLine, string.Join(';', map.Select(p => Uri.EscapeDataString(p.Key) + ":" + p.Value)), true);
+    private void FollowTextures(IReadOnlyList<(string From, string To)> renames, IEnumerable<string> deleted)
+    {
+        var map = Textures(); var changed = false;
+        foreach (var (from, to) in renames) if (map.Remove(from, out var n)) { map[to] = n; changed = true; }
+        foreach (var gone in deleted) changed |= map.Remove(gone);
+        if (changed) SaveTextures(map);
+    }
     // ---- seasonal decorations: a wreath and lights round the pill on holidays
     private const string SeasonalLine = "seasonal=";
     /// <summary>Whether seasonal decorations are allowed. Off until chosen, saved as the appearance line seasonal=on; each season then shows only within its own dates.</summary>

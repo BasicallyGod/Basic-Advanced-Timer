@@ -369,13 +369,13 @@ public sealed class PillWindow : Window
         if (model.IsTracking || chosen) model.TogglePause(); else ShowPanel();
     }
     /// <summary>The shape the card was last built for (compact, tall, and the tall pill's lower height), so a change in Settings or a press on the lower display is applied once.</summary>
-    private (bool Compact, bool Tall, double Height) ShapeApplied;
-    private (bool, bool, double) Shape => (model.CompactPill, model.TallPill, CardHeight);
+    private (bool Compact, bool Tall, double Height, double Width) ShapeApplied;
+    private (bool, bool, double, double) Shape => (model.CompactPill, model.TallPill, CardHeight, CardWidth);
     /// <summary>Switches the card between the full, compact (only the display) and tall pills, and brings the window to the new size. The window grows downward,
     /// so the clock stays where it was.</summary>
     private void ApplyShape()
     {
-        var resized = ShapeApplied.Compact != model.CompactPill || ShapeApplied.Tall != model.TallPill;
+        var resized = ShapeApplied.Compact != model.CompactPill || ShapeApplied.Tall != model.TallPill || ShapeApplied.Width != CardWidth; // a new look can be a little wider
         ShapeApplied = Shape; face.SetCompact(model.CompactPill); face.SetTall(model.TallPill);
         surface.Width = CardWidth; surface.Height = CardHeight; if (resized) CloseFlyouts(); EnsureSize();
     }

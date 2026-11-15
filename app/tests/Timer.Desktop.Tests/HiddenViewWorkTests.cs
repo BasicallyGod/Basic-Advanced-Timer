@@ -66,7 +66,7 @@ public sealed class HiddenViewWorkTests
         var window = new DashboardWindow(model); window.Show(); Dispatcher.UIThread.RunJobs();
         try
         {
-            var chip = Find<Border>(window, "NowChip"); var text = (TextBlock)chip.Child!;
+            var chip = Find<Border>(window, "NowChip"); var text = (SegmentText)chip.Child!;
             Assert.Equal("14:15", text.Text);
             window.Hide(); now = now.AddHours(1); window.Show();
             Assert.Equal("15:15", text.Text);

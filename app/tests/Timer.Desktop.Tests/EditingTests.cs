@@ -332,7 +332,8 @@ public sealed class EditingTests
         {
             Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
             var cards = window.GetVisualDescendants().OfType<Border>().Where(b => b.Tag is SessionRow).OrderBy(b => Canvas.GetLeft(b)).ToList();
-            Assert.NotEqual(Avalonia.Media.Color.Parse("#102030"), ((Avalonia.Media.LinearGradientBrush)cards[0].Background!).GradientStops[0].Color); // A very dark colour is lifted a little so it shows.
+            var fill = cards[0].GetVisualDescendants().OfType<Border>().First(b => b.Name == "BlockPhosphor");
+            Assert.NotEqual(Avalonia.Media.Color.Parse("#102030"), ((Avalonia.Media.ISolidColorBrush)fill.Background!).Color); // A very dark colour is lifted a little so it shows.
             Assert.True(cards[0].Width >= ReviewViews.MinimumBlockWidth); // One minute is only a few pixels at this zoom, but it can be clicked.
             model.ToggleSelection(new[] { engine.Sessions[1] }); Dispatcher.UIThread.RunJobs(); using var again = window.CaptureRenderedFrame();
             var selected = window.GetVisualDescendants().OfType<Border>().Single(b => b.Tag is SessionRow row && ReferenceEquals(row, engine.Sessions[1]));

@@ -175,7 +175,7 @@ public sealed class ShellTests
                 dashboard.SelectTab(false);
                 Save(dashboard, Path.Combine(output, $"dashboard-timeline-{theme}.png"));
                 Assert.True(dashboard.GetVisualDescendants().OfType<ScrollViewer>().Single(s => s.Name == "TimelineScroll").Offset.X > 500); // Opened part way along the day, on the first block.
-                var nine = dashboard.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "09:00");
+                var nine = dashboard.GetVisualDescendants().OfType<SegmentText>().Single(t => t.Name == "TimelineHour_9");
                 var ninePoint = nine.TranslatePoint(new Point(0, 0), dashboard)!.Value;
                 Assert.InRange(ninePoint.X, 100, 500); Assert.InRange(ninePoint.Y, 100, 400);
                 dashboard.SelectTab(true);
@@ -329,7 +329,7 @@ Dispatcher.UIThread.RunJobs(); using var accountsFrame = dashboard.CaptureRender
             coordinator.Pill.OpenDashboard!();
             var output = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR") ?? Path.GetTempPath();
             Save(coordinator.Dashboard, Path.Combine(output, "demo-idle.png"));
-            var nine = coordinator.Dashboard.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "09:00");
+            var nine = coordinator.Dashboard.GetVisualDescendants().OfType<SegmentText>().Single(t => t.Name == "TimelineHour_9");
             Assert.InRange(nine.TranslatePoint(default, coordinator.Dashboard)!.Value.Y, 100, 400);
             model.ToggleAccount("Account one");
             Save(coordinator.Dashboard, Path.Combine(output, "demo-tracking.png"));

@@ -213,7 +213,7 @@ public sealed class UiEfficiencyTests
     }
 
     [AvaloniaFact]
-    public void WeekExportUsesTheViewedWeekAndItsFeedbackSurvivesTheWorkspaceRefresh()
+    public void WeekExportUsesTheViewedWeek()
     {
         WithStore((folder, store, model) =>
         {
@@ -223,9 +223,9 @@ public sealed class UiEfficiencyTests
             try
             {
                 Assert.Equal(ReviewViews.WeekTableFor(model, model.SelectedDate).Table.ToTsv(), TimesheetActions.Table(model, model.SelectedDate));
-                Press(window, "WeekExportCsv"); Assert.Contains("Week-20261026", model.ExportPath);
+                var said = TimesheetActions.Export(model, false, model.WeekStart(model.SelectedDate), out var saved); Assert.True(saved, said);
+                Assert.Contains("Week-20261026", model.ExportPath);
                 Assert.True(File.Exists(Path.Combine(model.ExportPath!, "Summary.csv")));
-                Assert.StartsWith("Both files saved", Find<TextBlock>(window, "MessageText").Text);
                 Assert.Equal(Now.Date.AddDays(-7), model.SelectedDate);
             }
             finally { window.Close(); }

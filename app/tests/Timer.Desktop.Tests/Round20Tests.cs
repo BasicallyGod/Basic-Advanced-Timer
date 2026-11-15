@@ -44,36 +44,31 @@ public sealed class Round20Tests
     }
 
     [AvaloniaFact]
-    public void TheWeeksAccountListScrollsOnItsOwnAndHasNoLineAboveTheFirstAccount()
+    public void TheWeeksAccountsScrollByWholeRowsInsideTheInstrumentWhileTheRestStaysPut()
     {
         var model = Model(); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            Click(window, "WeekOverviewTab");
-            var list = Find<StackPanel>(window, "WeekByAccount");
-            Assert.NotNull(list.FindAncestorOfType<ScrollViewer>()); // The list has its own scroll bar...
-            Assert.Single(window.GetVisualDescendants().OfType<ScrollViewer>().Where(s => ((Visual)s).GetVisualDescendants().Contains(list))); // ...and the page itself is not one.
-            var first = list.Children.OfType<Border>().First(); var second = list.Children.OfType<Border>().Skip(1).First();
-            Assert.Equal(0, first.BorderThickness.Top); Assert.Equal(1, second.BorderThickness.Top);
+            Click(window, "WeekOverviewTab"); Settle(window);
+            var instrument = window.GetVisualDescendants().OfType<WeekInstrument>().Single();
+            // The instrument is the page: there is no scroll view round it, and the accounts it lists are buttons that move with the rows.
+            Assert.Empty(instrument.GetVisualAncestors().OfType<ScrollViewer>());
+            Assert.NotEmpty(instrument.GetVisualDescendants().OfType<Button>().Where(b => b.Name?.StartsWith("WeekAccount_") == true || b.Name == "WeekShowQuiet"));
         }
         finally { window.Close(); }
     }
 
     [AvaloniaFact]
-    public void AGroupedPinsHaloAndCountSitOnTheDotsCentre()
+    public void AGroupedPinsTagCarriesTheirCountCentredInIt()
     {
         var model = Model(); var due = Day.AddHours(14);
         model.Notes.AddNote("One", null, due); model.Notes.AddNote("Two", null, due);
         var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            var mark = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name?.StartsWith("TimelinePinMark_") == true);
-            var visual = ((Visual)mark.Parent!).GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Ellipse>().ToList();
-            var dot = visual.Single(e => e.StrokeThickness == 2.5); var halo = visual.Single(e => e.StrokeThickness == 3);
-            double CentreX(Control c) => Canvas.GetLeft(c) + c.Width / 2; double CentreY(Control c) => Canvas.GetTop(c) + c.Height / 2;
-            Assert.Equal(CentreX(dot), CentreX(halo), 3); Assert.Equal(CentreY(dot), CentreY(halo), 3); // The outer band is level with the dot.
-            Assert.Equal(CentreX(dot), CentreX(mark), 3); Assert.Equal(CentreY(dot), CentreY(mark), 3);
-            var digit = (TextBlock)mark.Child!; Assert.Equal(Avalonia.Media.TextAlignment.Center, digit.TextAlignment); // The count is centred in its dot.
+            var tag = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name?.StartsWith("TimelineTag_") == true);
+            var count = Assert.IsType<SegmentText>(tag.Child); Assert.Equal("2", count.Text);
+            Assert.Equal(Avalonia.Layout.HorizontalAlignment.Center, count.HorizontalAlignment); Assert.Equal(Avalonia.Layout.VerticalAlignment.Center, count.VerticalAlignment);
         }
         finally { window.Close(); }
     }

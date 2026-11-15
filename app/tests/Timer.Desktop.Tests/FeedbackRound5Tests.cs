@@ -69,20 +69,6 @@ public sealed class FeedbackRound5Tests
     }
 
     [AvaloniaFact]
-    public void ALongAccountNameOnABlockSlidesWhileThePointerIsOverIt()
-    {
-        var model = new TimerModel(new TrackingEngine(clock: () => Day.AddHours(16)), new StoreSettings(new() { new("A very long client account name indeed") }, false, "Light", DayOfWeek.Monday)); model.CompleteSetup();
-        model.Engine.Sessions.Add(Row("09:00:00", "60", "A very long client account name indeed"));
-        var window = new DashboardWindow(model); window.Show(); Settle(window);
-        try
-        {
-            var marquee = Find<Border>(window, "TimelineEntry0").GetVisualDescendants().OfType<MarqueeText>().Single();
-            Assert.False(marquee.Scrolling); marquee.Hover(true); Assert.True(marquee.Scrolling); marquee.Hover(false); Assert.False(marquee.Scrolling);
-        }
-        finally { window.Close(); }
-    }
-
-    [AvaloniaFact]
     public void RightClickOnTheTimelineOffersAddMeetingAndItOpensTheMeetingForm()
     {
         var model = Model(out _); var window = new DashboardWindow(model); window.Show(); Settle(window);

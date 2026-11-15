@@ -52,11 +52,11 @@ public sealed class Round18Tests
             Assert.False(Has(window, "TimelinePin_" + IdOf(model, "Tidy the shared drive"))); Assert.False(Has(window, "TimelinePin_" + IdOf(model, "Already done")));
             var pph = model.TimelinePixelsPerHour;
             Assert.Equal(ReviewViews.TimelineGutter + 8 * pph, Canvas.GetLeft(late) + 10, .5); Assert.Equal(ReviewViews.TimelineGutter + 15.5 * pph, Canvas.GetLeft(coming) + 10, .5);
-            var lateDot = late.Children.OfType<Avalonia.Controls.Shapes.Ellipse>().Last(); var comingDot = coming.Children.OfType<Avalonia.Controls.Shapes.Ellipse>().Last();
-            Assert.Equal(Theme(lateDot, "Overtime"), Brush(lateDot)); Assert.Equal(Theme(comingDot, "AccentLit"), Brush(comingDot));
-            // The meeting row sits lower to make room for the pins, as the quiet day below has it.
+            // On the display a reminder is a lit tag among the hour digits, red once late and the accent while coming; it needs no room under the ruler.
+            var lateTag = Find<Border>(window, "TimelineTag_" + IdOf(model, "Send the revised budget")); var comingTag = Find<Border>(window, "TimelineTag_" + IdOf(model, "Follow up on the new brief"));
+            Assert.Equal(Theme(lateTag, "Overtime"), ((Avalonia.Media.SolidColorBrush)lateTag.Background!).Color); Assert.Equal(Theme(comingTag, "AccentLit"), ((Avalonia.Media.SolidColorBrush)comingTag.Background!).Color);
             var lane = Find<Border>(window, "MeetingLane");
-            Assert.Equal(28 + 14 + TimelineGuide.PinRoom, Canvas.GetTop(lane), .5);
+            Assert.Equal(28 + 14, Canvas.GetTop(lane), .5);
             Assert.Contains("late", Avalonia.Automation.AutomationProperties.GetName(late)); Assert.DoesNotContain("late", Avalonia.Automation.AutomationProperties.GetName(coming));
         }
         finally { window.Close(); }
@@ -111,17 +111,16 @@ public sealed class Round18Tests
             var line = Find<Avalonia.Controls.Shapes.Line>(window, "TimelineGuideLine"); var chip = Find<Border>(window, "TimelineGuideChip"); var card = Find<Border>(window, "TimelineGuideNote");
             // A few pixels off the pin: the guide snaps to it.
             window.MouseMove(At(window, model, 8.0, 40) + new Vector(4, 0)); Settle(window);
-            Assert.Equal("08:00", ((TextBlock)chip.Child!).Text); Assert.Equal(Canvas.GetLeft(late) + 10, Canvas.GetLeft(line) + 1, .5);
+            Assert.Equal(Canvas.GetLeft(late) + 10, Canvas.GetLeft(line) + 1, .5); Assert.False(chip.IsVisible); // On a tag the ruler reads the reminder in the chip's place.
             Assert.Equal(Find<Canvas>(window, "TimelineCanvas").Bounds.Height, Canvas.GetTop(line) + line.EndPoint.Y, .5); // Snapping skips the pin, but still reaches the display's bottom.
-            Assert.True(card.IsVisible); var words = string.Join(" ", card.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text));
-            Assert.Contains("Send the revised budget", words); Assert.Contains("Today, 08:00", words); Assert.Contains("2h 00m late", words);
-            Assert.Equal(TimelineGuide.ActiveDot, late.Children.OfType<Avalonia.Controls.Shapes.Ellipse>().Last().Width); // The pin swells while the guide is on it.
+            var readout = Find<StackPanel>(window, "TimelineReadout"); Assert.True(readout.Opacity > 0);
+            var words = string.Join(" ", readout.GetVisualDescendants().OfType<SegmentText>().Select(t => t.Text)); Assert.Contains("08:00", words); Assert.Contains("SEND", words);
             // Further away it lets go of the pin.
             window.MouseMove(At(window, model, 8.0, 40) + new Vector(24, 0)); Settle(window);
-            Assert.False(card.IsVisible); Assert.Equal(TimelineGuide.RestDot, late.Children.OfType<Avalonia.Controls.Shapes.Ellipse>().Last().Width);
+            Assert.True(readout.Opacity < .1);
             // With tooltips switched off the words stay in the Notes card, not beside the line.
             model.SetTooltips(false); Settle(window); // The timeline is drawn again, so its parts are found again.
-            window.MouseMove(At(window, model, 8.0, 40) + new Vector(2, 0)); Settle(window); Assert.False(Find<Border>(window, "TimelineGuideNote").IsVisible); Assert.True(Find<Border>(window, "TimelineGuideChip").IsVisible);
+            window.MouseMove(At(window, model, 8.0, 40) + new Vector(2, 0)); Settle(window); Assert.False(Find<Border>(window, "TimelineGuideNote").IsVisible); Assert.True(Find<StackPanel>(window, "TimelineReadout").Opacity > 0);
             model.SetTooltips(true); Settle(window); late = Find<Canvas>(window, "TimelinePin_" + lateId); At(window, model, 8.0);
             // Pressing the pin selects the note, and Details edits it.
             var onPin = late.TranslatePoint(new Point(10, 14), window)!.Value; window.MouseDown(onPin, MouseButton.Left); window.MouseUp(onPin, MouseButton.Left); Settle(window);

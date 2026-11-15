@@ -26,9 +26,13 @@ public sealed class TallPillTests
         model.SetTallPill(true); Assert.False(model.CompactPill); // and the other way round.
         // Pressing steps through every display and comes back to the first.
         var seen = new List<PillLower>();
-        for (var i = 0; i < Enum.GetValues<PillLower>().Length; i++) { seen.Add(model.PillLower); model.CyclePillLower(); }
-        Assert.Equal(Enum.GetValues<PillLower>(), seen); Assert.Equal(PillLower.Strip, model.PillLower);
-        Assert.Equal(6, seen.Count); // No focus count-down: the day strip, up next, budgets, the week, both, and the bat.
+        for (var i = 0; i < LowerDisplay.Cycle.Count; i++) { seen.Add(model.PillLower); model.CyclePillLower(); }
+        Assert.Equal(LowerDisplay.Cycle, seen); Assert.Equal(PillLower.Strip, model.PillLower);
+        Assert.Equal(5, seen.Count); // The day strip, up next, the week, both, and the bat. Budgets are gone.
+        // E-ink has no bat: it steps through four, and a saved bat shows the day strip there.
+        model.SetPillLower(PillLower.Bat); Assert.Equal(PillLower.Bat, model.PillLower);
+        model.SetDisplayStyle(DisplayStyle.Ink); Assert.Equal(PillLower.Strip, model.PillLower); Assert.Equal(4, LowerDisplay.Cycle.Count); Assert.DoesNotContain(PillLower.Bat, LowerDisplay.Cycle);
+        model.SetDisplayStyle(DisplayStyle.Phosphor);
     }
 
     [AvaloniaFact]
@@ -89,24 +93,26 @@ public sealed class TallPillTests
         foreach (var s in model.Engine.Sessions.Where(s => model.CountsOn(s, model.TodayKey))) Assert.True(s.From >= from && s.To <= until);
     }
 
-    [AvaloniaFact]
-    public void EveryLowerDisplayDrawsInBothLooksAndPicturesAreWritten()
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void EveryLowerDisplayDrawsInBothLooksAndPicturesAreWritten(bool ink)
     {
         var folder = Environment.GetEnvironmentVariable("TIMER_PREVIEW_DIR");
         foreach (var theme in new[] { "Dark", "Light" })
         {
-            var model = Demo(theme); model.SetTallPill(true); model.ToggleAccount(model.Accounts[0].Name);
+            var model = Demo(theme); if (ink) model.SetDisplayStyle(DisplayStyle.Ink); model.SetTallPill(true); model.ToggleAccount(model.Accounts[0].Name);
             var pill = new PillWindow(model); pill.Show(); Settle(pill);
             try
             {
-                foreach (var shown in Enum.GetValues<PillLower>())
+                foreach (var shown in LowerDisplay.Cycle)
                 {
                     model.SetPillLower(shown); Settle(pill);
-                    var lower = Find<LowerDisplay>(pill, "PillLower"); lower.Seconds = 2.4; Settle(pill);
+                    var lower = Find<LowerDisplay>(pill, "PillLower"); lower.Seconds = 2.4; lower.Step(400); Settle(pill); // timers do not tick headless, so the stepped change between displays is finished by hand
                     Assert.Equal(LowerDisplay.HeightFor(shown), lower.Bounds.Height, .5);
                     using var frame = pill.CaptureRenderedFrame();
                     Assert.NotNull(frame);
-                    if (folder is not null) { Directory.CreateDirectory(folder); frame!.Save(Path.Combine(folder, $"tallpill-{theme}-{shown}.png")); }
+                    if (folder is not null) { Directory.CreateDirectory(folder); frame!.Save(Path.Combine(folder, $"tallpill-{(ink ? "ink" : "phosphor")}-{theme}-{shown}.png")); }
                 }
             }
             finally { pill.Close(); }

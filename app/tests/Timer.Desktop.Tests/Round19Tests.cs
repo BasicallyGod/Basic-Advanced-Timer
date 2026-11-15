@@ -45,7 +45,7 @@ public sealed class Round19Tests
         {
             var card = Find<Border>(window, "TimelineMeeting" + model.Notes.All.Single().Id);
             Assert.DoesNotContain(card.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Shape>(), s => s.StrokeDashArray is { Count: > 0 }); // No dashes anywhere on it.
-            Assert.True(card.TryFindResource("MeetBg", card.ActualThemeVariant, out var grey)); Assert.Equal(((ISolidColorBrush)grey!).Color, ((ISolidColorBrush)card.Background!).Color); // The theme's light grey.
+            Assert.Contains("vfd", card.Classes); Assert.NotNull(card.BorderBrush); // On the display a meeting is an outline, not a grey fill.
             Assert.Equal(new CornerRadius(12), card.CornerRadius);
         }
         finally { window.Close(); }
@@ -107,12 +107,12 @@ public sealed class Round19Tests
             var first = IdOf(model, "First thing"); var lunch = IdOf(model, "Lunch order");
             // 08:00, 08:00 and 08:04 (a few pixels apart at this zoom) are one pin of three; the lunch reminder has a pin of its own with no count.
             Assert.True(Has(window, "TimelinePin_" + first)); Assert.False(Has(window, "TimelinePin_" + IdOf(model, "Second thing"))); Assert.False(Has(window, "TimelinePin_" + IdOf(model, "Third thing")));
-            Assert.Equal("3", ((TextBlock)Find<Border>(window, "TimelinePinMark_" + first).Child!).Text); Assert.False(Has(window, "TimelinePinMark_" + lunch));
+            Assert.Equal("3", ((SegmentText)Find<Border>(window, "TimelineTag_" + first).Child!).Text); Assert.IsNotType<SegmentText>(Find<Border>(window, "TimelineTag_" + lunch).Child); // A count, or a single mark.
             Assert.Contains("First thing", Avalonia.Automation.AutomationProperties.GetName(Find<Canvas>(window, "TimelinePin_" + first)));
             Assert.Contains("Third thing", Avalonia.Automation.AutomationProperties.GetName(Find<Canvas>(window, "TimelinePin_" + first)));
             window.MouseMove(At(window, model, 8.0, Ruler)); Settle(window);
-            var words = string.Join(" | ", Find<Border>(window, "TimelineGuideNote").GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text));
-            Assert.Contains("3 reminders", words); Assert.Contains("First thing", words); Assert.Contains("Second thing", words); Assert.Contains("Third thing", words);
+            var words = string.Join(" | ", Find<StackPanel>(window, "TimelineReadout").GetVisualDescendants().OfType<SegmentText>().Select(t => t.Text));
+            Assert.Contains("1/3", words); Assert.Contains("FIRST", words); // The ruler reads the three in turn.
             // Pressing the pin selects the first of them and Details edits it.
             var onPin = Find<Canvas>(window, "TimelinePin_" + first).TranslatePoint(new Point(10, 14), window)!.Value; window.MouseDown(onPin, MouseButton.Left); window.MouseUp(onPin, MouseButton.Left); Settle(window);
             Assert.Equal("First thing", Find<TextBox>(window, "DetailsNoteWords").Text); // Details shows the note.
@@ -128,9 +128,10 @@ public sealed class Round19Tests
         try
         {
             var card = Find<Border>(window, "TimelineGuideNote"); var line = Find<Avalonia.Controls.Shapes.Line>(window, "TimelineGuideLine");
-            window.MouseMove(At(window, model, 8.0, Ruler)); Settle(window); Assert.True(card.IsVisible); // On the ruler by the pin: the note's card.
+            var readout = Find<StackPanel>(window, "TimelineReadout");
+            window.MouseMove(At(window, model, 8.0, Ruler)); Settle(window); Assert.True(readout.Opacity > 0); // On the ruler by the pin: the ruler reads the note.
             window.MouseMove(At(window, model, 8.0, Lanes)); Settle(window);
-            Assert.False(card.IsVisible); Assert.True(line.IsVisible); // Down among the blocks, at the very same time: no note card, the meeting's own tooltip is the one to read.
+            Assert.False(card.IsVisible); Assert.True(readout.Opacity < .1); Assert.True(line.IsVisible); // Down among the blocks, at the very same time: no note card, the meeting's own tooltip is the one to read.
             Assert.Contains("Stand-up", ToolTip.GetTip(Find<Border>(window, "TimelineMeeting" + model.Notes.All.Single(n => NotesModel.IsMeeting(n)).Id))!.ToString());
             Assert.Equal("08:00", ((TextBlock)Find<Border>(window, "TimelineGuideChip").Child!).Text); // The chip still follows the pointer.
         }
@@ -186,9 +187,9 @@ public sealed class Round19Tests
         try
         {
             var plain = IdOf(model, "Plain one"); var pay = IdOf(model, "Pay the invoice");
-            Assert.False(Has(window, "TimelinePinMark_" + plain));
+            Assert.True(Has(window, "TimelineTag_" + plain));
             Click(window, "NoteImportant_" + pay); Assert.True(NotesModel.IsImportant(model.Notes.Find(pay)!));
-            Assert.Equal("!", ((TextBlock)Find<Border>(window, "TimelinePinMark_" + pay).Child!).Text); // The pin carries a !.
+            Assert.True(Has(window, "TimelineTag_" + pay)); // Its tag is still among the hours.
             var names = window.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Name?.StartsWith("NoteText_") == true).Select(t => t.Name!).ToList();
             Assert.Equal("NoteText_" + pay, names[0]); // Important first in the card.
             Click(window, "NoteImportant_" + pay); Assert.False(NotesModel.IsImportant(model.Notes.Find(pay)!)); Click(window, "NoteImportant_" + pay);

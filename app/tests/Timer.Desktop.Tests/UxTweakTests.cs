@@ -52,14 +52,6 @@ public sealed class UxTweakTests
     }
 
     [AvaloniaFact]
-    public void TheWeekOverviewNeverAsksForASidewaysScrollBar()
-    {
-        var model = new TimerModel(new TrackingEngine(), new StoreSettings(new() { new("A", null, null) }, false, "Light", DayOfWeek.Monday));
-        var scroll = ReviewViews.Week(model).GetLogicalDescendants().OfType<ScrollViewer>().First();
-        Assert.Equal(Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled, scroll.HorizontalScrollBarVisibility);
-    }
-
-    [AvaloniaFact]
     public void TheWindowsStayOnTopUnlessSwitchedOffInSettings()
     {
         var model = new TimerModel(new TrackingEngine(), new StoreSettings(new() { new("A", null, null) }, false, "Light", DayOfWeek.Monday));

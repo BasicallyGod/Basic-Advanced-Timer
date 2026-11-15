@@ -1429,29 +1429,48 @@ public sealed class AccountDisplayRow : Control
     {
         var w = Bounds.Width; if (w <= 0) return;
         var ink = C("Ink", "#ECEEF2"); var quiet = C("Muted", "#A0A7B3"); var live = C("Live", "#3EDC8E"); var dark = SoftTint.IsDark(this);
+        var inked = DisplayInk.On; var paper = DisplayInk.For(dark);
+        if (inked) { ink = paper.Ink; quiet = paper.Muted; live = paper.Live; }
         var recording = model.ActiveAccount == account.Name && !model.IsOnBreak;
         if (rule) context.DrawRectangle(new Avalonia.Media.SolidColorBrush(SoftTint.WithAlpha(ink, .06)), null, new Rect(10, 0, w - 20, 1));
-        if (recording) context.DrawRectangle(new Avalonia.Media.SolidColorBrush(SoftTint.WithAlpha(live, .06)), null, new Rect(0, rule ? 1 : 0, w, Bounds.Height - (rule ? 1 : 0)));
-        // The lamp: the account's colour, quiet at rest, lit green while it records.
-        var lamp = new Rect(12, 9, 4, 16);
-        if (recording && dark) new PhosphorBloom(live, 0, .78).Draw(context, new Avalonia.Media.RectangleGeometry(lamp, 2, 2), true);
-        context.DrawRectangle(new Avalonia.Media.SolidColorBrush(recording ? live : SoftTint.WithAlpha(Avalonia.Media.Color.Parse(Ui.Visible(account.Colour)), .7)), null, lamp, 2, 2);
-        // Today's hours at the right, then the name in what is left, in whole cells.
+        // The recording row is an inset rounded highlight, clear of the rows' own rules and of the display's edge, with a hairline of the Live colour in E-ink.
+        if (recording)
+        {
+            var well = new Rect(5, 2, w - 10, Bounds.Height - 4);
+            context.DrawRectangle(new Avalonia.Media.SolidColorBrush(SoftTint.WithAlpha(live, inked ? .13 : .08)), inked ? new Avalonia.Media.Pen(new Avalonia.Media.SolidColorBrush(SoftTint.WithAlpha(live, .55)), 1) : null, well, 9, 9);
+        }
+        // The account's colour: a lamp, lit green while it records (Phosphor), or a textured swatch (E-ink), so the colour is never the only way to tell accounts apart.
+        if (inked)
+        {
+            var swatch = new Rect(13, 9, 14, 16);
+            DisplayInk.Cell(context, paper, new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse(model.ChartColour(account.Colour))), swatch, 3);
+            DisplayInk.Texture(context, model.TextureOf(account.Name), swatch, 3, Avalonia.Media.Color.Parse(model.ChartColour(account.Colour)));
+        }
+        else
+        {
+            var lamp = new Rect(12, 9, 4, 16);
+            if (recording && dark) new PhosphorBloom(live, 0, .78).Draw(context, new Avalonia.Media.RectangleGeometry(lamp, 2, 2), true);
+            context.DrawRectangle(new Avalonia.Media.SolidColorBrush(recording ? live : SoftTint.WithAlpha(Avalonia.Media.Color.Parse(Ui.Visible(account.Colour)), .7)), null, lamp, 2, 2);
+        }
+        var textX = inked ? 36.0 : 26.0;
+        // Today's hours at the right, then the name in what is left, cut to fit.
         const double nameH = 11, hoursH = 13;
-        var hours = model.Format(model.Today(account)); var hoursW = SegmentText.WidthOf(hours.Length, hoursH);
-        SegmentText.Draw(context, hours, w - 12 - hoursW, 9, hoursH, recording ? live : ink, ghosts: true);
-        var name = LowerDisplay.Drawable(account.Display); var room = w - 12 - hoursW - 10 - 26; var cells = name.Length;
-        while (cells > 0 && SegmentText.WidthOf(cells, nameH) > room) cells--;
-        SegmentText.Draw(context, cells < name.Length ? name[..cells].TrimEnd() : name, 26, 11, nameH, ink);
+        var hours = model.Format(model.Today(account)); var hoursW = SegmentText.TextWidth(hours, hoursH);
+        SegmentText.Draw(context, hours, w - 14 - hoursW, 9, hoursH, recording ? live : ink, ghosts: true);
+        var name = LowerDisplay.Drawable(account.Display); var room = w - 14 - hoursW - 10 - textX; var cells = name.Length;
+        while (cells > 0 && SegmentText.TextWidth(name[..cells], nameH) > room) cells--;
+        SegmentText.Draw(context, cells < name.Length ? (inked ? name[..cells].TrimEnd() + "…" : name[..cells].TrimEnd()) : name, textX, 11, nameH, ink);
         // The budget as cells under the name, or quiet words when there is none.
         var used = account.Budget is null ? (TimeSpan?)null : model.BudgetUsed(account);
-        if (model.BudgetRatio(account, used) is not { } ratio) { SegmentText.Draw(context, "NO BUDGET", 26, 30, 8, quiet); return; }
-        var tone = recording ? live : ratio >= 1 ? C("Overtime", "#FF6B6B") : ratio >= .8 ? Avalonia.Media.Color.Parse("#F5B63A") : ink;
-        const int n = 24; var x0 = 26.0; var cw = (w - 12 - x0) / n; var lit = (int)Math.Round(Math.Min(1, ratio) * n);
+        if (model.BudgetRatio(account, used) is not { } ratio) { SegmentText.Draw(context, "NO BUDGET", textX, 30, 8, quiet); return; }
+        var amber = inked ? paper.Amber : Avalonia.Media.Color.Parse("#F5B63A"); var red = inked ? paper.Red : C("Overtime", "#FF6B6B");
+        var tone = recording ? live : ratio >= 1 ? red : ratio >= .8 ? amber : ink;
+        const int n = 23; var x0 = textX; var cw = (w - 14 - x0) / n; var lit = (int)Math.Round(Math.Min(1, ratio) * n);
         for (var k = 0; k < n; k++)
         {
             var r = new Rect(Math.Round(x0 + k * cw), 31, Math.Max(1, Math.Round(cw) - 2), 5);
-            if (k >= lit) { context.DrawRectangle(new Avalonia.Media.SolidColorBrush(SoftTint.WithAlpha(ink, .07)), null, r, 1.2, 1.2); continue; }
+            if (k >= lit) { context.DrawRectangle(new Avalonia.Media.SolidColorBrush(inked ? paper.Ghost : SoftTint.WithAlpha(ink, .07)), null, r, 1.2, 1.2); continue; }
+            if (inked) { DisplayInk.Cell(context, paper, new Avalonia.Media.SolidColorBrush(tone), r, 1.2); continue; }
             using (Honeycomb.MeshedLarge(context, r)) context.DrawRectangle(new Avalonia.Media.SolidColorBrush(tone), null, r, 1.2, 1.2);
         }
     }

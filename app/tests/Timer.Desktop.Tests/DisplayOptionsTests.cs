@@ -52,10 +52,12 @@ public sealed class DisplayOptionsTests
         finally { pill.Close(); }
     }
 
-    [AvaloniaFact]
-    public void TheCompactPillIsOnlyItsDisplayAndTheWindowFollows()
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void TheCompactPillIsItsDisplayAndTheTwoKeysAndTheWindowFollows(bool ink)
     {
-        var model = Demo(); var pill = new PillWindow(model); pill.Show(); Settle(pill);
+        var model = Demo(); if (ink) model.SetDisplayStyle(DisplayStyle.Ink); var pill = new PillWindow(model); pill.Show(); Settle(pill);
         try
         {
             var surface = Find<Border>(pill, "PillSurface");
@@ -63,7 +65,8 @@ public sealed class DisplayOptionsTests
             model.SetCompactPill(true); Settle(pill);
             Assert.Equal(PillWindow.CompactWidth, surface.Width); Assert.Equal(StatusFace.ShortDisplayWidth + 12, PillWindow.CompactWidth, 1.0);
             Assert.Equal((PillWindow.CompactWidth + 2 * Ui.ShadowMargin) * pill.Scale, pill.WindowWidthNow, 0.5);
-            Assert.False(Find<Button>(pill, "PillPause").IsVisible); Assert.False(Find<Button>(pill, "PillBreak").IsVisible);
+            // The two keys stay (stacked at the right); the account name and its box go to the right-click menu.
+            Assert.True(Find<Button>(pill, "PillPause").IsVisible); Assert.True(Find<Button>(pill, "PillBreak").IsVisible); Assert.False(Find<Button>(pill, "PillAccounts").IsVisible);
             var display = Find<Border>(pill, "PillDisplay"); Assert.True(display.IsVisible);
             var inset = display.TranslatePoint(default, surface)!.Value;
             Assert.Equal(PillWindow.BezelWidth, inset.X, 0.5);

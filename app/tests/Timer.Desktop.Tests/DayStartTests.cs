@@ -112,7 +112,7 @@ public sealed class DayStartTests
         try
         {
             Dispatcher.UIThread.RunJobs(); using var frame = window.CaptureRenderedFrame();
-            var labels = window.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Name?.StartsWith("TimelineHour_") == true).ToList();
+            var labels = window.GetVisualDescendants().OfType<SegmentText>().Where(t => t.Name?.StartsWith("TimelineHour_") == true).ToList();
             Assert.Equal("18:00", labels.Single(l => l.Name == "TimelineHour_0").Text); Assert.Equal("00:00", labels.Single(l => l.Name == "TimelineHour_6").Text);
             Assert.Single(window.GetVisualDescendants().OfType<Border>(), b => b.Name == "TimelineMidnight");
             var block = Assert.Single(window.GetVisualDescendants().OfType<Border>(), b => b.Name?.StartsWith("TimelineEntry") == true);

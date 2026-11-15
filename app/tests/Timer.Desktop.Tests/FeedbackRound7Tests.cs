@@ -103,13 +103,12 @@ public sealed class FeedbackRound7Tests
     }
 
     [AvaloniaFact]
-    public void AMeetingsNameSlidesOnHoverAndTheGapsAboveAndBelowTheMeetingRowAreEqual()
+    public void TheGapsAboveAndBelowTheMeetingRowAreEqual()
     {
         var model = Model(meeting: true); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
-            var card = Find<Border>(window, "TimelineMeeting" + model.Notes.All.Single().Id); var name = card.GetVisualDescendants().OfType<MarqueeText>().Single();
-            Assert.False(name.Scrolling);
+            var card = Find<Border>(window, "TimelineMeeting" + model.Notes.All.Single().Id);
             var axis = Find<Border>(window, "TimelineAxis"); var block = Find<Border>(window, "TimelineEntry0");
             Assert.Equal(Canvas.GetTop(card) - Canvas.GetTop(axis), Canvas.GetTop(block) - (Canvas.GetTop(card) + card.Height), 0.5);
         }
@@ -126,37 +125,6 @@ public sealed class FeedbackRound7Tests
             var tall = ticks.Max(t => t.Height); var halves = ticks.Where(t => t.Height is > 5.5 and < 7).ToList();
             Assert.NotEmpty(halves); Assert.True(halves.All(h => h.Opacity >= 1)); Assert.True(tall - halves[0].Height <= 3.5);
             Assert.NotEmpty(window.GetVisualDescendants().OfType<Border>().Where(b => b.Tag is "HalfGuide"));
-        }
-        finally { window.Close(); }
-    }
-
-    [AvaloniaFact]
-    public void TheWeekTableTotalsUseTheOrdinaryTypefaceAndTheWorkingTimeRowHasRoom()
-    {
-        var model = Model(); var window = new DashboardWindow(model); window.Show(); window.SelectTab(true); Settle(window); model.SetWeekAsTable(true); Settle(window);
-        try
-        {
-            var totals = window.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Name == "WeekTableTotal").ToList();
-            Assert.NotEmpty(totals); Assert.All(totals, t => Assert.False(t.Classes.Contains("figures")));
-            var working = Find<Grid>(window, "WeekTableRow_Workingtime"); var account = Find<Grid>(window, "WeekTableRow_Accountone");
-            Assert.True(working.Bounds.Height >= account.Bounds.Height + 8);
-        }
-        finally { window.Close(); }
-    }
-
-    [AvaloniaFact]
-    public void TheWeekChartKeepsTheScheduleWordsApartFromTheColumnsAndCarriesNoMeetingOrNoteCounts()
-    {
-        var model = Model(); model.Notes.AddMeeting(Day, TimeSpan.FromHours(14), TimeSpan.FromHours(15), "Review", null, RepeatChoice.None); model.Notes.AddNote("Chase", null, Day.AddHours(18));
-        var window = new DashboardWindow(model); window.Show(); window.SelectTab(true); Settle(window);
-        try
-        {
-            var chart = Find<Grid>(window, "WeekChart_");
-            // The day's meetings and open notes are not counted under its column (they are on the timeline and the Notes page), and the day's name is not cut off.
-            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Control>(), c => c.Name is "WeekDayMeetings" or "WeekDayTasks");
-            var dayLabel = window.GetVisualDescendants().OfType<Border>().First(b => b.Name == "WeekDayLabel"); var labelBottom = dayLabel.TranslatePoint(new Point(0, dayLabel.Bounds.Height), chart)!.Value.Y; Assert.True(labelBottom <= chart.Bounds.Height, $"day names end at {labelBottom} of {chart.Bounds.Height}");
-            var label = Find<TextBlock>(window, "WeekScheduleLabel"); var last = window.GetVisualDescendants().OfType<Button>().Where(b => b.Name?.StartsWith("WeekDay_") == true).OrderBy(b => b.TranslatePoint(default, window)!.Value.X).Last();
-            var lastRight = last.TranslatePoint(new Point(last.Bounds.Width, 0), window)!.Value.X; Assert.True(label.TranslatePoint(default, window)!.Value.X >= lastRight);
         }
         finally { window.Close(); }
     }

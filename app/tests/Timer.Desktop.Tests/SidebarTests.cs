@@ -43,7 +43,7 @@ public sealed class SidebarTests
                 model.SelectBlock(Array.Empty<SessionRow>(), false);
                 Click(window, "CardKindMeetings"); Audit("timeline, meeting form"); Click(window, "CardKindNotes"); Audit("timeline, note form");
                 Click(window, "NotesTab"); Audit("notes"); window.GetVisualDescendants().OfType<NotesPage>().Single().SetKind(true); Dispatcher.UIThread.RunJobs(); Audit("notes, meeting form");
-                Click(window, "WeekOverviewTab"); Audit("week chart"); Click(window, "WeekTable"); Audit("week table");
+                Click(window, "WeekOverviewTab"); Audit("week"); Click(window, "WeekKeySheet"); Audit("timesheet"); Click(window, "WeekKeyWeek");
                 Click(window, "Settings");
                 foreach (var section in new[] { "Look", "Pill", "Alerts", "Day", "Accounts", "Export", "About" }) { Click(window, "Settings" + section); Audit("settings " + section); }
             }

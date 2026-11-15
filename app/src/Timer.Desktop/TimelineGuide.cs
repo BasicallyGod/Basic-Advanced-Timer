@@ -51,7 +51,8 @@ public static class TimelineGuide
         double X(DateTime time) => gutter + (time - day).TotalHours * pixelsPerHour;
         var pins = new List<Pin>();
         // The display look: reminders are lit tags above the line among the hour digits, and the reminder pointed at reads along the ruler (see VfdReadout).
-        var vfd = model.DisplayTimeline; Func<IReadOnlyList<DayNote>, long>? VfdShowing = null;
+        Func<IReadOnlyList<DayNote>, long>? VfdShowing = null;
+        var tagInk = DisplayInk.On ? DisplayInk.For(model.GlassTheme.Dark).Paper : VfdLook.BlockInk; // dark on the lit tag; paper-coloured on the ink one
         bool Late(Pin pin) => pin.Notes.Any(model.Notes.IsLate);
         string ColourKey(Pin pin) => Late(pin) ? "Overtime" : "AccentLit";
         // Notes within a pin's width of each other are one pin, so none is hidden behind another.
@@ -81,7 +82,6 @@ public static class TimelineGuide
                 Canvas.SetLeft(badge, 10 - rest / 2); Canvas.SetTop(badge, 11.5 - rest / 2); visual.Children.Add(badge);
             }
             Canvas.SetLeft(visual, x - 10); Canvas.SetTop(visual, axisY);
-            if (vfd)
             {
                 // A lit tag in the hour row on a short stem down to the line, its count (or a ! for one reminder) in dark ink.
                 visual.Children.Clear(); visual.Height = axisY; Canvas.SetTop(visual, 0);
@@ -89,8 +89,8 @@ public static class TimelineGuide
                 var tag = new Border { Name = "TimelineTag_" + first.Id, Width = 14, Height = 14, CornerRadius = new CornerRadius(3.5), IsHitTestVisible = false, Tag = "VfdTag" };
                 Canvas.SetLeft(tag, 3); Canvas.SetTop(tag, 5); visual.Children.Add(tag);
                 Control inked = group.Count > 1
-                    ? new SegmentText(Math.Min(group.Count, 99).ToString(System.Globalization.CultureInfo.InvariantCulture), 8, VfdLook.BlockInk, weight: 1.15)
-                    : new Canvas { Width = 2, Height = 9, Children = { new Border { Width = 2, Height = 6, CornerRadius = new CornerRadius(1), Background = new SolidColorBrush(VfdLook.BlockInk) }, new Border { Width = 2, Height = 2, CornerRadius = new CornerRadius(1), Background = new SolidColorBrush(VfdLook.BlockInk), [Canvas.TopProperty] = 7.5 } } };
+                    ? new SegmentText(Math.Min(group.Count, 99).ToString(System.Globalization.CultureInfo.InvariantCulture), 8, tagInk, weight: 1.15)
+                    : new Canvas { Width = 2, Height = 9, Children = { new Border { Width = 2, Height = 6, CornerRadius = new CornerRadius(1), Background = new SolidColorBrush(tagInk) }, new Border { Width = 2, Height = 2, CornerRadius = new CornerRadius(1), Background = new SolidColorBrush(tagInk), [Canvas.TopProperty] = 7.5 } } };
                 inked.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center; inked.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center; tag.Child = inked;
                 Paint(tag, Border.BackgroundProperty, group.Any(model.Notes.IsLate) ? "Overtime" : "AccentLit");
                 Paint(tag, Border.BorderBrushProperty, group.Any(model.Notes.IsLate) ? "Overtime" : "AccentLit"); tag.BorderThickness = new Thickness(1.2);
@@ -105,7 +105,7 @@ public static class TimelineGuide
             {
                 if (!e.GetCurrentPoint(visual).Properties.IsLeftButtonPressed) return;
                 // A press opens the reminder in Details; on the display, for a tag holding several, it is the one the ruler is reading at that moment.
-                model.Notes.RequestEditNote(vfd && members.Count > 1 && VfdShowing is { } pick ? pick(members) : id);
+                model.Notes.RequestEditNote(members.Count > 1 && VfdShowing is { } pick ? pick(members) : id);
                 e.Handled = true;
             };
             canvas.Children.Add(visual);
@@ -129,7 +129,7 @@ public static class TimelineGuide
             timer.Tick += (_, _) => { foreach (var pin in pins) Recolour(pin); };
             _ = new ViewActivity(canvas, active => { if (active) { foreach (var pin in pins) Recolour(pin); timer.Start(); } else timer.Stop(); });
         }
-        if (vfd && pins.Any(Late) && !Motion.Reduced)
+        if (pins.Any(Late) && !Motion.Reduced)
         {
             // A late tag blinks: lit, then only its outline, twice a second.
             var blink = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) }; var lit = true;
@@ -153,8 +153,8 @@ public static class TimelineGuide
         var noteCard = new Border { Name = "TimelineGuideNote", CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1), Padding = new Thickness(11, 9), BoxShadow = HangingCard.Shadow, IsHitTestVisible = false, IsVisible = false, ZIndex = 12 };
         Paint(noteCard, Border.BackgroundProperty, "Panel"); Paint(noteCard, Border.BorderBrushProperty, "Line");
         canvas.Children.Add(line); canvas.Children.Add(guideDot); canvas.Children.Add(chip); canvas.Children.Add(noteCard);
-        var readout = vfd ? new VfdReadout(canvas, model, axisY) : null;
-        if (vfd) VfdShowing = notes => readout!.Showing(notes);
+        var readout = new VfdReadout(canvas, model, axisY);
+        VfdShowing = notes => readout.Showing(notes);
         // What the line crosses among the blocks is ringed by the block's own shadow, the way a selected block is, so the ring is always the same width all round (a ring drawn as a
         // separate shape was sometimes a pixel or two off). A selected or recording block already has its own ring and is left alone.
         var ringed = new Dictionary<Control, (BoxShadows Shadow, int Z)>();

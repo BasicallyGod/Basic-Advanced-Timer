@@ -6,6 +6,8 @@ basics-advanced-timer.settings.json*
 
 # Existing local themes, runtime state, historical preferences and overrides
 *.txt
+# The font licences that ship inside the application are not runtime text files
+!app/src/Timer.Desktop/Assets/Fonts/*.txt
 
 # Error logs and drawing speed reports
 *.log

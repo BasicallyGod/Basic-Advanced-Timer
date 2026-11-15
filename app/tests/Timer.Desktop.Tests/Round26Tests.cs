@@ -90,17 +90,14 @@ public sealed class Round26Tests
     }
 
     [AvaloniaFact]
-    public void ABlocksNoteStopsShortOfItsNoteMarkAndTheSidebarSaysItsStateOnlyInTheTooltipWhileTracking()
+    public void ANotedBlockCarriesANoteDotAndTheSidebarSaysItsStateOnlyInTheTooltipWhileTracking()
     {
         var model = Model(); model.Engine.AddSession("Account one", T(12, 0), T(14, 0)); var noted = model.Engine.Sessions[^1]; model.EditEntry(noted, noted.Account, noted.From, noted.To, "Kick-off prep and agenda for the week");
         var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
             var block = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineEntry" + (model.Engine.Sessions.Count - 1));
-            var note = block.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text!.StartsWith("• "));
-            var mark = block.GetVisualDescendants().OfType<IconGlyph>().Single(g => g.Name == "NoteMark");
-            Assert.True(note.Margin.Right >= 20); // The words are cut before the mark, not run under it.
-            Assert.True(note.TranslatePoint(new Point(note.Bounds.Width, 0), block)!.Value.X <= mark.TranslatePoint(default, block)!.Value.X + .5);
+            Assert.Single(block.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Ellipse>(), e => e.Name == "NoteDot"); // A noted block carries one small dot.
             model.ToggleAccount("Account two"); Settle(window);
             Assert.Equal("Account two · Recording", ToolTip.GetTip(Find<Border>(window, "SidebarWhoName"))?.ToString());
         }

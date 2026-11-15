@@ -489,10 +489,10 @@ public sealed class DashboardWindow : Window
             return edge;
         }
         lip.Children.Add(LipShadow(true)); lip.Children.Add(LipShadow(false));
-        var glass = new Avalonia.Controls.ThemeVariantScope { RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Dark, Child = lip };
-        var trough = new Border { Name = "TimelineTrough", Child = glass, CornerRadius = new CornerRadius(14), Margin = new Thickness(14, 0, 14, 0), Padding = new Thickness(0, 6, 0, 0), ClipToBounds = true }; trough.Classes.Add("trough");
-        // The glass itself: the Dark theme's well, a touch lighter at the top, drawn over the sunk look so the inset shadow stays.
-        trough.Background = new LinearGradientBrush { StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative), GradientStops = { new GradientStop(Color.Parse(ThemeColours.Mix(model.GlassTheme.Colour("Surface"), model.GlassTheme.Colour("Panel"), .55)), 0), new GradientStop(Color.Parse(model.GlassTheme.Colour("Surface")), 1) } };
+        // In Phosphor the glass is always Dark; in E-ink it is the theme's own paper (see UpdateTrough).
+        troughScope = new Avalonia.Controls.ThemeVariantScope { RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Dark, Child = lip };
+        var trough = troughHost = new Border { Name = "TimelineTrough", Child = troughScope, CornerRadius = new CornerRadius(14), Margin = new Thickness(14, 0, 14, 0), Padding = new Thickness(0, 6, 0, 0), ClipToBounds = true }; trough.Classes.Add("trough");
+        UpdateTrough();
         var cardGrid = Ui.Grid("*", "Auto,Auto"); Ui.Put(cardGrid, trough); Ui.Put(cardGrid, tools, 0, 1);
         timelineCard = new Border { Name = "TimelineCard", Child = cardGrid, CornerRadius = new CornerRadius(18), BorderThickness = new Thickness(1), Padding = new Thickness(0, 14, 0, 9), VerticalAlignment = VerticalAlignment.Top };
         timelineCard.Classes.Add("dayCard");
@@ -928,9 +928,24 @@ public sealed class DashboardWindow : Window
     private void ShowSettings() { settingsMode = !settingsMode; Refresh(true); }
     // The Notes page is built once and kept: it listens to the model itself, so coming back to it finds the search and the form as they were.
     private NotesPage NotesPageInstance() { if (notesPage is null) notesPage = new NotesPage(model) { Query = searchBox.Text ?? "" }; return notesPage; }
+    private Avalonia.Controls.ThemeVariantScope? troughScope; private Border? troughHost; private bool troughInk;
+    /// <summary>
+    /// The timeline's well: dark glass in the Phosphor look, the theme's own paper (with a whisper of grain) in E-ink. The scope's theme variant decides what every colour
+    /// drawn inside it resolves to, so it follows the look as well as the background.
+    /// </summary>
+    private void UpdateTrough()
+    {
+        if (troughScope is null || troughHost is null) return;
+        var ink = DisplayInk.On; var glass = model.GlassTheme; troughInk = ink;
+        troughScope.RequestedThemeVariant = glass.Dark ? Avalonia.Styling.ThemeVariant.Dark : Avalonia.Styling.ThemeVariant.Light;
+        troughHost.Background = ink
+            ? new SolidColorBrush(DisplayInk.For(glass.Dark).Paper)
+            : new LinearGradientBrush { StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative), GradientStops = { new GradientStop(Color.Parse(ThemeColours.Mix(glass.Colour("Surface"), glass.Colour("Panel"), .55)), 0), new GradientStop(Color.Parse(glass.Colour("Surface")), 1) } };
+    }
     private void Changed(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (Topmost != model.DashboardOnTop) Topmost = model.DashboardOnTop;
+        if (troughInk != DisplayInk.On || (DisplayInk.On && e.PropertyName != TimerModel.PresentationChange && model.GlassTheme.Dark != (troughScope?.RequestedThemeVariant == Avalonia.Styling.ThemeVariant.Dark))) UpdateTrough();
         UpdateShadow(); UpdateOnboarding();
         var rebuild = e.PropertyName is not (nameof(TimerModel.Elapsed) or TimerModel.PresentationChange);
         if (e.PropertyName == TimerModel.CheckpointChange)

@@ -105,10 +105,62 @@ public sealed class SettingsView : Grid
         stack.Children.Add(tiles);
         stack.Children.Add(BuildSunOptions());
 
+        stack.Children.Add(BuildDisplayStyle());
         stack.Children.Add(Section("Hints", Toggle("Show tooltips", "Short hints on hover. With them off, budget percentages are still in Week overview.", "ShowTooltips", () => model.Tooltips, v => model.SetTooltips(v))));
-        stack.Children.Add(Section("Timeline", Toggle("Display timeline", "Draw the timeline as the pill's display: lit blocks through the honeycomb and segment figures.", "DisplayTimeline", () => model.DisplayTimeline, v => model.SetDisplayTimeline(v))));
         stack.Children.Add(Section("Seasonal", Toggle("Seasonal decorations", "A wreath and lights round the pill at Christmas, 1 December to 6 January. Off by default.", "SeasonalDecorations", () => model.SeasonalDecorations, v => model.SetSeasonalDecorations(v))));
+        stack.Margin = new Thickness(0, 0, 0, 6); // room for the last tick's shadow when the page scrolls
         return stack;
+    }
+
+    // ---- display style: Phosphor (lit segments and glow) or E-ink (plain type on paper with grain), and how strong the e-ink effect is
+    private Control BuildDisplayStyle()
+    {
+        var stack = new StackPanel { Spacing = 0 };
+        stack.Children.Add(SectionLabel("Display style"));
+        var tiles = new Avalonia.Controls.Primitives.UniformGrid { Rows = 1, Columns = 2, Margin = new Thickness(0, 6, 0, 10), HorizontalAlignment = HorizontalAlignment.Left, MaxWidth = 2 * 172 + 12 };
+        var buttons = new Dictionary<DisplayStyle, Button>();
+        foreach (var (style, words) in new[] { (DisplayStyle.Phosphor, "Phosphor"), (DisplayStyle.Ink, "E-ink") })
+        {
+            var tile = new Button { Name = "DisplayStyle" + (style == DisplayStyle.Ink ? "Ink" : "Phosphor"), BorderThickness = new Thickness(2), MaxWidth = 172, HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 0, 12, 0), HorizontalContentAlignment = HorizontalAlignment.Stretch }; tile.Classes.Add("choiceTile"); tile.Padding = new Thickness(8);
+            var inner = new StackPanel(); inner.Children.Add(DisplayStylePicture(style));
+            var caption = Ui.Text(words, 14); caption.FontWeight = FontWeight.SemiBold; caption.Margin = new Thickness(2, 8, 0, 0); inner.Children.Add(caption);
+            tile.Content = inner; tile.Click += (_, _) => model.SetDisplayStyle(style);
+            Avalonia.Automation.AutomationProperties.SetName(tile, words + " display style");
+            buttons[style] = tile; tiles.Children.Add(tile);
+        }
+        stack.Children.Add(tiles);
+        var slider = new Slider { Name = "InkStrength", Minimum = 0, Maximum = 100, TickFrequency = 10, IsSnapToTickEnabled = true, MinWidth = 200, MaxWidth = 280, HorizontalAlignment = HorizontalAlignment.Left, Value = model.InkPercent };
+        Avalonia.Automation.AutomationProperties.SetName(slider, "E-ink effect strength");
+        var value = Ui.Text("", 13); value.Name = "InkStrengthNote"; value.FontWeight = FontWeight.SemiBold; value.Width = 80; value.TextAlignment = TextAlignment.Right; value.VerticalAlignment = VerticalAlignment.Center;
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
+        var label = Ui.Text("Effect", 13); label.VerticalAlignment = VerticalAlignment.Center; label.Width = 52;
+        row.Children.Add(label); row.Children.Add(slider); row.Children.Add(value);
+        slider.PropertyChanged += (_, e) => { if (e.Property == Avalonia.Controls.Primitives.RangeBase.ValueProperty && slider.IsEnabled) model.SetInkPercent((int)Math.Round(slider.Value)); };
+        void Sync()
+        {
+            foreach (var (style, tile) in buttons) tile.Classes.Set("selected", style == model.DisplayStyle);
+            // The slider only means something to E-ink, so it rests under Phosphor.
+            slider.IsEnabled = model.DisplayStyle == DisplayStyle.Ink; row.Opacity = slider.IsEnabled ? 1 : .5;
+            if (Math.Abs(slider.Value - model.InkPercent) > .5) slider.Value = model.InkPercent;
+            value.Text = model.InkPercent == 0 ? "Off" : $"{model.InkPercent} per cent";
+        }
+        syncs.Add(Sync); Sync();
+        stack.Children.Add(row);
+        var note = Ui.Text("The look of the pill, the sidebar, the timeline and the week page. Takes effect at once.", 12); note.Margin = new Thickness(0, 6, 0, 8); note.Opacity = .75; note.TextWrapping = TextWrapping.Wrap;
+        stack.Children.Add(note);
+        return stack;
+    }
+    // A small picture of the clock in each style, drawn from plain shapes at its own size: lit green segments on a dark well, or ink on paper.
+    private static Control DisplayStylePicture(DisplayStyle style)
+    {
+        var ink = style == DisplayStyle.Ink;
+        var picture = new Border { Height = 44, CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1) };
+        picture.Background = new SolidColorBrush(ink ? Color.Parse("#F3F3EF") : Color.Parse("#0D1411"));
+        picture.BorderBrush = new SolidColorBrush(ink ? Color.Parse("#B9B9B2") : Color.Parse("#2A332E"));
+        var clock = new TextBlock { Text = "07:42", FontSize = 22, FontWeight = FontWeight.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        clock.Foreground = new SolidColorBrush(ink ? Color.Parse("#0C0C0C") : Color.Parse("#7CF2A0"));
+        if (!ink) clock.Effect = new Avalonia.Media.DropShadowEffect { Color = Color.Parse("#7CF2A0"), BlurRadius = 8, OffsetX = 0, OffsetY = 0, Opacity = .6 };
+        picture.Child = clock; return picture;
     }
 
     // ---- the pill

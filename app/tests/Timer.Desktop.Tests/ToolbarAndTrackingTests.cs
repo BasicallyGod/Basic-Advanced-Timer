@@ -29,11 +29,11 @@ public sealed class ToolbarAndTrackingTests
         {
             Settle(window);
             var chip = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "NowChip"); var line = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "NowMarker");
-            Assert.Equal(model.Engine.Now.ToString("HH:mm"), ((TextBlock)chip.Child!).Text);
+            Assert.Equal(model.Engine.Now.ToString("HH:mm"), ((SegmentText)chip.Child!).Text);
             double Centre(Border b) => b.TranslatePoint(new Point(b.Bounds.Width / 2, 0), window)!.Value.X;
             Assert.Equal(Centre(line), Centre(chip), 0.6); // The chip is centred on the line.
             // And the line is where the current time falls on the hours: so many hours from midnight, at so many pixels an hour, after the gutter.
-            var hour = window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Name == "TimelineHour_12");
+            var hour = window.GetVisualDescendants().OfType<SegmentText>().First(t => t.Name == "TimelineHour_12");
             var twelve = hour.TranslatePoint(new Point(hour.Bounds.Width / 2, 0), window)!.Value.X;
             Assert.Equal(twelve + (model.Engine.Now.TimeOfDay.TotalHours - 12) * model.TimelinePixelsPerHour, Centre(line), 1.0);
         }
