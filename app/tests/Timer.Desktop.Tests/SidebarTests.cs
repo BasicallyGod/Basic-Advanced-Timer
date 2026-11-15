@@ -65,7 +65,7 @@ public sealed class SidebarTests
             Assert.DoesNotContain(Find<Border>(window, "NotesViews").GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "ACCOUNTS");
             Click(window, "NotesAccountFilter"); // One button; the list of accounts hangs under it.
             var one = Find<Button>(window, "NotesAccount_Accountone"); var two = Find<Button>(window, "NotesAccount_Accounttwo");
-            Assert.Contains(one.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "#Accountone"); Assert.Contains(one.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "2"); // Tagged as a note carries it, with its count.
+            Assert.Contains(one.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Account one"); Assert.Contains(one.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "2"); // The real account name, with its count.
             Assert.False(Has(window, "NotesAccountClear")); Assert.Equal(4, window.GetVisualDescendants().OfType<TextBlock>().Count(t => t.Name?.StartsWith("PageNoteText_") == true));
             Click(window, "NotesAccount_Accountone"); one = Find<Button>(window, "NotesAccount_Accountone");
             Assert.Contains("tickDone", one.GetVisualDescendants().OfType<Border>().First(b => b.Classes.Contains("tick")).Classes); Assert.Equal(2, window.GetVisualDescendants().OfType<TextBlock>().Count(t => t.Name?.StartsWith("PageNoteText_") == true)); Assert.True(Has(window, "NotesAccountClear"));

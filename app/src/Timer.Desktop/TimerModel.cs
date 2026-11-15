@@ -269,6 +269,7 @@ public sealed class TimerModel : INotifyPropertyChanged
     public DraftWorkspace Drafts => drafts ??= new DraftWorkspace(this);
     private CreationDrafts? creationDrafts;
     public CreationDrafts CreationDrafts => creationDrafts ??= new CreationDrafts(this);
+    public WeekPresentationState WeekPresentation { get; } = new();
     public event Action? ReviewDraftsRequested;
     public void ReviewDrafts() => ReviewDraftsRequested?.Invoke();
     internal bool CanEditRecords => !closed && store is not { IsDisposed: true };
@@ -554,6 +555,8 @@ public sealed class TimerModel : INotifyPropertyChanged
         drafts?.RelinkAccounts(renames);
         preferences = preferences with { Accounts = WithColours(values) };
         if (renamed.Count > 0 && SelectedAccount is { } picked && renames.TryGetValue(picked, out var now)) SelectedAccount = now;
+        if (WeekPresentation.TracedAccount is { } trace && renames.TryGetValue(trace, out var traced)) WeekPresentation.TracedAccount = traced;
+        else if (WeekPresentation.TracedAccount is { } removed && deleted.Contains(removed) && !ReviewAccounts.Any(a => a.Name.Equals(removed, StringComparison.OrdinalIgnoreCase))) WeekPresentation.TracedAccount = null;
         if (!Accounts.Any(a => a.Name == SelectedAccount)) SelectedAccount = values.FirstOrDefault(a => !a.Hidden)?.Name;
         Save(); Notify();
     }

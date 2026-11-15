@@ -5,7 +5,7 @@ using Timer.Storage;
 namespace Timer.Desktop;
 
 // Cells and Total are the short forms shown on screen (7:00, with a dash for nothing). CopyCells and CopyTotal keep the full wording for pasting.
-public sealed record WeekTableRow(string Label, string[] Cells, string Total, string Style, string[] CopyCells, string CopyTotal);
+public sealed record WeekTableRow(string Label, string[] Cells, string Total, string Style, string[] CopyCells, string CopyTotal, string? Account = null);
 /// <summary>One budgeted account in a week view. Period names the budget period the Used figure belongs to.</summary>
 public sealed record BudgetTableRow(string Account, string Budget, string Used, string Remaining, double Fraction, string Period = "");
 
@@ -14,12 +14,13 @@ public sealed class WeekTable
 {
     public const string AllocatedLabel = "Allocated", UnallocatedLabel = "Unallocated", WorkingLabel = "Working time", BreaksLabel = "Breaks";
     public string[] Headers { get; init; } = Array.Empty<string>();
+    public DateTime[] Dates { get; init; } = Array.Empty<DateTime>();
     public List<WeekTableRow> Rows { get; } = new();
     public List<BudgetTableRow> Budgets { get; } = new();
 
     public static WeekTable Build(TimerModel model, WeekExport reconciled, DateTime weekStart, int[] days)
     {
-        var table = new WeekTable { Headers = new[] { "Account" }.Concat(days.Select(i => weekStart.AddDays(i).ToString("ddd dd/MM", CultureInfo.GetCultureInfo("en-GB")))).Append("Total").ToArray() };
+        var table = new WeekTable { Headers = new[] { "Account" }.Concat(days.Select(i => weekStart.AddDays(i).ToString("ddd dd/MM", CultureInfo.GetCultureInfo("en-GB")))).Append("Total").ToArray(), Dates = days.Select(i => weekStart.AddDays(i).Date).ToArray() };
         // Decimal figures use the reconciled hundredths so rows and columns add up exactly. While a timer runs they are provisional.
         var exact = model.DecimalHours && model.Engine.Active is null;
         string Units(long value) => WeekExport.Hours(value) + "h";
@@ -29,17 +30,17 @@ public sealed class WeekTable
         // On screen the table uses the short form, so seven days fit the width, and a dash where nothing was recorded.
         string Short(TimeSpan time) => time == TimeSpan.Zero ? "–" : model.FormatShort(time);
         string ShortUnits(long value) => value == 0 ? "–" : WeekExport.Hours(value);
-        void Add(string label, Func<int, TimeSpan> time, Func<int, long> units, string style)
+        void Add(string label, Func<int, TimeSpan> time, Func<int, long> units, string style, string? account = null)
         {
             var cells = days.Select(i => exact ? ShortUnits(units(i)) : Short(time(i))).ToArray();
             var copy = days.Select(i => exact ? Units(units(i)) : model.Format(time(i))).ToArray();
             var sum = days.Aggregate(TimeSpan.Zero, (acc, i) => acc + time(i));
-            table.Rows.Add(new(label, cells, exact ? ShortUnits(days.Sum(units)) : Short(sum), style, copy, exact ? Units(days.Sum(units)) : model.Format(sum)));
+            table.Rows.Add(new(label, cells, exact ? ShortUnits(days.Sum(units)) : Short(sum), style, copy, exact ? Units(days.Sum(units)) : model.Format(sum), account));
         }
         foreach (var account in accounts)
         {
             var values = UnitsFor(account.Name);
-            Add(account.Display, i => model.OnDay(account, weekStart.AddDays(i)), i => values[i], "normal");
+            Add(account.Display, i => model.OnDay(account, weekStart.AddDays(i)), i => values[i], "normal", account.Name);
         }
         var perAccount = accounts.Select(a => UnitsFor(a.Name)).ToList();
         // One meaning throughout: Working time is what was given to accounts (Allocated) plus what was not (Unallocated). Breaks are never part of it.

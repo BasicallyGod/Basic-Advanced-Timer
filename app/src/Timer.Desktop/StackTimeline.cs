@@ -48,7 +48,7 @@ public sealed class StackTimeline : Panel
         if (bar.Label.Length > 0) line.Children.Add(label);
         line.Children.Add(length); line.Children.Add(times);
         if (bar.Live) line.Children.Add(new Avalonia.Controls.Shapes.Ellipse { Width = 6, Height = 6, Fill = Brush.Parse(model.CurrentTheme.Colour("Live")), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Name = "StackRecordingDot" });
-        var box = new Border { Name = "Stack_" + bar.Key, Background = new SolidColorBrush(bar.Fill), CornerRadius = new CornerRadius(8), Child = new Border { ClipToBounds = true, CornerRadius = new CornerRadius(8), Child = line }, Focusable = !bar.Live, Cursor = new Cursor(bar.Live ? StandardCursorType.Arrow : StandardCursorType.Hand), Tag = bar };
+        var box = new DisplayItem { Name = "Stack_" + bar.Key, Background = new SolidColorBrush(bar.Fill), CornerRadius = new CornerRadius(8), Child = new Border { ClipToBounds = true, CornerRadius = new CornerRadius(8), Child = line }, Focusable = !bar.Live, Cursor = new Cursor(bar.Live ? StandardCursorType.Arrow : StandardCursorType.Hand), Tag = bar, Selected = bar.Picked, CanSelect = !bar.Live, Activate = _ => { if (bar.Live) model.ExplainRunning(); else PickedBar?.Invoke(bar); } };
         if (bar.Picked) { box.Classes.Add("mergeSelected"); box.BoxShadow = new BoxShadows(new BoxShadow { Spread = 2, Color = Color.Parse(ThemeEngine.LitOf(model.CurrentTheme)) }); box.ZIndex = 3; }
         else if (bar.Live) box.BoxShadow = new BoxShadows(new BoxShadow { Spread = 2, Color = Color.Parse(model.CurrentTheme.Colour("Live")) });
         ToolTip.SetTip(box, bar.Tip); Avalonia.Automation.AutomationProperties.SetName(box, bar.Tip + (bar.Live ? ", recording" : bar.Picked ? ", picked" : ""));
@@ -60,7 +60,6 @@ public sealed class StackTimeline : Panel
             { if (bar.Live) model.ExplainRunning(); else PickedBar?.Invoke(bar); }
             press = null; e.Handled = true;
         };
-        box.KeyDown += (_, e) => { if (!bar.Live && e.Key is Key.Enter or Key.Space) { PickedBar?.Invoke(bar); e.Handled = true; } };
         Children.Add(box); boxes.Add((box, bar, length, times));
         if (bar.Picked && bar.Editable) { AddHandle(bar, true); AddHandle(bar, false); }
     }

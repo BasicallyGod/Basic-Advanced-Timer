@@ -15,6 +15,8 @@ Download **BasicsAdvancedTimer-Windows-experimental** from the latest successful
 
 In Alpha and Experimental, click the **About** tile ten times in quick succession to unlock **Development**. It includes the sample-data demo, controls gallery and frame timing reports. The demo opens with developer features enabled.
 
+Current display and keyboard behaviour, including Phosphor/E-ink, compact account choice, timeline items and Timesheet readouts, is documented in [Display and data presentation](../docs/design/display-data-presentation.md).
+
 ## The two windows
 
 - **Pill.** A small card that stays on top, one line long. From the left it has two lights (the state light: grey idle, green recording, amber on a break; and the reminder light: grey until a reminder is due, then blue and pulsing), the day clock (hours and minutes with the seconds smaller), the primary control (the running account's initials, a play or pause symbol under the pointer; it pauses or resumes), the account's box (a dot and an arrow) and the break control (a cup that turns orange while on a break). A soft ring and glow round the card repeat the state. Click the clock to open the dashboard. The account's box hangs the account list below the pill, with each account's time, budget bar and play button and a Manage accounts icon; choosing an account leaves it open, and the box, Esc or a click elsewhere folds it away. The right-click menu has Collapse to tray. Drag it anywhere to move it.

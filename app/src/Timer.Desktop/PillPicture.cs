@@ -46,7 +46,7 @@ internal sealed class PillPicture : Viewbox
         row.Children.Add(count); Gap(StatusFace.CountNameGap);
         if (full)
         {
-            var name = new SegmentName { Text = "ACME", Colour = Ui.ThemeColour(this, "Ink", Colors.Gray) };
+            var name = new SegmentName { Animate = false, Colour = Ui.ThemeColour(this, "Ink", Colors.Gray) }; name.SetAccount("ACME");
             name.SetInkWindow(StatusFace.NameZone);
             row.Children.Add(new Border { Width = StatusFace.NameZone, Child = name, VerticalAlignment = VerticalAlignment.Center });
             Gap(StatusFace.NameTagGap);

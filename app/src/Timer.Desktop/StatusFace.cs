@@ -123,6 +123,7 @@ public sealed class StatusFace : Grid
     public LowerDisplay? Lower { get; private set; }
     public Button? LowerButton { get; private set; }
     private Border? lowerHost;
+    private DisplayStyle? lowerMenuStyle;
     /// <summary>Shows the tall pill's lower display (or hides it for the full and compact pills). Not for the sidebar.</summary>
     public void SetTall(bool tall)
     {
@@ -135,9 +136,22 @@ public sealed class StatusFace : Grid
         // Named even while hidden, so the button always says what it does.
         var all = LowerDisplay.Cycle; var next = all[(all.ToList().IndexOf(model.PillLower) + 1) % all.Count];
         var tip = LowerDisplay.NameOf(model.PillLower) + " · press for " + LowerDisplay.NameOf(next).ToLowerInvariant();
-        ToolTip.SetTip(LowerButton, tip); Avalonia.Automation.AutomationProperties.SetName(LowerButton, tip);
+        ToolTip.SetTip(LowerButton, tip);
+        Avalonia.Automation.AutomationProperties.SetName(LowerButton, LowerDisplay.NameOf(model.PillLower));
         if (!lowerHost.IsVisible) return;
         Lower.Show(model.PillLower);
+        Avalonia.Automation.AutomationProperties.SetName(LowerButton, LowerDisplay.NameOf(model.PillLower) + ". " + Lower.Description);
+        if (LowerButton is ReadoutButton readout) readout.Value = Lower.Description;
+        if (lowerMenuStyle != DisplayInk.Style || LowerButton.ContextMenu is null)
+        {
+            lowerMenuStyle = DisplayInk.Style;
+            LowerButton.ContextMenu = new ContextMenu { ItemsSource = all.Select(mode =>
+            {
+                var item = new MenuItem { Name = "PillLowerMode_" + mode, Header = LowerDisplay.NameOf(mode), Tag = mode, ToggleType = MenuItemToggleType.Radio };
+                item.Click += (_, _) => model.SetPillLower(mode); return item;
+            }).ToArray() };
+        }
+        foreach (var item in LowerButton.ContextMenu.ItemsSource!.OfType<MenuItem>()) item.IsChecked = Equals(item.Tag, model.PillLower);
         lowerHost.BorderBrush = new SolidColorBrush(SoftTint.WithAlpha(ThemeColourOr("Ink", "#18233A"), SoftTint.IsDark(this) ? .07 : .08));
     }
     /// <summary>The keys' sizes follow the look, which can change while the pill is showing.</summary>
@@ -261,7 +275,7 @@ public sealed class StatusFace : Grid
             // The tall pill's second row sits under the clock row in the same window, behind a faint etched rule. It reaches past the window's padding to both edges,
             // and pressing it steps to the next display.
             Lower = new LowerDisplay(model) { Name = prefix + "Lower" };
-            LowerButton = Ui.Button("", () => model.CyclePillLower(), prefix + "LowerDisplay");
+            LowerButton = new ReadoutButton { Name = prefix + "LowerDisplay", FocusAdorner = DisplayFocus.For(this) }; LowerButton.Click += (_, _) => model.CyclePillLower();
             LowerButton.Classes.Add("pillBare"); LowerButton.Classes.Add("zone"); LowerButton.Padding = new Thickness(0); LowerButton.Content = Lower;
             LowerButton.HorizontalAlignment = HorizontalAlignment.Stretch; LowerButton.HorizontalContentAlignment = HorizontalAlignment.Stretch;
             lowerHost = new Border { Name = prefix + "LowerRow", Child = LowerButton, BorderThickness = new Thickness(0, 1, 0, 0), Margin = new Thickness(-DisplayPadding, 0, -RightPadding, 0), Padding = new Thickness(0, 0, 0, 0), IsVisible = false };
@@ -413,15 +427,15 @@ public sealed class StatusFace : Grid
         // The play tag stays the tracking colour, and turns the break colour on a break, when pressing it resumes.
         Transport!.Colour = onBreak ? BreakGlyphColour(this) : ThemeColourOr(SoftTint.IsDark(this) ? "Live" : "LiveText", "#34D399");
         Transport.Show(recording, instant: !Transport.IsAttachedToVisualTree());
-        var index = shown is null ? -1 : model.Accounts.ToList().FindIndex(a => a.Name == shown);
+        var catalogue = AccountCatalogue.Capture(model, model.Accounts);
+        var index = shown is null ? -1 : catalogue.Items.ToList().FindIndex(a => a.Key.Equals(shown, StringComparison.OrdinalIgnoreCase));
         NameRun!.Colour = ThemeColourOr("Ink", "#18233A");
-        NameRun.Text = shown is null ? (DisplayInk.On ? "Choose" : "CHOOSE") : SegmentName.ForAccount(model.Accounts.FirstOrDefault(a => a.Name == shown)?.Display ?? shown, Math.Max(0, index));
+        NameRun.SetAccount(shown is null ? null : catalogue.Find(shown).DisplayName, Math.Max(0, index));
         if (nameHost is not null)
         {
             // The words the old card showed under the name now live in its tooltip and accessible name.
-            var account = model.Accounts.FirstOrDefault(a => a.Name == shown);
-            var who2 = shown is null ? "Choose an account" : account?.Display ?? shown;
-            var status = onBreak ? "On break" + (model.ResumeAccount is { } back ? " · back to " + (model.Accounts.FirstOrDefault(a => a.Name == back)?.Display ?? back) : "")
+            var who2 = shown is null ? "Choose an account" : catalogue.Find(shown).DisplayName;
+            var status = onBreak ? "On break" + (model.ResumeAccount is { } back ? " · back to " + catalogue.Find(back).DisplayName : "")
                 : model.IsTracking ? "Recording" : shown is null ? "Pick one below" : "Ready to track";
             var words = who2 + " · " + status;
             ToolTip.SetTip(nameHost, words); Avalonia.Automation.AutomationProperties.SetName(nameHost, words);

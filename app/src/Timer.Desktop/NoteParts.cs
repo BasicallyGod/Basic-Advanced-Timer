@@ -30,6 +30,13 @@ public static class NoteParts
         return chip;
     }
 
+    public static Border AccountChip(TimerModel model, string account, IconKind? trailing = null)
+    {
+        var label = AccountPresentation.Label(account); var chip = Chip(label, "plain", null, Dot(model, account), trailing);
+        var text = ((StackPanel)chip.Child!).Children.OfType<TextBlock>().Single(); text.MaxWidth = 180; text.TextTrimming = TextTrimming.CharacterEllipsis;
+        ToolTip.SetTip(chip, label); Avalonia.Automation.AutomationProperties.SetName(chip, label); return chip;
+    }
+
     /// <summary>A round swatch of an account's colour (grey for none).</summary>
     public static Control Dot(TimerModel model, string? account, double size = 10)
     {
@@ -84,7 +91,8 @@ public static class NoteParts
         {
             var button = Ui.Button("", () => pick(option.Name, rest), idPrefix + option.Name.Replace(" ", ""));
             button.Classes.Add("flat"); button.Classes.Set("suggestOn", options.IndexOf(option) == nav.Index); button.HorizontalAlignment = HorizontalAlignment.Stretch; button.HorizontalContentAlignment = HorizontalAlignment.Left;
-            button.Content = Ui.Horizontal(Dot(model, option.Name), new TextBlock { Text = "#" + option.Name.Replace(" ", ""), FontWeight = FontWeight.SemiBold, FontSize = 13 }, Ink(option.Name, "Muted", 13));
+            button.Content = Ui.Horizontal(Dot(model, option.Name), new TextBlock { Text = AccountPresentation.Label(option.Name), FontWeight = FontWeight.SemiBold, FontSize = 13 });
+            Avalonia.Automation.AutomationProperties.SetName(button, "Assign to " + AccountPresentation.Label(option.Name));
             host.Children.Add(button);
         }
         host.IsVisible = options.Count > 0;
