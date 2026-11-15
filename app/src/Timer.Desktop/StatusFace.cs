@@ -145,7 +145,12 @@ public sealed class StatusFace : Grid
     {
         Circle.Width = ControlZone; Circle.Height = ControlHeight; Break.Width = ControlZone; Break.Height = ControlHeight;
         transportControls.Spacing = ControlGap; if (nameHost is not null) nameHost.Width = SidebarNameZone;
+        // E-ink's name fills the whole room it has and scrolls smoothly in it; Phosphor's is whole cells.
+        NameRun?.SetInkWindow(Sidebar ? SidebarNameZone : NameZone);
         if (!Sidebar) displayBox.Padding = new Thickness(DisplayPadding, 0, RightPadding, 0);
+        // The tall pill's lower row reaches past the padding to the window's edges, so its margin follows the padding when the look changes (it was left at the first look's,
+        // and a pointer wash then ran past the pill), and it is clipped to the well's rounded foot so a wash never squares off the corners.
+        if (lowerHost is not null) { lowerHost.Margin = new Thickness(-DisplayPadding, 0, -RightPadding, 0); lowerHost.CornerRadius = new CornerRadius(0, 0, DisplayRadius - 1, DisplayRadius - 1); lowerHost.ClipToBounds = true; }
     }
     public Button ClockButton { get; }
     /// <summary>The lights as a button that opens the pill's alerts; null on the sidebar.</summary>
@@ -260,7 +265,7 @@ public sealed class StatusFace : Grid
             LowerButton.Classes.Add("pillBare"); LowerButton.Classes.Add("zone"); LowerButton.Padding = new Thickness(0); LowerButton.Content = Lower;
             LowerButton.HorizontalAlignment = HorizontalAlignment.Stretch; LowerButton.HorizontalContentAlignment = HorizontalAlignment.Stretch;
             lowerHost = new Border { Name = prefix + "LowerRow", Child = LowerButton, BorderThickness = new Thickness(0, 1, 0, 0), Margin = new Thickness(-DisplayPadding, 0, -RightPadding, 0), Padding = new Thickness(0, 0, 0, 0), IsVisible = false };
-            Grid.SetRow(lowerHost, 1);
+            Grid.SetRow(lowerHost, 1); ApplyKeySizes();
             var rows = new Grid { RowDefinitions = new RowDefinitions(DisplayHeight + ",Auto") };
             displayBox.Child = null; rows.Children.Add(inside); rows.Children.Add(lowerHost); displayBox.Child = PaperLayer.Under(displayBox, rows);
         }

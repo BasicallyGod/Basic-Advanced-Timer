@@ -17,7 +17,7 @@ public enum DisplayStyle { Phosphor, Ink }
 /// </summary>
 public static class DisplayInk
 {
-    public const int DefaultPercent = 60;
+    public const int DefaultPercent = 50;
     // Per thread, like Motion's override: the app draws on one thread, and tests that run side by side must not turn each other's displays to e-ink.
     [ThreadStatic] private static int? chosenPercent;
     [ThreadStatic] private static DisplayStyle? chosenStyle;

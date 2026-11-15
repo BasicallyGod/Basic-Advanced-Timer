@@ -326,7 +326,7 @@ public sealed class EditingTests
     public void VeryShortBlocksAreStillBigEnoughToSeeAndSelectAndSelectedBlocksAddNothingToTheirText()
     {
         var engine = Engine(); engine.Sessions.AddRange(new[] { Row("09:00:00", "09:01:00", "1"), Row("10:00:00", "10:20:00", "20") });
-        var model = new TimerModel(engine); model.SetAccounts(model.AccountSettings.Select(x => x.Name == "Account one" ? x with { Colour = "#102030" } : x));
+        var model = new TimerModel(engine); model.SetOutlinedBlocks(false); model.SetAccounts(model.AccountSettings.Select(x => x.Name == "Account one" ? x with { Colour = "#102030" } : x));
         var window = new DashboardWindow(model); window.Show();
         try
         {

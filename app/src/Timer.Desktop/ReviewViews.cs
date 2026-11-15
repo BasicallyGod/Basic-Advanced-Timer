@@ -227,11 +227,29 @@ public static partial class ReviewViews
     private static void VfdWords(StackPanel text, BlockDetail detail, double width, string length, string name, Color ink, bool isBreak = false, Color? plate = null)
     {
         // The words' own room: the block less the text's margins either side and a little to spare for the round caps (and, in E-ink, the paper plate each line sits on).
-        var room = width - (detail == BlockDetail.Full ? (width < 84 ? 14 : 20) : 16) - 6 - (plate is null ? 0 : 8);
+        var room = width - (detail == BlockDetail.Full ? (width < 84 ? 14 : 20) : 16) - 6 - (plate is null ? 0 : 2);
         var upper = isBreak ? "BREAK" : LowerDisplay.Drawable(name); var initials = isBreak ? "" : LowerDisplay.Drawable(PillWindow.Initials(name));
         SegmentText Seg(string words, double height) => new(words, height, ink, weight: 1.3) { Name = "BlockWords", Plate = plate };
         bool Fits(string words, double height) => words.Length >= 2 && SegmentText.Fits(words, height, room);
-        switch (detail)
+        // E-ink sets every block's words in one size (12 for the length, 11 for the line under it), dropping a line before shrinking it, so neighbouring blocks never differ.
+        if (DisplayInk.On)
+        {
+            switch (detail)
+            {
+                case BlockDetail.Full:
+                    if (Fits(length, 12)) text.Children.Add(Seg(length, 12));
+                    var inkShown = Fits(upper, 11) ? upper : Fits(initials, 11) ? initials : null;
+                    if (inkShown is not null && text.Children.Count > 0) text.Children.Add(Seg(inkShown, 11)); else if (inkShown is not null && !isBreak) text.Children.Add(Seg(inkShown, 11));
+                    text.Spacing = 4; break;
+                case BlockDetail.Inline:
+                    var one = Fits(length + " " + upper, 11) ? length + " " + upper : Fits(length + " " + initials, 11) ? length + " " + initials : Fits(length, 11) ? length : null;
+                    if (one is not null) text.Children.Add(Seg(one, 11)); break;
+                default:
+                    var tiny = Fits(initials + " " + length, 11) ? initials + " " + length : Fits(initials, 11) ? initials : null;
+                    if (tiny is not null) text.Children.Add(Seg(tiny, 11)); break;
+            }
+        }
+        else switch (detail)
         {
             case BlockDetail.Full:
                 if (Fits(length, 15)) text.Children.Add(Seg(length, 15)); else if (Fits(length, 12)) text.Children.Add(Seg(length, 12)); else if (Fits(length, 9)) text.Children.Add(Seg(length, 9));

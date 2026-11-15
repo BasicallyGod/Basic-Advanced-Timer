@@ -6,6 +6,12 @@ The right-click menu shows `Version 0.1.<build> (<commit>)` and the channel for 
 
 The dated Avalonia milestones below are newest first, not numbered releases. Use the [alpha commit history](https://github.com/BasicallyGod/Basic-Advanced-Timer/commits/alpha/) and [build workflow runs](https://github.com/BasicallyGod/Basic-Advanced-Timer/actions/workflows/avalonia-preview.yml) to identify a packaged build.
 
+## 15 November 2026
+
+| Change | Commit | Details |
+|---|---|---|
+| Third round from Windows: Outlined blocks are now the Phosphor default (a Settings, Look tick turns them off, `blocks=filled`); E-ink grain defaults to 50 per cent; E-ink block words use one size on every block; the account name in E-ink fills its whole box, is centred on the keys and slides a few pixels at a time with a rest at the start, instead of jumping a cell; the tall pill's lower row follows the padding when the look changes and is clipped to the well's rounded foot, so a hover wash no longer overhangs the pill. | pending | Not yet seen on real Windows. |
+
 ## 14 November 2026
 
 | Change | Commit | Details |

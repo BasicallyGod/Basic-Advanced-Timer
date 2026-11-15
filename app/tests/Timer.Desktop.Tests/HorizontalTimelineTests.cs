@@ -61,7 +61,7 @@ public sealed class HorizontalTimelineTests
     [AvaloniaFact]
     public void ABreakIsAnOutlineAndAnAccountBlockIsLitInItsOwnColour()
     {
-        var model = Model(); model.Engine.Sessions.Add(new("2026-10-21", "Account one", "09:00:00", "recorded", "60"));
+        var model = Model(); model.SetOutlinedBlocks(false); model.Engine.Sessions.Add(new("2026-10-21", "Account one", "09:00:00", "recorded", "60"));
         model.Engine.Sessions.Add(new("2026-10-21", BreakAccount.Name, "10:00:00", "recorded", "30"));
         var window = new DashboardWindow(model); window.Show(); Settle(window);
         try

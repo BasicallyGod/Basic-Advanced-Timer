@@ -173,7 +173,7 @@ public sealed class FeedbackRound10Tests
     [AvaloniaFact]
     public void TheRecordingBlocksGreenRingIsTheSameWidthAllRoundAndOutsideTheBlockLikeTheSelectionRing()
     {
-        var model = Model(out _); model.ToggleAccount("Account one"); var window = new DashboardWindow(model); window.Show(); Settle(window);
+        var model = Model(out _); model.SetOutlinedBlocks(false); model.ToggleAccount("Account one"); var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
             var card = window.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TimelineRecording");

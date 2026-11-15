@@ -47,7 +47,8 @@ public sealed class VfdTimelineTests
     [AvaloniaFact]
     public void OnTheDisplayTheTimelineIsDrawnInSegmentsUnderOneMesh()
     {
-        var model = Demo(); if (!model.IsTracking) model.ToggleAccount(model.Accounts[0].Name);
+        // The filled look; outlined is the default and has its own test.
+        var model = Demo(); model.SetOutlinedBlocks(false); if (!model.IsTracking) model.ToggleAccount(model.Accounts[0].Name);
         var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {

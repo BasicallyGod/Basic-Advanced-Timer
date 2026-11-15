@@ -21,10 +21,10 @@ public sealed class DisplayInkTests
     private static double Over(Color a, Color paper) => ThemeColours.Contrast(Hex(a), Hex(paper));
 
     [Fact]
-    public void PhosphorIsTheDefaultAndSixtyIsTheStrength()
+    public void PhosphorIsTheDefaultAndFiftyIsTheStrength()
     {
         var model = Demo();
-        Assert.Equal(DisplayStyle.Phosphor, model.DisplayStyle); Assert.Equal(60, model.InkPercent);
+        Assert.Equal(DisplayStyle.Phosphor, model.DisplayStyle); Assert.Equal(50, model.InkPercent);
         Assert.False(DisplayInk.On);
     }
 
@@ -121,7 +121,7 @@ public sealed class DisplayInkTests
             Assert.Contains("selected", Find<Button>("DisplayStylePhosphor").Classes); Assert.False(Find<Slider>("InkStrength").IsEnabled);
             Find<Button>("DisplayStyleInk").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
             Assert.Equal(DisplayStyle.Ink, model.DisplayStyle); Assert.Contains("selected", Find<Button>("DisplayStyleInk").Classes);
-            var slider = Find<Slider>("InkStrength"); Assert.True(slider.IsEnabled); Assert.Equal(60, slider.Value);
+            var slider = Find<Slider>("InkStrength"); Assert.True(slider.IsEnabled); Assert.Equal(50, slider.Value);
             slider.Value = 20; Dispatcher.UIThread.RunJobs(); Assert.Equal(20, model.InkPercent);
         }
         finally { window.Close(); DisplayInk.Style = DisplayStyle.Phosphor; }
@@ -232,6 +232,58 @@ public sealed class DisplayInkTests
             Assert.NotEqual(before, instrument.ShownAccounts);
         }
         finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void OutlinedBlocksAreTheDefaultAndFilledIsTheChoice()
+    {
+        var model = Demo(); Assert.True(model.OutlinedBlocks);
+        model.SetOutlinedBlocks(false); Assert.False(model.OutlinedBlocks); model.SetOutlinedBlocks(true); Assert.True(model.OutlinedBlocks);
+    }
+
+    [AvaloniaFact]
+    public void EInksNameFillsItsRoomAndSlidesAFewPixelsAtATime()
+    {
+        using var motion = new EnabledMotionScope();
+        var model = Demo(); model.SetDisplayStyle(DisplayStyle.Ink); var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs();
+        try
+        {
+            var run = pill.GetVisualDescendants().OfType<SegmentName>().Single();
+            Assert.Equal(StatusFace.NameZone, run.Width, 1); // The whole box, not six whole cells.
+            run.Text = "A very long account name indeed";
+            Assert.True(run.Scrolling); run.Step(1500); Assert.Equal(0, run.InkOffset); // A rest at the start first,
+            run.Step(100); Assert.InRange(run.InkOffset, 1, SegmentName.CellWidth - 1); // then a slide in pixels, not a jump of a cell.
+            model.SetDisplayStyle(DisplayStyle.Phosphor); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(SegmentName.Cells * SegmentName.CellWidth + SegmentName.CellHeight * SegmentName.Slant, run.Width, 1); // Phosphor goes back to its cells.
+        }
+        finally { pill.Close(); DisplayInk.Style = DisplayStyle.Phosphor; }
+    }
+
+    [AvaloniaFact]
+    public void TheTallPillsLowerRowFollowsThePaddingAndIsClippedToTheWellsFoot()
+    {
+        var model = Demo(); model.SetTallPill(true); var pill = new PillWindow(model); pill.Show(); Dispatcher.UIThread.RunJobs();
+        try
+        {
+            Border Row() => pill.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "PillLowerRow");
+            Assert.Equal(-6, Row().Margin.Right); Assert.True(Row().ClipToBounds); Assert.Equal(StatusFace.DisplayRadius - 1, Row().CornerRadius.BottomRight);
+            model.SetDisplayStyle(DisplayStyle.Ink); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(-12, Row().Margin.Right); // It was left at the first look's margin, so a wash ran past the pill.
+        }
+        finally { pill.Close(); DisplayInk.Style = DisplayStyle.Phosphor; }
+    }
+
+    [AvaloniaFact]
+    public void EInkBlockWordsAreOneSizeOnEveryBlock()
+    {
+        var model = Demo(); model.SetDisplayStyle(DisplayStyle.Ink);
+        var window = new DashboardWindow(model); window.Show(); for (var pass = 0; pass < 3; pass++) { Dispatcher.UIThread.RunJobs(); using var f = window.CaptureRenderedFrame(); }
+        try
+        {
+            var heights = window.GetVisualDescendants().OfType<SegmentText>().Where(t => t.Name == "BlockWords").Select(t => t.CellHeight).Distinct().OrderBy(h => h).ToList();
+            Assert.NotEmpty(heights); Assert.All(heights, h => Assert.Contains(h, new[] { 11.0, 12.0 })); // One size for the length and one for the line under it.
+        }
+        finally { window.Close(); DisplayInk.Style = DisplayStyle.Phosphor; }
     }
 
     [Fact]
