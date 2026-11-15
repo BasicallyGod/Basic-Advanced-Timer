@@ -47,11 +47,11 @@ public sealed class SettingsPageTests
         {
             OpenSettings(window);
             var hm = window.GetVisualDescendants().OfType<Button>().Single(c => c.Name == "TimeFormatHm"); var dec = window.GetVisualDescendants().OfType<Button>().Single(c => c.Name == "TimeFormatDecimal");
-            Assert.False(model.DecimalHours); Assert.Contains("selected", hm.Classes);
+            Assert.False(model.DecimalHours); Assert.Contains("optOn", hm.Classes);
             dec.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); // Choosing 1.50h flips the model.
-            Assert.True(model.DecimalHours); Assert.Contains("selected", dec.Classes); Assert.DoesNotContain("selected", hm.Classes);
+            Assert.True(model.DecimalHours); Assert.Contains("optOn", dec.Classes); Assert.DoesNotContain("optOn", hm.Classes);
             model.ToggleFormat(); Dispatcher.UIThread.RunJobs(); // Changed from the menu instead.
-            Assert.False(model.DecimalHours); Assert.Contains("selected", hm.Classes);
+            Assert.False(model.DecimalHours); Assert.Contains("optOn", hm.Classes);
         }
         finally { window.Close(); }
     }

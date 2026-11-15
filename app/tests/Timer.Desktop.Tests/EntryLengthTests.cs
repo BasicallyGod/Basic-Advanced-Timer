@@ -32,12 +32,12 @@ public sealed class EntryLengthTests
         try
         {
             Dispatcher.UIThread.RunJobs();
-            Assert.Equal("0:30", Find<TextBox>(window, "EntryLength").Text);
+            Assert.Equal("00:30", Find<TextBox>(window, "EntryLength").Text);
             Type(window, "EntryLength", "45"); Assert.Equal("11:45:00", Find<TextBox>(window, "EntryEnd").Text); // Plain numbers are minutes.
             Type(window, "EntryLength", "1:15"); Assert.Equal("12:15:00", Find<TextBox>(window, "EntryEnd").Text);
             Type(window, "EntryLength", "0:20:30"); Assert.Equal("11:20:30", Find<TextBox>(window, "EntryEnd").Text);
-            Type(window, "EntryEnd", "11:50:00"); Assert.Equal("0:50", Find<TextBox>(window, "EntryLength").Text);
-            Type(window, "EntryStart", "11:10:00"); Assert.Equal("0:40", Find<TextBox>(window, "EntryLength").Text); // Moving the start changes the length, the end stays.
+            Type(window, "EntryEnd", "11:50:00"); Assert.Equal("00:50", Find<TextBox>(window, "EntryLength").Text);
+            Type(window, "EntryStart", "11:10:00"); Assert.Equal("00:40", Find<TextBox>(window, "EntryLength").Text); // Moving the start changes the length, the end stays.
             Type(window, "EntryLength", "twenty"); Assert.Equal("11:50:00", Find<TextBox>(window, "EntryEnd").Text); // Nonsense changes nothing.
             Type(window, "EntryLength", "23:59"); Assert.Equal("11:09:00", Find<TextBox>(window, "EntryEnd").Text); Assert.Equal("", Find<TextBlock>(window, "EntryError").Text); // A block may cross midnight: 11:10 and 23:59 later is 11:09 the next day.
         }
@@ -51,14 +51,14 @@ public sealed class EntryLengthTests
         try
         {
             model.ToggleSelection(new[] { engine.Sessions[0] }); Dispatcher.UIThread.RunJobs();
-            Assert.Equal("0:30", Find<TextBox>(window, "SelectedLength").Text);
+            Assert.Equal("00:30", Find<TextBox>(window, "SelectedLength").Text);
             // A longer length runs into the next block. There is no question: the blocks overlap and stack on the timeline, and the time counts twice.
             Type(window, "SelectedLength", "0:45"); Find<TextBox>(window, "SelectedLength").RaiseEvent(new Avalonia.Input.KeyEventArgs { RoutedEvent = Avalonia.Input.InputElement.KeyDownEvent, Key = Avalonia.Input.Key.Enter });
             Dispatcher.UIThread.RunJobs();
             Assert.Equal("09:00:00", engine.Sessions[0].Start); Assert.Equal(45.0, engine.Sessions[0].Duration.TotalMinutes, 0.05);
             Assert.Equal("09:30:00", engine.Sessions[1].Start); // The next block did not move.
             Assert.True(engine.Sessions[0].To > engine.Sessions[1].From);
-            Assert.Equal("0:45", Find<TextBox>(window, "SelectedLength").Text); Assert.Equal("09:45:00", Find<TextBox>(window, "SelectedEnd").Text);
+            Assert.Equal("00:45", Find<TextBox>(window, "SelectedLength").Text); Assert.Equal("09:45:00", Find<TextBox>(window, "SelectedEnd").Text);
             Assert.Equal(TimeSpan.FromMinutes(45 + 30 + 30), engine.Credited("Account one", Day, Day.AddDays(1)) + engine.Credited("Account two", Day, Day.AddDays(1)));
             Assert.True(model.UndoEdit()); Assert.Equal(30.0, engine.Sessions[0].Duration.TotalMinutes, 0.05);
         }

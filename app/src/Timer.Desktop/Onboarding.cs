@@ -133,9 +133,13 @@ public sealed class OnboardingView : Grid
     private void AddRow(AccountSettings account, bool existing)
     {
         var name = new TextBox { Text = account.Name, Watermark = "Client name", Margin = new Thickness(0, 0, 8, 0), Name = "SetupName" + accountRows.Count };
-        var budget = new TextBox { Text = account.BudgetHours?.ToString("0.###", CultureInfo.InvariantCulture) ?? "", Watermark = "none", Margin = new Thickness(0, 0, 8, 0), Name = "SetupBudget" + accountRows.Count };
+        var budget = new DurationBox(DurationUnit.Hours, model, "Budget for " + account.Name) { Watermark = "none", Margin = new Thickness(0, 0, 8, 0), Name = "SetupBudget" + accountRows.Count };
+        budget.SetHours(account.BudgetHours);
         var period = new ComboBox { ItemsSource = new[] { "day", "week", "month", "quarter" }, SelectedItem = account.BudgetPeriod, HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 0, 8, 0) };
         var show = new CheckBox { IsChecked = !account.Hidden, HorizontalAlignment = HorizontalAlignment.Center };
+        Avalonia.Automation.AutomationProperties.SetName(name, "Account name");
+        Avalonia.Automation.AutomationProperties.SetName(period, "Budget period for " + account.Name);
+        Avalonia.Automation.AutomationProperties.SetName(show, "Show " + account.Name + " in tracker");
         var row = (existing ? account.Name : null, account.Colour, name, budget, period, show);
         accountRows.Add(row);
         accountList?.Children.Add(RowGrid(row));
@@ -158,7 +162,7 @@ public sealed class OnboardingView : Grid
             double? budget = null;
             if (!string.IsNullOrWhiteSpace(row.Budget.Text))
             {
-                if (!double.TryParse(row.Budget.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var hours) || hours <= 0) { Fail("Use positive budget hours, such as 7.5, or leave the budget blank."); return false; }
+                if (((DurationBox)row.Budget).ReadHours() is not { } hours) { Fail("Budget: use 07:30 or 7.5h, or leave it blank."); return false; }
                 budget = hours;
             }
             accounts.Add(new AccountSettings(name, budget, (string?)row.Period.SelectedItem ?? "week", row.Show.IsChecked != true, row.Colour));
@@ -186,7 +190,8 @@ public sealed class OnboardingView : Grid
             var shift = schedule.Shifts.GetValueOrDefault(first) ?? schedule.Default;
             startBox = new TextBox { Text = shift.Start.ToString(@"hh\:mm"), Width = 90, Name = "SetupStart" }; endBox = new TextBox { Text = shift.End.ToString(@"hh\:mm"), Width = 90, Name = "SetupEnd" };
             // A timer that has never had a break chosen is offered half an hour, the usual lunch; one that has keeps what it has, even if that is nothing.
-            breakBox = new TextBox { Text = (model.BreakAllowanceChosen ? model.BreakAllowance : TimeSpan.FromMinutes(30)).ToString(@"hh\:mm"), Width = 90, Name = "SetupBreak", HorizontalAlignment = HorizontalAlignment.Left };
+            var duration = new DurationBox(DurationUnit.Minutes, model, "Break each day", allowZero: true) { Width = 100, Name = "SetupBreak", HorizontalAlignment = HorizontalAlignment.Left };
+            duration.SetDuration(model.BreakAllowanceChosen ? model.BreakAllowance : TimeSpan.FromMinutes(30)); breakBox = duration;
             foreach (var day in new[] { DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Saturday, DayOfWeek.Sunday })
                 dayBoxes.Add((day, new CheckBox { Content = day.ToString()[..3], IsChecked = schedule.Days.Contains(day), Name = "SetupDay" + day.ToString()[..3] }));
         }
@@ -206,7 +211,7 @@ public sealed class OnboardingView : Grid
     }
     private bool ApplyHours()
     {
-        if (!TimeSpan.TryParseExact((breakBox.Text ?? "").Trim(), @"hh\:mm", CultureInfo.InvariantCulture, TimeSpanStyles.None, out var allowance) || allowance > TimeSpan.FromHours(4)) { Fail("Break each day: HH:mm, up to 04:00."); return false; }
+        if (((DurationBox)breakBox).ReadDuration() is not { } allowance || allowance > TimeSpan.FromHours(4)) { Fail("Break each day: use 00:30 or 0.5h, up to 04:00."); return false; }
         model.SetBreakAllowance(allowance);
         // Hours set one day at a time in their own dialog are kept as they are, rather than flattened to one shift.
         if (customHours) return true;
@@ -230,7 +235,9 @@ public sealed class OnboardingView : Grid
         {
             var text = new StackPanel { Spacing = 4, HorizontalAlignment = HorizontalAlignment.Left };
             text.Children.Add(Ui.Text(heading, 14)); var big = Ui.Text(example, 26); big.Classes.Add("clock"); text.Children.Add(big);
-            var tile = Ui.Button("", () => { decimalChoice = decimalValue; Mark(); }, name);
+            var tile = new ChoiceButton("selected") { Name = name };
+            tile.Click += (_, _) => { decimalChoice = decimalValue; Mark(); };
+            Avalonia.Automation.AutomationProperties.SetName(tile, heading);
             tile.Classes.Add("choiceTile"); tile.Content = text; tile.HorizontalAlignment = HorizontalAlignment.Stretch; tile.HorizontalContentAlignment = HorizontalAlignment.Left;
             return tile;
         }

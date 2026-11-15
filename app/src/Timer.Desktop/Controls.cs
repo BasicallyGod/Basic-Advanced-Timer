@@ -178,6 +178,7 @@ public static class Ui
     public static Button DialogButton(string text, Action click, string? name = null, bool? main = null)
     {
         var button = Button(text, click, name);
+        Avalonia.Automation.AutomationProperties.SetName(button, text);
         button.Classes.Add("toolButton"); button.Classes.Add("quiet"); button.Classes.Add("dialogButton");
         if (main ?? MainActions.Contains(text)) button.Classes.Add("mainAction");
         return button;

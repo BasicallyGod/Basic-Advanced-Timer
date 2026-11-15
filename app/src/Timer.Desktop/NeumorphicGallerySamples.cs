@@ -153,9 +153,11 @@ internal static class NeumorphicGallerySamples
         body.Children.Add(Card("On / off · inset track, raised knob", Row(
             new ToggleSwitch { Name = p + "_SwitchOff", IsChecked = false }, new ToggleSwitch { Name = p + "_SwitchOn", IsChecked = true },
             new ToggleSwitch { Name = p + "_SwitchDisabled", IsChecked = true, IsEnabled = false })));
+        var budget = new DurationBox(DurationUnit.Hours, false, "Budget") { Name = p + "_Budget", Width = 110, Height = 36 }; budget.SetHours(7.5);
+        var length = new DurationBox(DurationUnit.Minutes, true, "Length") { Name = p + "_Length", Width = 110, Height = 36 }; length.SetDuration(TimeSpan.FromMinutes(90));
         body.Children.Add(Card("Text, budget and time fields", new TextBox { Name = p + "_InputText", Watermark = "Write a note", Height = 36 },
             new TextBox { Watermark = "Disabled field", Height = 36, IsEnabled = false },
-            Row(new TextBox { Name = p + "_Budget", Text = "37.5", Width = 100, Height = 36 }, new TextBox { Text = "09:00", Width = 100, Height = 36 })));
+            Row(budget, length, new TextBox { Text = "09:00", Width = 100, Height = 36 }), Caption("Budget numbers are hours; block length numbers are minutes. Both accept 01:30 or 1.5h.")));
         body.Children.Add(Card("Dropdown and scale", Row(new ComboBox { Name = p + "_InputDropdown", ItemsSource = new[] { "Day", "Week", "Month", "Quarter" }, SelectedIndex = 1, Width = 150 }),
             new Slider { Name = p + "_Scale", Minimum = 50, Maximum = 120, Value = 90, Width = 280, HorizontalAlignment = HorizontalAlignment.Left }));
         var calendar = new SoftDatePicker { Name = p + "_Calendar", HorizontalAlignment = HorizontalAlignment.Left };

@@ -44,14 +44,15 @@ public sealed class ShiftEditor : StackPanel
             Ui.Put(row, on); Ui.Put(row, start, 1); Ui.Put(row, Ui.Dash(), 2); Ui.Put(row, end, 3);
             root.Children.Add(row); entries.Add((day, on, start, end));
         }
-        var breakBox = new TextBox { Text = model.BreakAllowance.ToString(@"hh\:mm"), Width = 80, Name = "BreakAllowance" };
+        var breakBox = new DurationBox(DurationUnit.Minutes, model, "Break each day", allowZero: true) { Width = 90, Name = "BreakAllowance" };
+        breakBox.SetDuration(model.BreakAllowance);
         if (withBreaks)
         {
             // The break is what turns the clock hours into the time you are to work, so it is a group of its own, set apart in a well with a live sum, and not one more line under the days.
             var well = new Border { Name = "DailyBreak", CornerRadius = new CornerRadius(12), Padding = new Thickness(16, 12), Margin = new Thickness(0, 6, 0, 2) };
             well.Bind(Border.BackgroundProperty, well.GetResourceObservable("Well")); well.Bind(Border.BoxShadowProperty, well.GetResourceObservable("ShadowSunk"));
             var inner = new StackPanel { Spacing = 8 };
-            var breakRow = Ui.Grid("*,80"); var breakLabel = Ui.Text("Break each day", 14); breakLabel.Name = "BreakEachDay"; breakLabel.FontWeight = Avalonia.Media.FontWeight.SemiBold;
+            var breakRow = Ui.Grid("*,90"); var breakLabel = Ui.Text("Break each day", 14); breakLabel.Name = "BreakEachDay"; breakLabel.FontWeight = Avalonia.Media.FontWeight.SemiBold;
             Ui.Put(breakRow, breakLabel); Ui.Put(breakRow, breakBox, 1); inner.Children.Add(breakRow);
             var breakNote = Ui.Text("Taken off every working day, so the schedule is the time you are to work.", 12, "muted"); breakNote.TextWrapping = Avalonia.Media.TextWrapping.Wrap; inner.Children.Add(breakNote);
             var sum = Ui.Text("", 13); sum.Name = "BreakSummary"; sum.FontWeight = Avalonia.Media.FontWeight.SemiBold; sum.TextWrapping = Avalonia.Media.TextWrapping.Wrap; inner.Children.Add(sum);
@@ -59,10 +60,10 @@ public sealed class ShiftEditor : StackPanel
             void Sum()
             {
                 var first = entries.FirstOrDefault(e => e.On.IsChecked == true);
-                bool ok1 = TimeSpan.TryParseExact((first.Start?.Text ?? "").Trim(), new[] { "h\\:mm", "hh\\:mm" }, CultureInfo.InvariantCulture, out var from), ok2 = TimeSpan.TryParseExact((first.End?.Text ?? "").Trim(), new[] { "h\\:mm", "hh\\:mm" }, CultureInfo.InvariantCulture, out var to), ok3 = TimeSpan.TryParseExact((breakBox.Text ?? "").Trim(), new[] { "h\\:mm", "hh\\:mm" }, CultureInfo.InvariantCulture, out var brk);
-                if (first.Start is null || !ok1 || !ok2 || !ok3 || to <= from) { sum.Text = ""; return; }
+                bool ok1 = TimeSpan.TryParseExact((first.Start?.Text ?? "").Trim(), new[] { "h\\:mm", "hh\\:mm" }, CultureInfo.InvariantCulture, out var from), ok2 = TimeSpan.TryParseExact((first.End?.Text ?? "").Trim(), new[] { "h\\:mm", "hh\\:mm" }, CultureInfo.InvariantCulture, out var to);
+                if (first.Start is null || !ok1 || !ok2 || breakBox.ReadDuration() is not { } brk || brk > TimeSpan.FromHours(4) || to <= from) { sum.Text = ""; return; }
                 var net = to - from - brk; if (net < TimeSpan.Zero) net = TimeSpan.Zero;
-                sum.Text = $"{from:hh\\:mm} to {to:hh\\:mm} less {brk:hh\\:mm} break: {net:hh\\:mm} to work.";
+                sum.Text = $"{from:hh\\:mm} to {to:hh\\:mm} less {model.Format(brk)} break: {model.Format(net)} to work.";
             }
             foreach (var e in entries) { e.Start.PropertyChanged += (_, ev) => { if (ev.Property == TextBox.TextProperty) Sum(); }; e.End.PropertyChanged += (_, ev) => { if (ev.Property == TextBox.TextProperty) Sum(); }; e.On.IsCheckedChanged += (_, _) => Sum(); }
             breakBox.PropertyChanged += (_, ev) => { if (ev.Property == TextBox.TextProperty) Sum(); };
@@ -79,7 +80,7 @@ public sealed class ShiftEditor : StackPanel
                 var shifts = entries.Where(e => e.On.IsChecked == true).ToDictionary(e => e.Day,
                     e => new Shift(TimeSpan.ParseExact(e.Start.Text ?? "", @"hh\:mm", CultureInfo.InvariantCulture),
                         TimeSpan.ParseExact(e.End.Text ?? "", @"hh\:mm", CultureInfo.InvariantCulture)));
-                var allowance = withBreaks ? TimeSpan.ParseExact((breakBox.Text ?? "").Trim(), @"hh\:mm", CultureInfo.InvariantCulture) : model.BreakAllowance;
+                var allowance = withBreaks ? breakBox.ReadDuration() ?? throw new FormatException() : model.BreakAllowance;
                 if (allowance < TimeSpan.Zero || allowance > TimeSpan.FromHours(4)) { error.Text = "Break each day: up to 04:00."; return; }
                 model.SetShifts(shifts, today.IsChecked == true);
                 if (model.LastError is not null) { error.Text = model.LastError; return; }
@@ -87,7 +88,7 @@ public sealed class ShiftEditor : StackPanel
                 error.Text = ""; saved();
             }
             catch (Exception ex) when (ex is FormatException or ArgumentException or OverflowException)
-            { error.Text = "Use HH:mm, with an end after the start, and at least one working day. The break is HH:mm too."; }
+            { error.Text = "Use HH:mm, with an end after the start, and at least one working day. Break: 00:30 or 0.5h."; }
         }, "SaveShifts"));
         if (cancelled is not null) buttons.Children.Add(Ui.DialogButton("Cancel", cancelled));
         root.Children.Add(buttons);

@@ -191,7 +191,8 @@ public sealed partial class SelectedBlockCard : Border
                 model.MoveEntries(now.Rows, BreakAccount.Stored(chosen));
             };
         var start = Box("SelectedStart", TimeText.ShowClock(block.Start, day), !group); var end = Box("SelectedEnd", TimeText.ShowClock(block.End, day), !group);
-        var length = Box("SelectedLength", TimeText.ShowLength(block.End - block.Start), !group);
+        var length = new DurationBox(DurationUnit.Minutes, model, "Length") { Name = "SelectedLength", Height = 38, IsEnabled = !group, HorizontalAlignment = HorizontalAlignment.Stretch };
+        length.SetDuration(block.End - block.Start);
         Field(fields, 0, "Account", account); Field(fields, 1, "Start", start); Field(fields, 2, "End", end); Field(fields, 3, "Length", length);
         body.Children.Add(fields);
         if (!group)
@@ -205,7 +206,7 @@ public sealed partial class SelectedBlockCard : Border
                 DateTime newEnd;
                 if (which == "length")
                 {
-                    if (TimeText.ParseLength(length.Text) is not { } span) { model.Refuse("Length: try 1:30 or 90"); return; }
+                    if (length.ReadDuration() is not { } span) { model.Refuse("Length: try 01:30, 1.5h or 90 minutes"); return; }
                     newEnd = newStart + span;
                 }
                 else if (!TimeText.TryParseClock(end.Text, day, true, out newEnd)) { model.Refuse("End: try 10:30"); return; }
@@ -288,7 +289,8 @@ public sealed partial class SelectedBlockCard : Border
     {
         void Set(TextBox? box, string text) { if (box is not null && (all || !box.IsFocused) && box.Text != text) box.Text = text; }
         Set(startBox, TimeText.ShowClock(block.Start, block.Start.Date)); Set(endBox, TimeText.ShowClock(block.End, block.Start.Date));
-        Set(lengthBox, TimeText.ShowLength(block.End - block.Start)); Set(noteBox, block.Note);
+        if (lengthBox is DurationBox length && (all || !length.IsFocused)) length.SetDuration(block.End - block.Start);
+        Set(noteBox, block.Note);
     }
 
     private static TextBox Box(string name, string text, bool enabled) => new() { Name = name, Text = text, Height = 38, IsEnabled = enabled, HorizontalAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Center };
