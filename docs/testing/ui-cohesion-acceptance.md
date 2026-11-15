@@ -29,6 +29,7 @@ All data is disposable: a new explicit `--data-dir` for setup/recovery and a sep
 | Large Notes | 20,303 records, 20,000 completed; All/Done filters and native wheel scrolling | Completed history shows about 11–12 realised row controls in captured trees, rather than thousands |
 | Virtualised draft | Edit completed row, scroll it out, verify editor absent, scroll back, Save | Exact draft returns; saved text and completed state confirmed in database after shutdown |
 | Persistence | Graceful fresh-fixture close/reopen; later abrupt stress-fixture termination with no running recording | Saved notes/meeting/settings retained; SQLite integrity check reports ok |
+| Portable export | Native Export CSV files on the stress fixture, 9–15 November | Both files written; 23 account totals and all 161 account/day cells reconcile with detail hours, including zeros |
 
 The stress fixture also contained 5,025 ledger entries and 23 accounts before transport checks. History and overlaps were deliberately synthetic; their totals are not a realistic working week. A full current-schema fixture was seeded while the app was closed. An initial seed with assumed account IDs failed its transaction and was corrected to use actual account identities before observations began.
 
@@ -58,22 +59,44 @@ Row badges now also read the note model's persistence state and observe note cha
 
 These changes do not alter storage schema, recording policy, shared package pins, display geometry or the approved material renderers.
 
+### F-04: Windows larger-text preference is not reflected in ordinary app text — open
+
+With explicit permission, Windows Text size was changed from 100% to exactly 150% and applied. Windows Settings and other desktop text enlarged. Ordinary Timer Settings labels retained their original size. A cold launch of the fixed candidate into first-run setup also retained the original text sizes. Therefore this is **not** a passed larger-text accessibility check, even though the inspected layouts did not clip. Text size was restored to 100% afterwards.
+
+This is separate from DPI scaling, which the app does respond to. A follow-up should define shared, scalable typography for ordinary labels, editors, menus and dialogs, read the Windows preference at startup and when it changes, and exercise wrapping, minimum window areas and popup placement. The fixed-size instrument displays need their own deliberate policy so expanding ordinary text does not accidentally stretch the segment glyphs or change the approved pill geometry. Increasing isolated font constants, or merely scaling the whole app as a substitute for text adaptation, would not establish a coherent solution.
+
+This follow-up remains open; it has not been silently folded into the three contained acceptance corrections. No whole-app accessibility or Main-release acceptance is claimed.
+
 ## Performance evidence and limits
 
 A passive report from the stress fixture measured approximately 975 ms to pill opened and 4,011 ms to dashboard-prepared callback. Startup storage load was 31.4 ms; model construction 38.3 ms. Account refresh averaged 3.9 ms across 73 calls, worst 14.0 ms. Save averaged 52.2 ms across eight calls, worst 206.2 ms. These numbers are a single-machine sample, not thresholds or a before/after benchmark.
 
 The sampled expansion recorded a 32.8 ms worst native callback gap and 3.0 ms worst dispatcher probe lateness. Animation update itself peaked at 0.5 ms. Preparation cost 109.1 ms, including a 49.6 ms dashboard capture; total transition including preparation was 466.5 ms. This sample did not reproduce the previously reported 80–110 ms delay cluster. It does not establish that intermittent stalls are fixed.
 
-Continuous timing is a separate diagnostic pass. Screenshot capture, UI Automation and concurrent local test/build work can disturb its measurements; they must be disclosed when interpreting that report. Neither the native callback monitor nor passive operation timings measures frames presented by the GPU.
+Continuous timing was a separate diagnostic pass. Its retained Notes sample reported 75 callback fps, p95 30.4 ms and worst 75.4 ms; Timeline reported 48 callback fps, p95 31.4 ms and worst 84.3 ms. Local builds/tests and computer-use captures overlapped that collection. Those disturbances prevent treating it as an isolated performance baseline or attributing the peaks to application rendering. Timing was stopped afterwards. Neither the native callback monitor nor passive operation timings measures frames presented by the GPU.
 
 ## Remaining acceptance and release gates
 
-- Reduced motion: Windows Animation effects was originally On. Automatic approval review refused the Off toggle pending explicit permission. It remains unchanged until permission and the check are completed.
-- Windows text-size variation: explicit temporary-change permission requested; no changed-size pass claimed yet.
+- Reduced motion: after explicit permission, Windows Animation effects was set Off. A read-only call to the same client-area animation API used by the app confirmed disabled animations. Live and cold pill observations showed stationary account text; dashboard/picker navigation remained usable. This is sampled behaviour, not a presented-frame measurement of every effect. Original On restoration is confirmed in the final verification record.
+- Windows text-size variation: applied 150%, checked live and cold, restored 100%; F-04 remains open.
 - The scale pass is sampled native coverage, not every theme × pill × page × scale permutation or a cold launch at every scale. Smaller physical displays and mixed-monitor movement remain separate checks.
-- Native minimise/tray return, Store-installed startup registration, export destination workflow and update/upgrade handling are not established by this pass. Existing automated lifecycle/export contracts and CI native smoke results are supporting evidence only.
+- Native minimise/tray return, Store-installed startup registration and update/upgrade handling are not established by this pass. Portable export was exercised above; that does not establish the installed Store workflow. Existing automated lifecycle/export contracts and CI native smoke results are supporting evidence only.
 - Actual Narrator speech needs listening verification. Windows UI Automation observations are not a passed speech test.
 - A first-time participant must still assess idle/recording/break comprehension and saved/unsaved understanding. The implementer's own successful navigation is not an independent comprehension sample.
 - Promotion to Main additionally requires the installed MSIX release gate in `BRANCHES.md`: installation/update, persistence, tray/startup and export. No Main promotion or Store acceptance is claimed here.
 
-Final candidate test and native recheck results are recorded after the finding fixes are validated.
+## Fixed-candidate validation
+
+The correction code is commit `670d3edaeb312c80d9d299d15086f73cc09ebedf`, PR 263. Feature workflow [43755367982](https://github.com/BasicallyGod/Basic-Advanced-Timer/actions/runs/43755367982) published **0.1.826**, artifact 14177374025. It passed all 967 tests, with zero failures or skips, and both native smoke modes. The separate PR workflow passed its shell checks and packaged launcher checks. Locally, all 967 tests passed before the final lookup-reuse adjustment; 97 affected tests passed after it.
+
+The downloaded fixed executable was checked natively:
+
+- Setup's final action exposes Open timer, matching its visible caption.
+- The reminder strip appears as an editable time value with date context in Windows UI Automation. SetValue to 22:17 previews that exact minute; Enter commits it and returns to the composer. Creating the note stores `at_time = 22:17` in the fixture database.
+- An inserted note rejected by the fixture trigger shows Retrying before any editor is opened, while Details remains empty. The persistent badge is separate from the failure toast. Quit refuses to close while the note remains queued, preserving it for correction.
+- A cold launch under Animation effects Off remains usable. F-04 was confirmed on this fixed executable's cold setup, not inferred solely from the baseline.
+- The corrected failed creation subsequently retried successfully, the badge cleared, and normal Quit succeeded. A database read confirmed both the exact-minute reminder and corrected note; integrity check returned ok. Fixture rejection triggers were removed while the app was closed.
+
+All temporary Windows changes were restored and observed: display scale 125%, Text size 100%, Animation effects On. A read-only client-area animation API check also returned enabled after restoration. The disposable timer processes and the Settings window opened for this session were closed. The downloaded fixed main DLL SHA256 is `97066F12AA38083148F91C901BBA7565D9F4B0EF4D4F8964A37A5BF9A085C52C`.
+
+Subsequent documentation-only commits record these outcomes without changing the tested correction code. The complete local evidence, diagnostic reports, fixture SQL and native notes are in the project review directory `reviews/ui-cohesion-f/`; they are not application data or shipped fixtures.
