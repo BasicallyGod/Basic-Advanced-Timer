@@ -37,47 +37,65 @@ public static class DisplayInk
         Color.Parse("#82E3AC"), Color.Parse("#F2BD52"), Color.Parse("#FF8F89"), Color.FromArgb(72, 255, 255, 255), false);
     public static Colours For(bool dark) => dark ? Dark : Light;
     public static Colours For(Avalonia.Controls.Control control) => For(SoftTint.IsDark(control));
+    /// <summary>
+    /// Draws everything under <paramref name="root"/> again, measured and drawn, after the look was changed: controls that choose their drawing by the look only did so
+    /// the next time something else made them redraw (the clock, a second later), so a change took seconds to show.
+    /// </summary>
+    public static void Repaint(Avalonia.Visual root)
+    {
+        foreach (var control in Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(root).OfType<Avalonia.Controls.Control>().Prepend(root as Avalonia.Controls.Control)) { if (control is null) continue; control.InvalidateMeasure(); control.InvalidateVisual(); }
+    }
 
     // ---- grain
-    private const int TileSize = 128;
-    private static readonly Dictionary<string, IBrush> brushes = new();
-    private static IBrush Tile(string key, Func<WriteableBitmap> make)
+    // Grain is drawn from small noise bitmaps with DrawImage, laid side by side where a shape is bigger than one, and the text speckle is a bitmap mask the size of the text
+    // (never repeated). Tiled brushes were used first and left vertical bands with no grain and, worse, letters missing from the speckle mask on Windows.
+    private const int NoiseSize = 512, DropoutHeight = 96;
+    private static readonly Dictionary<string, WriteableBitmap> noise = new();
+    private static WriteableBitmap Cached(string key, Func<WriteableBitmap> make) { lock (noise) { if (!noise.TryGetValue(key, out var bitmap)) noise[key] = bitmap = make(); return bitmap; } }
+    private static WriteableBitmap Bitmap(int width, int height, Func<double, uint> pixel, int cell, int seed)
     {
-        if (brushes.TryGetValue(key, out var found)) return found;
-        var bitmap = make(); var rect = new RelativeRect(0, 0, TileSize, TileSize, RelativeUnit.Absolute);
-        return brushes[key] = new ImageBrush(bitmap) { TileMode = TileMode.Tile, SourceRect = rect, DestinationRect = rect, Stretch = Stretch.Fill };
-    }
-    private static WriteableBitmap Bitmap(Func<int, int, double, uint> pixel, int cell, int seed)
-    {
-        var bmp = new WriteableBitmap(new PixelSize(TileSize, TileSize), new Vector(96, 96), PixelFormat.Bgra8888, AlphaFormat.Premul);
-        var data = new int[TileSize * TileSize]; var rnd = new Random(seed);
-        for (var y = 0; y < TileSize; y += cell)
-            for (var x = 0; x < TileSize; x += cell)
+        var bmp = new WriteableBitmap(new PixelSize(width, height), new Vector(96, 96), PixelFormat.Bgra8888, AlphaFormat.Premul);
+        var data = new int[width * height]; var rnd = new Random(seed);
+        for (var y = 0; y < height; y += cell)
+            for (var x = 0; x < width; x += cell)
             {
-                var value = pixel(x, y, rnd.NextDouble());
-                for (var dy = 0; dy < cell && y + dy < TileSize; dy++) for (var dx = 0; dx < cell && x + dx < TileSize; dx++) data[(y + dy) * TileSize + x + dx] = unchecked((int)value);
+                var value = pixel(rnd.NextDouble());
+                for (var dy = 0; dy < cell && y + dy < height; dy++) for (var dx = 0; dx < cell && x + dx < width; dx++) data[(y + dy) * width + x + dx] = unchecked((int)value);
             }
         using var fb = bmp.Lock();
-        if (fb.RowBytes == TileSize * 4) Marshal.Copy(data, 0, fb.Address, data.Length);
-        else for (var y = 0; y < TileSize; y++) Marshal.Copy(data, y * TileSize, fb.Address + y * fb.RowBytes, TileSize);
+        if (fb.RowBytes == width * 4) Marshal.Copy(data, 0, fb.Address, data.Length);
+        else for (var y = 0; y < height; y++) Marshal.Copy(data, y * width, fb.Address + y * fb.RowBytes, width);
         return bmp;
     }
     private static uint Premul(byte alpha, byte level) { var c = (uint)(alpha * level / 255); return (uint)alpha << 24 | c << 16 | c << 8 | c; }
-    /// <summary>A tile of ink grain: scattered specks, dark on light paper or light on dark, drawn over a filled shape at a low opacity.</summary>
-    public static IBrush Specks(bool onLightPaper) => Tile(onLightPaper ? "specks-dark" : "specks-light", () => Bitmap((_, _, r) =>
+    private static uint Speck(double r, bool onLightPaper) =>
         r < .22 ? Premul((byte)(255 * (.08 + (r / .22) * .22)), onLightPaper ? (byte)0 : (byte)255)
-        : r < .30 ? Premul((byte)(255 * (.10 + ((r - .22) / .08) * .20)), onLightPaper ? (byte)255 : (byte)0) : 0u, 2, onLightPaper ? 7 : 11));
+        : r < .30 ? Premul((byte)(255 * (.10 + ((r - .22) / .08) * .20)), onLightPaper ? (byte)255 : (byte)0) : 0u;
+    /// <summary>Scattered specks, dark on light paper or light on dark, drawn over a filled shape at a low opacity.</summary>
+    private static WriteableBitmap Specks(bool onLightPaper) => Cached(onLightPaper ? "specks-dark" : "specks-light", () => Bitmap(NoiseSize, NoiseSize, r => Speck(r, onLightPaper), 2, onLightPaper ? 7 : 11));
     /// <summary>A very fine grain for the paper itself.</summary>
-    public static IBrush Paper(bool onLightPaper) => Tile(onLightPaper ? "paper-dark" : "paper-light", () => Bitmap((_, _, r) =>
-        r < .22 ? Premul((byte)(255 * (.08 + (r / .22) * .22)), onLightPaper ? (byte)0 : (byte)255)
-        : r < .30 ? Premul((byte)(255 * (.10 + ((r - .22) / .08) * .20)), onLightPaper ? (byte)255 : (byte)0) : 0u, 1, onLightPaper ? 5 : 9));
-    private static IBrush Dropout(int tenths) => Tile("dropout" + tenths, () => Bitmap((_, _, r) =>
+    private static WriteableBitmap PaperNoise(bool onLightPaper) => Cached(onLightPaper ? "paper-dark" : "paper-light", () => Bitmap(NoiseSize, NoiseSize, r => Speck(r, onLightPaper), 1, onLightPaper ? 5 : 9));
+    private static ImageBrush Dropout(int tenths)
     {
-        var s = tenths / 10.0; var alpha = r < .10 * s ? 1 - .4 * s : 1.0; return Premul((byte)(255 * alpha), 255);
-    }, 1, 13));
+        var bitmap = Cached("dropout" + tenths, () => Bitmap(NoiseSize, DropoutHeight, r => { var strength = tenths / 10.0; return Premul((byte)(255 * (r < .10 * strength ? 1 - .4 * strength : 1.0)), 255); }, 1, 13));
+        return new ImageBrush(bitmap) { Stretch = Stretch.None, TileMode = TileMode.None, AlignmentX = AlignmentX.Left, AlignmentY = AlignmentY.Top };
+    }
+    private static void Lay(DrawingContext context, WriteableBitmap bitmap, Rect rect, double opacity)
+    {
+        if (rect.Width <= 0 || rect.Height <= 0) return;
+        using (context.PushRenderOptions(new RenderOptions { BitmapInterpolationMode = BitmapInterpolationMode.None }))
+        using (context.PushOpacity(opacity))
+            for (var y = rect.Y; y < rect.Bottom; y += NoiseSize)
+                for (var x = rect.X; x < rect.Right; x += NoiseSize)
+                {
+                    var w = Math.Min(NoiseSize, rect.Right - x); var h = Math.Min(NoiseSize, rect.Bottom - y);
+                    context.DrawImage(bitmap, new Rect(0, 0, w, h), new Rect(x, y, w, h));
+                }
+    }
 
-    /// <summary>Pushes a mask that lets a little ink drop out of whatever is drawn inside it (the speckle in the letters); nothing at all with the effect at 0. Dispose to stop.</summary>
-    public static IDisposable Speckled(DrawingContext context, Rect bounds) => On && percent > 0 ? context.PushOpacityMask(Dropout(percent / 10), bounds) : NoMask.Instance;
+    /// <summary>Pushes a mask that lets a little ink drop out of whatever is drawn inside it (the speckle in the letters); nothing at all with the effect at 0, and none for text too big for its mask. Dispose to stop.</summary>
+    public static IDisposable Speckled(DrawingContext context, Rect bounds) =>
+        On && percent > 0 && bounds.Width <= NoiseSize && bounds.Height <= DropoutHeight ? context.PushOpacityMask(Dropout(percent / 10), bounds) : NoMask.Instance;
     private sealed class NoMask : IDisposable { public static readonly NoMask Instance = new(); public void Dispose() { } }
 
     /// <summary>Fills a rounded shape with <paramref name="fill"/> and lays the ink grain over it, at its strength; an outline as firm as the ink round it.</summary>
@@ -91,13 +109,13 @@ public static class DisplayInk
     public static void Grain(DrawingContext context, bool onLightPaper, Rect rect, double radius, double scale)
     {
         if (percent == 0) return;
-        using (context.PushClip(new RoundedRect(rect, radius))) using (context.PushOpacity(Strength * scale)) context.DrawRectangle(Specks(onLightPaper), null, rect);
+        using (context.PushClip(new RoundedRect(rect, radius))) Lay(context, Specks(onLightPaper), rect, Strength * scale);
     }
     /// <summary>The paper of a display well: a whisper of fine grain over its fill.</summary>
     public static void PaperGrain(DrawingContext context, bool onLightPaper, Rect rect, double radius)
     {
         if (percent == 0) return;
-        using (context.PushClip(new RoundedRect(rect, radius))) using (context.PushOpacity(Strength * .35)) context.DrawRectangle(Paper(onLightPaper), null, rect);
+        using (context.PushClip(new RoundedRect(rect, radius))) Lay(context, PaperNoise(onLightPaper), rect, Strength * .35);
     }
 
     // ---- textures
@@ -227,4 +245,21 @@ public static class DotFont
         var text = System.Text.RegularExpressions.Regex.Replace(sb.ToString(), " {2,}", " ").Trim();
         return text.Length < 2 || drawn * 2 < seen ? null : text;
     }
+}
+
+/// <summary>
+/// The paper's fine grain under whatever a display well holds, when the look is E-ink. A Border cannot draw its own grain (its drawing is sealed), so the well holds this as the
+/// first thing in its content; it paints over the whole well, padding included, and takes no presses.
+/// </summary>
+public sealed class PaperLayer : Avalonia.Controls.Control
+{
+    private readonly Avalonia.Controls.Border owner;
+    public PaperLayer(Avalonia.Controls.Border owner) { this.owner = owner; IsHitTestVisible = false; ActualThemeVariantChanged += (_, _) => InvalidateVisual(); }
+    public override void Render(DrawingContext context)
+    {
+        if (!DisplayInk.On || owner.Bounds.Width <= 0 || owner.Bounds.Height <= 0 || owner.TranslatePoint(default, this) is not { } origin) return;
+        DisplayInk.PaperGrain(context, !SoftTint.IsDark(this), new Rect(origin, owner.Bounds.Size), owner.CornerRadius.TopLeft);
+    }
+    /// <summary>Wraps a well's content so the grain lies under it.</summary>
+    public static Avalonia.Controls.Grid Under(Avalonia.Controls.Border well, Avalonia.Controls.Control content) => new() { Children = { new PaperLayer(well), content } };
 }

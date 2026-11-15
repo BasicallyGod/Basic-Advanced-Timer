@@ -45,7 +45,7 @@ public sealed class Sidebar : Border
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Hidden };
         var indicator = new ScrollCells(AccountScroll) { Name = "SidebarAccountIndicator", Width = ScrollCells.ColumnWidth, Margin = new Thickness(0, 6, 6, 6) };
         var inside = Ui.Grid("*,Auto", "*"); Ui.Put(inside, AccountScroll, 0, 0); Ui.Put(inside, indicator, 1, 0);
-        var window = new Border { Name = "SidebarAccountDisplay", CornerRadius = new CornerRadius(14), ClipToBounds = true, Child = inside, Padding = new Thickness(0, 4), VerticalAlignment = VerticalAlignment.Stretch, Margin = new Thickness(0, 2, 0, 0) };
+        var window = new Border { Name = "SidebarAccountDisplay", CornerRadius = new CornerRadius(14), ClipToBounds = true, Padding = new Thickness(0, 4), VerticalAlignment = VerticalAlignment.Stretch, Margin = new Thickness(0, 2, 0, 0) }; window.Child = PaperLayer.Under(window, inside);
         window.Bind(Border.BackgroundProperty, window.GetResourceObservable("DisplayWell"));
         void Shade() => window.BoxShadow = new BoxShadows(new BoxShadow { IsInset = true, OffsetY = 2, Blur = 5, Color = Ui.ThemeColour(window, "DisplayShade", Color.Parse("#A0000000")) }, new[] { new BoxShadow { OffsetY = 1, Color = Ui.ThemeColour(window, "DisplayEdge", Color.Parse("#12FFFFFF")) } });
         window.ActualThemeVariantChanged += (_, _) => Shade(); window.AttachedToVisualTree += (_, _) => Shade();

@@ -109,7 +109,7 @@ internal readonly struct PhosphorBloom
 /// <summary>Play, pause and break badges drawn through the display's shared honeycomb and bloom.</summary>
 public abstract class VfdGlyph : SteppedControl
 {
-    public const double BadgeWidth = 30, BadgeHeight = 14, StrokeWidth = 1.4, BadgeRadius = 3.5, InkKeyWidth = 34, InkKeyHeight = 16;
+    public const double BadgeWidth = 30, BadgeHeight = 14, StrokeWidth = 1.4, BadgeRadius = 3.5, InkKeyWidth = 40, InkKeyHeight = 20;
     /// <summary>E-ink keys: a rounded outline in the key's colour, 1.5 pixels, with its symbol or word in normal type.</summary>
     protected void InkOutline(DrawingContext context, double alpha, bool filled = false)
     {
@@ -294,7 +294,7 @@ public sealed class BreakBadgeGlyph : VfdGlyph
         {
             // The word in normal type in a box; amber and a little filled while a break is on, hovered or focused, muted at rest.
             InkOutline(context, strength, Lit > .5);
-            var role = new InkRole(11, FontWeight.SemiBold);
+            var role = new InkRole(12, FontWeight.SemiBold);
             InkType.Draw(context, "Break", role, new SolidColorBrush(SoftTint.WithAlpha(Colour, Math.Min(1, strength + .2))), Bounds.Width / 2, Bounds.Height / 2 + role.Size * .365, TextAlignment.Center);
             return;
         }

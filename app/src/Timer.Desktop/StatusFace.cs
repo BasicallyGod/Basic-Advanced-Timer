@@ -79,7 +79,11 @@ public sealed class StatusFace : Grid
     /// <summary>The sidebar's display has a second row for the account name and stacked controls.</summary>
     public const double SecondRowHeight = 48;
     // Keep the two badges together close to the height of the clock's 28 px digits.
-    public const double NameZone = 88, ControlZone = 34, ControlHeight = 16, ControlGap = 1, RightPadding = 6;
+    public const double NameZone = 88, RightPadding = 6;
+    /// <summary>The play and break keys are 34 by 16 in Phosphor and 40 by 20 in E-ink, whose type needs the room (the word Break touched its box at 16).</summary>
+    public static double ControlZone => DisplayInk.On ? 40 : 34;
+    public static double ControlHeight => DisplayInk.On ? 20 : 16;
+    public static double ControlGap => DisplayInk.On ? 2 : 1;
     /// <summary>The pill's window: LED, clock, count, account name, and one column for play/pause and break.</summary>
     public static double DisplayWidth => LeftWidth - DisplayPadding + CountNameGap + NameZone + NameTagGap + ControlZone + RightPadding;
     /// <summary>The compact pill's window: LED, clock, count, and the stacked play and break keys, with no account name.</summary>
@@ -88,7 +92,7 @@ public sealed class StatusFace : Grid
     // As wide as the accounts display under it and Quit timer at the foot: the sidebar's width less its 12 pixel padding either side.
     public const double SidebarDisplayWidth = Timer.Desktop.Sidebar.Width - 24;
     public const int SidebarNameCells = 10;
-    private const double SidebarNameZone = SidebarDisplayWidth - 2 * DisplayPadding - NameTagGap - ControlZone;
+    private static double SidebarNameZone => SidebarDisplayWidth - 2 * DisplayPadding - NameTagGap - ControlZone;
     private readonly Ellipse selectorDot = new() { Width = 10, Height = 10, VerticalAlignment = VerticalAlignment.Center };
     private readonly Chevron selectorChevron = new() { VerticalAlignment = VerticalAlignment.Center };
     private Border selectorTile = null!;
@@ -133,6 +137,12 @@ public sealed class StatusFace : Grid
         if (!lowerHost.IsVisible) return;
         Lower.Show(model.PillLower);
         lowerHost.BorderBrush = new SolidColorBrush(SoftTint.WithAlpha(ThemeColourOr("Ink", "#18233A"), SoftTint.IsDark(this) ? .07 : .08));
+    }
+    /// <summary>The keys' sizes follow the look, which can change while the pill is showing.</summary>
+    private void ApplyKeySizes()
+    {
+        Circle.Width = ControlZone; Circle.Height = ControlHeight; Break.Width = ControlZone; Break.Height = ControlHeight;
+        transportControls.Spacing = ControlGap; if (nameHost is not null) nameHost.Width = SidebarNameZone;
     }
     public Button ClockButton { get; }
     /// <summary>The lights as a button that opens the pill's alerts; null on the sidebar.</summary>
@@ -182,9 +192,10 @@ public sealed class StatusFace : Grid
         displayBox = new Border
         {
             Name = prefix + "Display", CornerRadius = new CornerRadius(DisplayRadius),
-            Padding = new Thickness(DisplayPadding, 0), Child = inside,
+            Padding = new Thickness(DisplayPadding, 0),
             HorizontalAlignment = sidebar ? HorizontalAlignment.Center : HorizontalAlignment.Stretch
         };
+        displayBox.Child = inside;
         displayBox.Bind(Border.BackgroundProperty, displayBox.GetResourceObservable("DisplayWell"));
         // The primary control carries the running account's initials, and pauses or resumes. The initials give way to the symbol under the pointer.
         glyphBox.Child = glyph; glyph.Fixed = Brushes.Black;
@@ -248,7 +259,7 @@ public sealed class StatusFace : Grid
             lowerHost = new Border { Name = prefix + "LowerRow", Child = LowerButton, BorderThickness = new Thickness(0, 1, 0, 0), Margin = new Thickness(-DisplayPadding, 0, -RightPadding, 0), Padding = new Thickness(0, 0, 0, 0), IsVisible = false };
             Grid.SetRow(lowerHost, 1);
             var rows = new Grid { RowDefinitions = new RowDefinitions(DisplayHeight + ",Auto") };
-            displayBox.Child = null; rows.Children.Add(inside); rows.Children.Add(lowerHost); displayBox.Child = rows;
+            displayBox.Child = null; rows.Children.Add(inside); rows.Children.Add(lowerHost); displayBox.Child = PaperLayer.Under(displayBox, rows);
         }
         else
         {
@@ -265,7 +276,7 @@ public sealed class StatusFace : Grid
             displayBox.Child = null; displayBox.Padding = default; displayBox.Height = DisplayHeight + SecondRowHeight; displayBox.Width = SidebarDisplayWidth;
             Grid.SetRow(trackBox, 1);
             rows.Children.Add(top); rows.Children.Add(trackBox);
-            displayBox.Child = rows;
+            displayBox.Child = PaperLayer.Under(displayBox, rows);
         }
         ActualThemeVariantChanged += (_, _) => Refresh();
         Refresh();
@@ -331,6 +342,8 @@ public sealed class StatusFace : Grid
         var idle = key == "Idle";
         // The LED is seen through the display's honeycomb: lit in the state's colour, with a soft bloom on a dark theme, or a faint ghost of the text colour when idle.
         stateLight.Background = new SolidColorBrush(idle ? SoftTint.WithAlpha(ThemeColourOr("Ink", "#18233A"), .14) : stateColour);
+        stateLight.OpacityMask = DisplayInk.On ? null : Honeycomb.Brush; // the mesh belongs to Phosphor
+        ApplyKeySizes();
         stateLight.BoxShadow = default;
         ledGlow.BoxShadow = !idle && dark ? new BoxShadows(new BoxShadow { Blur = 7, Spread = 1, Color = SoftTint.WithAlpha(stateColour, .4) }) : default;
         Avalonia.Automation.AutomationProperties.SetName(stateLight, stateName); ToolTip.SetTip(stateLight, stateName);
