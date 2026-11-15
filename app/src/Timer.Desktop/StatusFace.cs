@@ -79,10 +79,12 @@ public sealed class StatusFace : Grid
     /// <summary>The sidebar's display has a second row for the account name and stacked controls.</summary>
     public const double SecondRowHeight = 48;
     // Keep the two badges together close to the height of the clock's 28 px digits.
-    public const double NameZone = 88, RightPadding = 6;
+    public const double NameZone = 88;
+    /// <summary>E-ink's keys had only 6 pixels between them and the display's rounded corner, which read as cramped.</summary>
+    public static double RightPadding => DisplayInk.On ? 12 : 6;
     /// <summary>The play and break keys are 34 by 16 in Phosphor and 40 by 20 in E-ink, whose type needs the room (the word Break touched its box at 16).</summary>
     public static double ControlZone => DisplayInk.On ? 40 : 34;
-    public static double ControlHeight => DisplayInk.On ? 20 : 16;
+    public static double ControlHeight => DisplayInk.On ? 19 : 16;
     public static double ControlGap => DisplayInk.On ? 2 : 1;
     /// <summary>The pill's window: LED, clock, count, account name, and one column for play/pause and break.</summary>
     public static double DisplayWidth => LeftWidth - DisplayPadding + CountNameGap + NameZone + NameTagGap + ControlZone + RightPadding;
@@ -143,6 +145,7 @@ public sealed class StatusFace : Grid
     {
         Circle.Width = ControlZone; Circle.Height = ControlHeight; Break.Width = ControlZone; Break.Height = ControlHeight;
         transportControls.Spacing = ControlGap; if (nameHost is not null) nameHost.Width = SidebarNameZone;
+        if (!Sidebar) displayBox.Padding = new Thickness(DisplayPadding, 0, RightPadding, 0);
     }
     public Button ClockButton { get; }
     /// <summary>The lights as a button that opens the pill's alerts; null on the sidebar.</summary>

@@ -262,7 +262,10 @@ public sealed class LowerDisplay : SteppedControl
         var scroll = chars.Count > cells && !Motion.Reduced; if (scroll) chars.AddRange("    ".Select(c => (c, roles["ink"])));
         var offset = scroll ? (int)(elapsed / TickerStepMilliseconds) % chars.Count : 0;
         for (var i = 0; i < cells; i++) { var k = offset + i; var (ch, col) = scroll ? chars[k % chars.Count] : k < chars.Count ? chars[k] : (' ', roles["ink"]); text[i] = ch; colours[i] = col; }
-        p.Text(new string(text), TickerLeft, y0 + 7, TickerHeight, i => colours[i]);
+        // E-ink type is not a fixed width, so the window is cut to the characters that really fit (the cell count is only an average) and never runs past the display.
+        var shown = text.Length; var room = Bounds.Width - TickerLeft - Pad;
+        if (DisplayInk.On) while (shown > 1 && SegmentText.TextWidth(new string(text, 0, shown), TickerHeight) > room) shown--;
+        p.Text(new string(text, 0, shown), TickerLeft, y0 + 7, TickerHeight, i => colours[i]);
     }
 
     // ---------- the week ----------

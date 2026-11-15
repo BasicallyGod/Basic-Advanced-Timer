@@ -109,7 +109,7 @@ internal readonly struct PhosphorBloom
 /// <summary>Play, pause and break badges drawn through the display's shared honeycomb and bloom.</summary>
 public abstract class VfdGlyph : SteppedControl
 {
-    public const double BadgeWidth = 30, BadgeHeight = 14, StrokeWidth = 1.4, BadgeRadius = 3.5, InkKeyWidth = 40, InkKeyHeight = 20;
+    public const double BadgeWidth = 30, BadgeHeight = 14, StrokeWidth = 1.4, BadgeRadius = 3.5, InkKeyWidth = 40, InkKeyHeight = 19;
     /// <summary>E-ink keys: a rounded outline in the key's colour, 1.5 pixels, with its symbol or word in normal type.</summary>
     protected void InkOutline(DrawingContext context, double alpha, bool filled = false)
     {

@@ -215,11 +215,13 @@ public sealed class WeekInstrument : Panel
     private sealed class Surface(WeekInstrument owner) : Control
     {
         public override void Render(DrawingContext context) { context.FillRectangle(Brushes.Transparent, new Rect(Bounds.Size)); owner.Paint(context, Bounds.Size); }
-        protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
-        {
-            if (owner.rows.Count > owner.Layout(Bounds.Size).Capacity) { owner.ScrollBy(e.Delta.Y < 0 ? 1 : e.Delta.Y > 0 ? -1 : 0); e.Handled = true; }
-            base.OnPointerWheelChanged(e);
-        }
+    }
+    // The wheel scrolls the accounts from anywhere over them: the buttons laid over the rows would otherwise swallow it between the columns of figures.
+    protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
+    {
+        var f = Layout(surface.Bounds.Size);
+        if (rows.Count > f.Capacity && e.GetPosition(this).Y >= f.AccountsRuleY - 6 && e.GetPosition(this).Y < f.FootY - 10) { ScrollBy(e.Delta.Y < 0 ? 1 : e.Delta.Y > 0 ? -1 : 0); e.Handled = true; return; }
+        base.OnPointerWheelChanged(e);
     }
     /// <summary>Moves the list of accounts by whole rows, as the wheel does.</summary>
     public void ScrollBy(int delta)

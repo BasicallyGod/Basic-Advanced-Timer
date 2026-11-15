@@ -64,7 +64,7 @@ public sealed class Sidebar : Border
     }
 
     /// <summary>The wreath round the clock display: a small card (corner 14) with 16 pixels of room, drawn at 60 per cent of the pill's size.</summary>
-    public static readonly DecorFrame DisplayFrame = new(16, 14, 0.6);
+    public static readonly DecorFrame DisplayFrame = new(11, 14, 0.6); // 11 pixels of room, so the wreath stays inside the column's 12 pixel margin and never reaches the window's edge
     private readonly ChristmasDecor garland = null!, lights = null!;
     /// <summary>The wreath and lights on the display, so tests can read them.</summary>
     public ChristmasDecor Garland => garland; public ChristmasDecor Lights => lights;
