@@ -43,7 +43,7 @@ public sealed class SelectedBlockCardTests
             var start = Find<TextBox>(window, "SelectedStart"); var end = Find<TextBox>(window, "SelectedEnd"); var length = Find<TextBox>(window, "SelectedLength");
             start.Text = "10:45"; Enter(start); // The boxes are the ones that were there before this edit.
             end.Text = "11:15"; Enter(end);
-            Assert.Null(model.EditError); Assert.Equal("10:45:00", engine.Sessions[2].Start); Assert.Equal("0:30", length.Text);
+            Assert.Null(model.EditError); Assert.Equal("10:45:00", engine.Sessions[2].Start); Assert.Equal("00:30", length.Text);
             length.Text = "1:00"; Enter(length);
             Assert.Null(model.EditError); Assert.Equal(60, engine.Sessions[2].Duration.TotalMinutes); Assert.Equal("11:45:00", end.Text);
             for (var i = 0; i < 5; i++) { end.Text = $"11:{50 + i}"; Enter(end); start.Text = $"10:{40 + i}"; Enter(start); Assert.Null(model.EditError); }
@@ -66,10 +66,10 @@ public sealed class SelectedBlockCardTests
             end.Focus(); Dispatcher.UIThread.RunJobs(); Assert.True(end.IsFocused);
             end.Text = "11:3"; // Half typed in the box that has the focus,
             Assert.True(model.NudgeSelection(1)); // while the block changes under it.
-            Assert.Equal("11:3", end.Text); Assert.Equal("0:31", length.Text); Assert.Equal("11:00:00", start.Text);
+            Assert.Equal("11:3", end.Text); Assert.Equal("00:31", length.Text); Assert.Equal("11:00:00", start.Text);
             end.Text = "banana"; Enter(end); // Not a time: refused, so every box goes back to what is saved. (An end before the start is the next day's, since a block may cross midnight.)
             Assert.Equal("11:31:00", end.Text); Assert.Equal("11:00:00", start.Text);
-            end.Text = "11:40"; Enter(end); Assert.Equal("0:40", length.Text); // And the same box takes the next edit.
+            end.Text = "11:40"; Enter(end); Assert.Equal("00:40", length.Text); // And the same box takes the next edit.
         }
         finally { window.Close(); }
     }
@@ -82,7 +82,7 @@ public sealed class SelectedBlockCardTests
         {
             model.SelectBlock(new[] { engine.Sessions[2] }, false); Settle(window);
             Find<TextBox>(window, "SelectedStart").Text = "10:45"; Enter(Find<TextBox>(window, "SelectedStart")); Settle(window);
-            Assert.Equal("10:45:00", engine.Sessions[2].Start); Assert.Equal("11:30:00", Find<TextBox>(window, "SelectedEnd").Text); Assert.Equal("0:45", Find<TextBox>(window, "SelectedLength").Text);
+            Assert.Equal("10:45:00", engine.Sessions[2].Start); Assert.Equal("11:30:00", Find<TextBox>(window, "SelectedEnd").Text); Assert.Equal("00:45", Find<TextBox>(window, "SelectedLength").Text);
             Assert.Same(engine.Sessions[2], Assert.Single(model.SelectedRows)); // Still selected, so the card still shows it.
         }
         finally { window.Close(); }
@@ -225,8 +225,8 @@ public sealed class SelectedBlockCardTests
             {
                 Assert.True(Avalonia.Application.Current!.Resources.ThemeDictionaries.TryGetValue(ThemeEngine.VariantFor(theme), out var found));
                 var dictionary = (ResourceDictionary)found!;
-                Assert.Equal(((SolidColorBrush)dictionary["Porcelain"]!).Color, ((SolidColorBrush)dictionary["MenuFlyoutPresenterBackground"]!).Color); // Porcelain, like the toast.
-                Assert.Equal(((SolidColorBrush)dictionary["Well"]!).Color, ((SolidColorBrush)dictionary["MenuFlyoutItemBackgroundPointerOver"]!).Color); // The row under the pointer sinks.
+                Assert.Equal(((SolidColorBrush)dictionary["Panel"]!).Color, ((SolidColorBrush)dictionary["MenuFlyoutPresenterBackground"]!).Color); // The same panel surface as dropdowns and picker cards.
+                Assert.Equal(((SolidColorBrush)dictionary["Hover"]!).Color, ((SolidColorBrush)dictionary["MenuFlyoutItemBackgroundPointerOver"]!).Color); // The same hover state as dropdowns.
                 Assert.Equal(Color.Parse(theme.Colour("Ink")), ((SolidColorBrush)dictionary["MenuFlyoutItemForeground"]!).Color);
             }
         }

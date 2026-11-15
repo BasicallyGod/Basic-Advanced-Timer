@@ -224,17 +224,27 @@ public sealed class NotesPage : Grid
             var line = Ui.Grid("Auto,Auto,*,Auto"); line.ColumnSpacing = 9;
             Ui.Put(line, tick); Ui.Put(line, NoteParts.Dot(model, a.Name), 1);
             Ui.Put(line, new TextBlock { Text = "#" + a.Display.Replace(" ", ""), FontSize = 13, VerticalAlignment = VerticalAlignment.Center }, 2); Ui.Put(line, NoteParts.Ink(count.ToString(CultureInfo.InvariantCulture), "Muted", 12), 3);
-            var row = Ui.Button("", () => { ToggleAccount(a.Name); BuildAccountFilterCard(); }, "NotesAccount_" + a.Name.Replace(" ", "")); row.Classes.Add("pillBare"); row.Content = line; row.HorizontalAlignment = HorizontalAlignment.Stretch; row.HorizontalContentAlignment = HorizontalAlignment.Stretch; row.Padding = new Thickness(8, 6);
-            Avalonia.Automation.AutomationProperties.SetName(row, (on ? "Stop filtering by " : "Filter by ") + a.Display + ", " + count + (count == 1 ? " note" : " notes"));
+            var row = new CompletionButton { Name = "NotesAccount_" + a.Name.Replace(" ", ""), IsChecked = on };
+            row.Click += (_, _) =>
+            {
+                ToggleAccount(a.Name); BuildAccountFilterCard();
+                Dispatcher.UIThread.Post(() => { if (filterHost.IsOpen) filterCard?.GetVisualDescendants().OfType<Button>().FirstOrDefault(b => b.Name == row.Name)?.Focus(); }, DispatcherPriority.Loaded);
+            };
+            row.Classes.Add("pillBare"); row.Content = line; row.HorizontalAlignment = HorizontalAlignment.Stretch; row.HorizontalContentAlignment = HorizontalAlignment.Stretch; row.Padding = new Thickness(8, 6);
+            Avalonia.Automation.AutomationProperties.SetName(row, "Filter by " + a.Display + ", " + count + (count == 1 ? " note" : " notes"));
             rows.Children.Add(row);
         }
         var foot = Ui.Grid("*,Auto"); foot.Margin = new Thickness(10, 8, 10, 6);
         Ui.Put(foot, Ui.Text(accountFilters.Count == 0 ? "Every account" : accountFilters.Count + (accountFilters.Count == 1 ? " account chosen" : " accounts chosen"), 12, "muted"));
-        if (accountFilters.Count > 0) { var clear = Ui.Button("Clear", () => { accountFilters.Clear(); shown = null; Sync(); BuildAccountFilterCard(); }, "NotesAccountClear"); clear.Classes.Add("flat"); clear.FontSize = 12.5; clear.FontWeight = FontWeight.SemiBold; Ui.Put(foot, clear, 1); }
-        var column = new StackPanel { Width = 250 }; column.Children.Add(rows); column.Children.Add(Ui.Rule()); column.Children.Add(foot);
+        if (accountFilters.Count > 0) { var clear = Ui.Button("Clear", () => { accountFilters.Clear(); shown = null; Sync(); BuildAccountFilterCard(); Dispatcher.UIThread.Post(() => { if (filterHost.IsOpen) filterCard?.GetVisualDescendants().OfType<CompletionButton>().FirstOrDefault()?.Focus(); }, DispatcherPriority.Loaded); }, "NotesAccountClear"); clear.Classes.Add("flat"); clear.FontSize = 12.5; clear.FontWeight = FontWeight.SemiBold; Ui.Put(foot, clear, 1); }
+        var column = new StackPanel { Width = 250 };
+        var offset = filterCard?.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault()?.Offset ?? default;
+        column.Children.Add(new ScrollViewer { Content = rows, MaxHeight = 280, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Offset = offset });
+        column.Children.Add(Ui.Rule()); column.Children.Add(foot);
         // One card for the page's life, whose contents are drawn again as ticks change: a popup keeps showing the child it was opened with.
         if (filterCard is null) { filterCard = new Border { CornerRadius = new CornerRadius(16), BorderThickness = new Thickness(1), Margin = HangingCard.Room, BoxShadow = HangingCard.Shadow, Name = "NotesAccountCard" }; filterCard.Classes.Add("surface"); filterCard.Classes.Add("flyoutCard"); }
         filterCard.Child = column;
+        PickerFocus.Manage(filterHost, filterCard);
         return filterCard;
     }
     private void ToggleAccount(string name)
@@ -488,7 +498,7 @@ public sealed class NotesPage : Grid
         }
         start.LostFocus += (_, _) => CommitStart(); start.KeyDown += (_, e) => { if (e.Key == Key.Enter) { CommitStart(); e.Handled = true; } };
         var to = Ui.Text("to", 13, "muted"); to.VerticalAlignment = VerticalAlignment.Center; Add(start); Add(new Border { Child = to, Height = 36 }); Add(end); // The margin goes on the box round the word, which the layout audit would count as squeezing it.
-        var repeats = new ChoiceStrip { Name = "PageRepeat", Look = ChoiceLook.Segments, ItemsSource = NotesModel.Offered(repeat), IsEnabled = !archived };
+        var repeats = new ChoiceStrip { Name = "PageRepeat", Look = ChoiceLook.Dropdown, AccessibleName = "Repeat", ItemsSource = NotesModel.Offered(repeat), IsEnabled = !archived };
         repeats.SelectedItem = NotesModel.Label(repeat);
         repeats.SelectionChanged += (_, _) => { if (repeats.SelectedItem is string label) repeat = Enum.GetValues<RepeatChoice>().First(c => NotesModel.Label(c) == label); };
         Add(repeats);
@@ -554,13 +564,15 @@ public sealed class NotesPage : Grid
     /// <summary>One choice of a two-way switch. Put the choices in <see cref="Switch"/> so they read as one control.</summary>
     internal static Button Seg(string name, string text, bool on, Action click)
     {
-        var button = Ui.Button(text, click, name); button.Classes.Add("seg"); button.Classes.Set("optOn", on); button.Height = 30; button.FontSize = 13.5;
+        var button = new ChoiceButton("optOn") { Content = text, Name = name }; button.Click += (_, _) => click();
+        button.Classes.Add("seg"); button.Classes.Set("optOn", on); button.Height = 30; button.FontSize = 13.5;
         return button;
     }
     /// <summary>The track that holds a switch's choices, 36 tall like the boxes beside it.</summary>
     internal static Border Switch(params Control[] choices)
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 }; foreach (var c in choices) row.Children.Add(c);
+        foreach (var choice in choices.OfType<ChoiceButton>()) choice.Sync();
         var track = new Border { Child = row, Height = 36, VerticalAlignment = VerticalAlignment.Center }; track.Classes.Add("segTrack"); return track;
     }
 

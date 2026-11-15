@@ -63,7 +63,7 @@ public sealed class SettingsView : Grid
     {
         var glyph = new IconGlyph(icon) { TintKey = "Muted", Width = 18, Height = 18, VerticalAlignment = VerticalAlignment.Center };
         var label = Ui.Text(name, 14); label.VerticalAlignment = VerticalAlignment.Center;
-        var nav = new Button { Name = "Settings" + char.ToUpperInvariant(id[0]) + id[1..], Content = Ui.Horizontal(glyph, label), HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Left };
+        var nav = new ChoiceButton("selected") { Name = "Settings" + char.ToUpperInvariant(id[0]) + id[1..], Content = Ui.Horizontal(glyph, label), HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Left };
         ((StackPanel)nav.Content).Spacing = 10;
         nav.Classes.Add("settingsNav"); nav.Click += (_, _) => ShowSection(id);
         Avalonia.Automation.AutomationProperties.SetName(nav, name);
@@ -91,7 +91,7 @@ public sealed class SettingsView : Grid
         var buttons = new Dictionary<string, Button>();
         foreach (var (choice, words) in new[] { (AppThemes.Dark.Name, "Dark"), (AppThemes.Light.Name, "Light"), (ThemeLibrary.System, "System"), (AppThemes.Sun, "Sunset") })
         {
-            var tile = new Button { Name = "Theme" + words, BorderThickness = new Thickness(2), MaxWidth = 172, HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 0, 12, 0), HorizontalContentAlignment = HorizontalAlignment.Stretch }; tile.Classes.Add("choiceTile"); tile.Classes.Add("themeTile"); tile.Padding = new Thickness(8);
+            var tile = new ChoiceButton("selected") { Name = "Theme" + words, BorderThickness = new Thickness(2), MaxWidth = 172, HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 0, 12, 0), HorizontalContentAlignment = HorizontalAlignment.Stretch }; tile.Classes.Add("choiceTile"); tile.Classes.Add("themeTile"); tile.Padding = new Thickness(8);
             var caption = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(2, 8, 0, 0) };
             caption.Children.Add(Ui.Text(words, 14)); ((TextBlock)caption.Children[0]).FontWeight = FontWeight.SemiBold;
             var picture = ThemePicture(words);
@@ -122,7 +122,7 @@ public sealed class SettingsView : Grid
         var buttons = new Dictionary<DisplayStyle, Button>();
         foreach (var (style, words) in new[] { (DisplayStyle.Phosphor, "Phosphor"), (DisplayStyle.Ink, "E-ink") })
         {
-            var tile = new Button { Name = "DisplayStyle" + (style == DisplayStyle.Ink ? "Ink" : "Phosphor"), BorderThickness = new Thickness(2), MaxWidth = 172, HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 0, 12, 0), HorizontalContentAlignment = HorizontalAlignment.Stretch }; tile.Classes.Add("choiceTile"); tile.Padding = new Thickness(8);
+            var tile = new ChoiceButton("selected") { Name = "DisplayStyle" + (style == DisplayStyle.Ink ? "Ink" : "Phosphor"), BorderThickness = new Thickness(2), MaxWidth = 172, HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 0, 12, 0), HorizontalContentAlignment = HorizontalAlignment.Stretch }; tile.Classes.Add("choiceTile"); tile.Padding = new Thickness(8);
             var inner = new StackPanel(); inner.Children.Add(DisplayStylePicture(style));
             var caption = Ui.Text(words, 14); caption.FontWeight = FontWeight.SemiBold; caption.Margin = new Thickness(2, 8, 0, 0); inner.Children.Add(caption);
             tile.Content = inner; tile.Click += (_, _) => model.SetDisplayStyle(style);
@@ -250,7 +250,7 @@ public sealed class SettingsView : Grid
         var hm = NotesPage.Seg("TimeFormatHm", "01:30", !model.DecimalHours, () => { if (model.DecimalHours) model.ToggleFormat(); });
         var dec = NotesPage.Seg("TimeFormatDecimal", "1.50h", model.DecimalHours, () => { if (!model.DecimalHours) model.ToggleFormat(); });
         var format = new Border { Name = "TimeFormat", HorizontalAlignment = HorizontalAlignment.Right, Child = Ui.Horizontal(hm, dec) }; format.Classes.Add("segTrack");
-        void SyncFormat() { hm.Classes.Set("selected", !model.DecimalHours); dec.Classes.Set("selected", model.DecimalHours); }
+        void SyncFormat() { hm.Classes.Set("optOn", !model.DecimalHours); dec.Classes.Set("optOn", model.DecimalHours); }
         syncs.Add(SyncFormat); SyncFormat();
         // Where a day begins: midnight unless someone works through it. A night shift is then one day on one page and one column in the week.
         var dayStart = new TextBox { Name = "DayStartBox", Width = 84, Height = 36, MinHeight = 36, FontSize = 13.5, HorizontalContentAlignment = HorizontalAlignment.Center };
@@ -312,6 +312,7 @@ public sealed class SettingsView : Grid
     {
         var places = new List<string>(SunTimes.Cities.Select(c => c.Name)) { "Set times by hand" };
         var place = new ComboBox { Name = "SunPlace", ItemsSource = places, Width = 190, Height = 36, MinHeight = 36, FontSize = 13.5 };
+        Avalonia.Automation.AutomationProperties.SetName(place, "Location for sunrise and sunset");
         Avalonia.Automation.AutomationProperties.SetName(place, "Place for sunrise and sunset");
         TextBox Time(string name, string words)
         {
@@ -395,6 +396,7 @@ public sealed class SettingsView : Grid
         weekChoice = Ui.DialogButton("Week", () => ChoosePeriod(false), "ExportWeekChoice", true); monthChoice = Ui.DialogButton("Month", () => ChoosePeriod(true), "ExportMonthChoice", false);
         stack.Children.Add(Ui.Horizontal(weekChoice, monthChoice));
         periodLabel = Ui.Text("Week", 13, "muted"); periodPick = new ComboBox { Name = "ExportPeriodPick", HorizontalAlignment = HorizontalAlignment.Stretch, MaxWidth = 360 };
+        Avalonia.Automation.AutomationProperties.SetName(periodPick, "Export period");
         // The lists run newest first, so the earlier period is the next place down the list.
         var earlier = Ui.IconButton(IconKind.Previous, "Earlier", "ExportPeriodEarlier", () => { if (periodPick.SelectedIndex + 1 < periodPick.ItemCount) periodPick.SelectedIndex++; });
         var later = Ui.IconButton(IconKind.Next, "Later", "ExportPeriodLater", () => { if (periodPick.SelectedIndex > 0) periodPick.SelectedIndex--; });
@@ -501,6 +503,7 @@ public sealed class SettingsView : Grid
         // Preview a season: shows one now whatever the date, so each can be tried on any day. Not saved.
         var seasonNames = new List<string> { "Automatic" }; seasonNames.AddRange(Seasons.All.Select(x => x.Name));
         var seasonPick = new ComboBox { Name = "SeasonPreview", ItemsSource = seasonNames, Width = 170, Height = 36, MinHeight = 36, FontSize = 13.5 };
+        Avalonia.Automation.AutomationProperties.SetName(seasonPick, "Season preview");
         Avalonia.Automation.AutomationProperties.SetName(seasonPick, "Preview a season");
         var seasonSyncing = false;
         void SyncSeason() { seasonSyncing = true; seasonPick.SelectedIndex = model.SeasonPreview is { } id ? 1 + Seasons.All.ToList().FindIndex(x => x.Id == id) : 0; seasonSyncing = false; }
@@ -546,7 +549,7 @@ public sealed class SettingsView : Grid
         var head = Ui.Text(label, 13.5); head.FontWeight = FontWeight.SemiBold; words.Children.Add(head);
         var detail = Ui.Text(description, 12, "muted"); detail.TextWrapping = TextWrapping.Wrap; words.Children.Add(detail);
         var inner = new StackPanel(); inner.Children.Add(frame); inner.Children.Add(words);
-        var tile = new Button { Name = name, Content = inner, HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Top, Padding = new Thickness(8), BorderThickness = new Thickness(2), Margin = new Thickness(0, 0, 10, 0) };
+        var tile = new ChoiceButton("selected") { Name = name, Content = inner, HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Top, Padding = new Thickness(8), BorderThickness = new Thickness(2), Margin = new Thickness(0, 0, 10, 0) };
         tile.Classes.Add("choiceTile"); tile.Classes.Add("themeTile");
         Avalonia.Automation.AutomationProperties.SetName(tile, label);
         tile.Click += (_, _) => { if (!chosen()) choose(); };

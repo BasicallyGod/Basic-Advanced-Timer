@@ -20,13 +20,13 @@ public sealed class EntryDialog : Dialog
         root.Children.Add(Ui.Text("Account", 12, "muted"));
         root.Children.Add(accounts);
         var times = Ui.Grid("*,24,*");
-        var from = new TextBox { Name = "EntryStart", Text = start.ToString("HH:mm:ss") };
+        var from = new TextBox { Name = "EntryStart", Text = TimeText.ShowClock(start, start.Date) };
         var until = new TextBox { Name = "EntryEnd", Text = TimeText.ShowClock(end, start) };
         Ui.Put(times, from); Ui.Put(times, Ui.Dash(), 1); Ui.Put(times, until, 2); root.Children.Add(times);
         // The length and the end follow each other: type either, and the other is worked out from the start.
-        var length = new TextBox { Name = "EntryLength", Width = 130, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left };
+        var length = new DurationBox(DurationUnit.Minutes, model, "Length") { Name = "EntryLength", Width = 130, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left };
         root.Children.Add(Ui.Horizontal(Ui.Text("Length", 13, "muted"), length));
-        var hint = Ui.Text("Times are HH:mm. Length is minutes (45) or hours and minutes (1:15).", 11, "muted");
+        var hint = Ui.Text("Times: HH:mm. Length: 01:30, 1.5h or 90 minutes.", 11, "muted");
         hint.TextWrapping = Avalonia.Media.TextWrapping.Wrap; root.Children.Add(hint);
         var note = new TextBox { Name = "EntryNote", Watermark = "Entry note", AcceptsReturn = true, TextWrapping = Avalonia.Media.TextWrapping.Wrap, Height = 110 };
         root.Children.Add(note);
@@ -39,7 +39,8 @@ public sealed class EntryDialog : Dialog
             syncing = true;
             try
             {
-                length.Text = TimeText.TryParseClockAfter(from.Text, dayBegin, false, false, out var a) && TimeText.TryParseClockAfter(until.Text, a, true, true, out var b) && b > a ? TimeText.ShowLength(b - a) : "";
+                if (TimeText.TryParseClockAfter(from.Text, dayBegin, false, false, out var a) && TimeText.TryParseClockAfter(until.Text, a, true, true, out var b) && b > a) length.SetDuration(b - a);
+                else length.Text = "";
             }
             finally { syncing = false; }
         }
@@ -49,7 +50,7 @@ public sealed class EntryDialog : Dialog
         length.PropertyChanged += (_, e) =>
         {
             if (e.Property != TextBox.TextProperty || syncing) return;
-            if (TimeText.ParseLength(length.Text) is not { } span || !TimeText.TryParseClockAfter(from.Text, dayBegin, false, false, out var begin)) return;
+            if (length.ReadDuration() is not { } span || !TimeText.TryParseClockAfter(from.Text, dayBegin, false, false, out var begin)) return;
             var finish = begin + span;
             error.Text = ""; syncing = true;
             try { until.Text = TimeText.ShowClock(finish, finish.Date); } finally { syncing = false; }
@@ -60,6 +61,7 @@ public sealed class EntryDialog : Dialog
             try
             {
                 if (applied) { if (model.Save()) Close(); else error.Text = model.LastError; return; }
+                if (length.ReadDuration() is null) { error.Text = "Length: use 01:30, 1.5h or 90 minutes, up to 24 hours."; length.Focus(); return; }
                 var previous = model.Editor.UndoState;
                 var blockStart = TimeText.ParseClockAfter(from.Text, dayBegin, false);
                 if (model.AddEntry(BreakAccount.Stored((string?)accounts.SelectedItem ?? ""), blockStart, TimeText.ParseClockAfter(until.Text, blockStart, true, true), note.Text ?? "")) Close();

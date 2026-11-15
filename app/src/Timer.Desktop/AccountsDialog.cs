@@ -14,7 +14,7 @@ public sealed class AccountsDialog : Dialog
         Width = 700; Height = 540;
         var root = Ui.Grid("*", "Auto,*,Auto,Auto,Auto,Auto"); root.Margin = new Thickness(24, 4, 24, 24);
         var intro = new StackPanel { Spacing = 8, Margin = new Thickness(0, 0, 0, 16) };
-        intro.Children.Add(new TextBlock { Text = "Rename, reorder (drag the grip) or delete accounts and set budgets in hours. A blank budget means no limit. Untick In tracker to take an account off the tracker list. Its recorded time stays in every report.", TextWrapping = Avalonia.Media.TextWrapping.Wrap });
+        intro.Children.Add(new TextBlock { Text = "Rename, reorder (drag the grip) or delete accounts. Budget: 07:30 or 7.5h; bare numbers mean hours. A blank budget means no limit. Untick In tracker to hide an account. Its recorded time stays in every report.", TextWrapping = Avalonia.Media.TextWrapping.Wrap });
         Ui.Put(root, intro);
         var confirm = new StackPanel { Name = "DeleteConfirm", Spacing = 8, IsVisible = false, Margin = new Thickness(0, 8, 0, 0) };
         var list = new StackPanel { Spacing = 10 };
@@ -53,15 +53,19 @@ public sealed class AccountsDialog : Dialog
         {
             var row = Ui.Grid("26,*,50,80,85,110,44");
             var name = new TextBox { Text = account.Name, MaxLength = Math.Max(TimerModel.MaxAccountNameLength, account.Name.Length), Margin = new Thickness(0, 0, 8, 0) };
+            Avalonia.Automation.AutomationProperties.SetName(name, "Account name");
             Ui.Put(row, name, 1);
             // A new account starts on the first palette colour nobody here is using, as the model would give it.
             var chosen = account.Colour ?? TimerModel.Palette.FirstOrDefault(c => !entries.Any(e => e.Colour().Equals(c, StringComparison.OrdinalIgnoreCase))) ?? TimerModel.Palette[0];
             Ui.Put(row, ColourButton(() => chosen, value => chosen = value, account.Name), 2);
             var visible = new CheckBox { IsChecked = !account.Hidden }; ToolTip.SetTip(visible, "In tracker");
+            Avalonia.Automation.AutomationProperties.SetName(visible, "Show " + account.Name + " in tracker");
             Ui.Put(row, visible, 3);
-            var budget = new TextBox { Text = account.BudgetHours?.ToString("0.###", CultureInfo.InvariantCulture) ?? "", Margin = new Thickness(0, 0, 8, 0) };
+            var budget = new DurationBox(DurationUnit.Hours, model, "Budget for " + account.Name) { Watermark = "none", Margin = new Thickness(0, 0, 8, 0) };
+            budget.SetHours(account.BudgetHours);
             Ui.Put(row, budget, 4);
             var period = new ComboBox { ItemsSource = new[] { "day", "week", "month", "quarter" }, SelectedItem = account.BudgetPeriod, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch };
+            Avalonia.Automation.AutomationProperties.SetName(period, "Budget period for " + account.Name);
             Ui.Put(row, period, 5);
             var entry = new AccountRow { Original = existing ? account.Name : null, Name = name, Visible = visible, Budget = budget, Period = period, Colour = () => chosen, Grid = row };
             // The bin removes a new row at once. For an existing account it marks the row for deleting, dimmed, and a second press takes the mark off.
@@ -73,6 +77,7 @@ public sealed class AccountsDialog : Dialog
                 foreach (var child in entry.Grid.Children.Where(c => !ReferenceEquals(c, entry.Bin))) { child.Opacity = entry.Deleting ? .4 : 1; child.IsEnabled = !entry.Deleting; }
                 ((IconGlyph)entry.Bin!.Content!).TintKey = entry.Deleting ? "Overtime" : null; ((IconGlyph)entry.Bin.Content).InvalidateVisual();
                 ToolTip.SetTip(entry.Bin, entry.Deleting ? "Keep account" : "Delete account");
+                Avalonia.Automation.AutomationProperties.SetName(entry.Bin, entry.Deleting ? "Keep account" : "Delete account");
                 confirm.IsVisible = false;
             });
             entry.Bin = bin; Ui.Put(row, bin, 6);
@@ -113,7 +118,7 @@ public sealed class AccountsDialog : Dialog
                 }
                 // An account keeps its colour through editing, renaming and reordering; a new one is given one by the model.
                 var accounts = kept.Select(e => new AccountSettings((e.Name.Text ?? "").Trim(),
-                    string.IsNullOrWhiteSpace(e.Budget.Text) ? null : double.Parse(e.Budget.Text, NumberStyles.Float, CultureInfo.InvariantCulture),
+                    string.IsNullOrWhiteSpace(e.Budget.Text) ? null : e.Budget.ReadHours() ?? throw new FormatException(),
                     (string?)e.Period.SelectedItem ?? "week", e.Visible.IsChecked != true, e.Colour())).ToList();
                 var renames = kept.Zip(accounts, (e, a) => (From: e.Original, To: a.Name))
                     .Where(r => r.From is not null && r.From != r.To).ToDictionary(r => r.From!, r => r.To);
@@ -122,7 +127,7 @@ public sealed class AccountsDialog : Dialog
                 Close();
             }
             catch (Exception ex) when (ex is FormatException or OverflowException)
-            { error.Text = "Use positive budget hours, such as 7.5, or leave the budget blank."; }
+            { error.Text = "Budget: use 07:30 or 7.5h, or leave it blank."; }
             catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or InvalidDataException or IOException)
             { error.Text = ex.Message; }
         }
@@ -132,7 +137,7 @@ public sealed class AccountsDialog : Dialog
     }
     private sealed class AccountRow
     {
-        public string? Original; public TextBox Name = null!; public CheckBox Visible = null!; public TextBox Budget = null!; public ComboBox Period = null!;
+        public string? Original; public TextBox Name = null!; public CheckBox Visible = null!; public DurationBox Budget = null!; public ComboBox Period = null!;
         public Func<string> Colour = null!; public Grid Grid = null!; public Button? Bin; public bool Deleting;
     }
     // A round swatch showing the account's colour. It opens the palette, and a box for any other colour as #RRGGBB.
@@ -141,6 +146,7 @@ public sealed class AccountsDialog : Dialog
         var swatch = new Border { Width = 22, Height = 22, CornerRadius = new CornerRadius(11), Background = Avalonia.Media.Brush.Parse(get()), BorderThickness = new Thickness(1), BorderBrush = Avalonia.Media.Brushes.Gray };
         var button = new Button { Content = swatch, Name = "AccountColour", Padding = new Thickness(4), Background = Avalonia.Media.Brushes.Transparent, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left };
         ToolTip.SetTip(button, "Colour");
+        Avalonia.Automation.AutomationProperties.SetName(button, "Colour for " + accountName);
         void Choose(string colour) { set(colour); swatch.Background = Avalonia.Media.Brush.Parse(colour); }
         var panel = new StackPanel { Spacing = 8, Margin = new Thickness(4) };
         var grid = new UniformGrid { Columns = 8, Width = 8 * 34 }; // Two even rows of eight.
@@ -149,11 +155,13 @@ public sealed class AccountsDialog : Dialog
         {
             var pick = new Button { Name = "Colour" + colour[1..], Width = 28, Height = 28, Margin = new Thickness(3), HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center, Padding = new Thickness(0), CornerRadius = new CornerRadius(14), Background = Avalonia.Media.Brush.Parse(colour) };
             ToolTip.SetTip(pick, colour);
+            Avalonia.Automation.AutomationProperties.SetName(pick, "Colour " + colour);
             pick.Click += (_, _) => { Choose(colour); flyout.Hide(); };
             grid.Children.Add(pick);
         }
         panel.Children.Add(grid);
         var hex = new TextBox { Name = "ColourHex", Watermark = "#RRGGBB", Text = get(), Width = 120, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left };
+        Avalonia.Automation.AutomationProperties.SetName(hex, "Custom colour");
         var note = Ui.Text("", 12, "muted");
         var apply = Ui.DialogButton("Use", () =>
         {

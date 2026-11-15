@@ -151,7 +151,7 @@ public sealed class SetupTests
             Settle(window);
             Find<TextBox>(window, "SetupBudget0").Text = "lots"; Press(window, "SetupNext"); Settle(window);
             Assert.Equal("Step 1 of 4", window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text is { } x && x.StartsWith("Step ")).Text);
-            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.IsVisible && t.Text is { } x && x.StartsWith("Use positive budget hours"));
+            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.IsVisible && t.Text is { } x && x.StartsWith("Budget: use"));
             Find<TextBox>(window, "SetupBudget0").Text = ""; Find<TextBox>(window, "SetupName0").Text = "Internal"; Press(window, "SetupNext"); // A name already used.
             Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.IsVisible && t.Text is { } x && x.Contains("unique"));
             Find<TextBox>(window, "SetupName0").Text = "Account one"; Press(window, "SetupNext"); Settle(window);

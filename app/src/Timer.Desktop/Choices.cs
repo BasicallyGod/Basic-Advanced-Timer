@@ -39,6 +39,8 @@ public sealed class ChoiceStrip : Border
     public Func<string, string>? ShortLabel { get; init; }
     /// <summary>How many options a chip strip shows before it folds the rest behind a "more" chip.</summary>
     public int FoldAfter { get; init; } = 8;
+    /// <summary>A human-readable field name; internal control identifiers are never spoken as labels.</summary>
+    public string? AccessibleName { get; init; }
     public event EventHandler<SelectionChangedEventArgs>? SelectionChanged;
 
     public ChoiceStrip()
@@ -60,7 +62,9 @@ public sealed class ChoiceStrip : Border
         {
             var next = value as string; if (next is not null) next = items.FirstOrDefault(i => i.Equals(next, StringComparison.OrdinalIgnoreCase)) ?? next;
             if (string.Equals(next, selected, StringComparison.Ordinal)) return;
-            var old = selected; selected = next; Refresh();
+            var old = selected; selected = next;
+            if (Look == ChoiceLook.Chips && items.Count > FoldAfter && !expanded && next is not null && !buttons.Any(b => b.Tag is string tag && tag.Equals(next, StringComparison.OrdinalIgnoreCase))) Rebuild();
+            else Refresh();
             SelectionChanged?.Invoke(this, new SelectionChangedEventArgs(SelectingItemsControl.SelectionChangedEvent, old is null ? Array.Empty<object>() : new object[] { old }, next is null ? Array.Empty<object>() : new object[] { next }));
         }
     }
@@ -97,7 +101,7 @@ public sealed class ChoiceStrip : Border
                 if (text is not null && DotFor?.Invoke(text) is { } hex) row.Children.Add(new Avalonia.Controls.Shapes.Ellipse { Width = 10, Height = 10, Fill = Brush.Parse(hex), VerticalAlignment = VerticalAlignment.Center });
                 row.Children.Add(new TextBlock { Text = ShortLabel?.Invoke(text ?? "") ?? text, VerticalAlignment = VerticalAlignment.Center }); return row;
             }) };
-        AutomationProperties.SetName(box, string.IsNullOrEmpty(Name) ? "Choice" : Name);
+        AutomationProperties.SetName(box, AccessibleName ?? FieldName(Name));
         combo = box; syncingCombo = true; box.SelectedItem = selected is null ? null : items.FirstOrDefault(i => i.Equals(selected, StringComparison.OrdinalIgnoreCase)); syncingCombo = false;
         box.SelectionChanged += (_, _) => { if (!syncingCombo && box.SelectedItem is string chosen) SelectedItem = chosen; };
         return box;
@@ -112,6 +116,7 @@ public sealed class ChoiceStrip : Border
             AutomationProperties.SetName(button, item); buttons.Add(button); row.Children.Add(button);
         }
         var track = new Border { Child = row, Height = 36, HorizontalAlignment = HorizontalAlignment.Left }; track.Classes.Add("segTrack");
+        foreach (var choice in buttons.OfType<ChoiceButton>()) choice.Sync();
         Dispatcher_Refresh(); return track;
     }
     private void Dispatcher_Refresh() => Avalonia.Threading.Dispatcher.UIThread.Post(Refresh, Avalonia.Threading.DispatcherPriority.Loaded);
@@ -119,7 +124,7 @@ public sealed class ChoiceStrip : Border
 
     private Button Chip(string item)
     {
-        var button = new Button { Name = (string.IsNullOrEmpty(Name) ? "Choice" : Name) + "_" + Safe(item), Tag = item }; button.Classes.Add("ctl"); button.Classes.Add("chip");
+        var button = new ChoiceButton("chipOn") { Name = (string.IsNullOrEmpty(Name) ? "Choice" : Name) + "_" + Safe(item), Tag = item }; button.Classes.Add("ctl"); button.Classes.Add("chip");
         var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 7, VerticalAlignment = VerticalAlignment.Center };
         content.Children.Add(new Border { Name = "Lamp", Width = 3, Height = 11, CornerRadius = new CornerRadius(2), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 0, 0) });
         if (DotFor?.Invoke(item) is { } hex) content.Children.Add(new Avalonia.Controls.Shapes.Ellipse { Width = 8, Height = 8, VerticalAlignment = VerticalAlignment.Center, Fill = Brush.Parse(hex) });
@@ -136,7 +141,7 @@ public sealed class ChoiceStrip : Border
         button.Classes.Add("ctl"); button.Classes.Add("chip"); button.Classes.Add("more"); button.Click += (_, _) => click(); return button;
     }
     private void Choose(string item) { SelectedItem = item; if (Look != ChoiceLook.Segments) FocusSelected(); }
-    private void FocusSelected() { var i = SelectedIndex; if (i >= 0 && i < buttons.Count && IsKeyboardFocusWithin) buttons[i].Focus(); }
+    private void FocusSelected() { if (IsKeyboardFocusWithin) buttons.FirstOrDefault(b => b.Tag is string tag && tag.Equals(selected, StringComparison.OrdinalIgnoreCase))?.Focus(); }
 
     /// <summary>Brings every option up to date with the choice: the lamp lights on the chosen chip, the thumb sits under the chosen segment.</summary>
     private void Refresh()
@@ -147,7 +152,8 @@ public sealed class ChoiceStrip : Border
             var on = items.Count > i && selected is not null && buttons[i].Tag is string tag ? tag.Equals(selected, StringComparison.OrdinalIgnoreCase) : (Look == ChoiceLook.Segments && i < items.Count && selected is not null && items[i].Equals(selected, StringComparison.OrdinalIgnoreCase));
             var button = buttons[i];
             if (Look == ChoiceLook.Segments) { button.Classes.Set("optOn", on); continue; }
-            button.Classes.Set("chipOn", on); AutomationProperties.SetHelpText(button, on ? "Chosen" : "");
+            button.Classes.Set("chipOn", on);
+            if (button is ChoiceButton choice) choice.Sync();
             if (button.Content is StackPanel content)
             {
                 var lit = Ui.ThemeColour(this, "AccentLit", Colors.MediumPurple); var lamp = (Border)content.Children[0];
@@ -159,10 +165,18 @@ public sealed class ChoiceStrip : Border
     }
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
+        if (Look == ChoiceLook.Dropdown || e.Handled) return; // Native ComboBox owns arrows, type-ahead and popup selection.
         if (items.Count == 0 || e.Key is not (Key.Left or Key.Right or Key.Up or Key.Down)) return;
         var step = e.Key is Key.Left or Key.Up ? -1 : 1; var at = SelectedIndex < 0 ? (step > 0 ? -1 : 0) : SelectedIndex;
         var next = Math.Clamp(at + step, 0, items.Count - 1);
         if (next != SelectedIndex) { SelectedItem = items[next]; if (next < buttons.Count) buttons[next].Focus(); }
         e.Handled = true;
+    }
+    private static string FieldName(string? name)
+    {
+        if (name?.Contains("Account", StringComparison.OrdinalIgnoreCase) == true) return "Account";
+        if (name?.Contains("Repeat", StringComparison.OrdinalIgnoreCase) == true) return "Repeat";
+        if (name?.Contains("Period", StringComparison.OrdinalIgnoreCase) == true) return "Period";
+        return "Choose an option";
     }
 }
