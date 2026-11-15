@@ -290,7 +290,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         // Only Light and Dark are offered now, so a saved choice of a retired theme or one of the user's own becomes Light or Dark (the theme stays in the file).
         this.preferences = this.preferences with { Theme = AppThemes.Resolve(this.preferences.Theme, this.preferences.Themes) };
         ApplyTheme(); Ui.ApplyTooltips(this.preferences.Tooltips);
-        DisplayInk.Style = DisplayStyle; DisplayInk.Percent = InkPercent;
+        DisplayInk.Style = DisplayStyle; DisplayInk.Percent = InkPercent; DisplayInk.DarkPaper = CurrentTheme.Dark;
         // When the computer switches between light and dark, System follows it.
         if (Application.Current?.PlatformSettings is { } platform)
             platform.ColorValuesChanged += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(() => { appliedVariant = null; Notify(); });
@@ -948,6 +948,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         ? ThemeEngine.StateVariant(CurrentTheme, ThemeState) : null;
     private void ApplyTheme()
     {
+        DisplayInk.DarkPaper = CurrentTheme.Dark; // the speckle's paper colour follows the theme
         // The check is on the application's own dispatcher, which is what setting its theme verifies. The shared UI dispatcher is not always the same one (tests that build a
         // model off the UI thread while another headless session's application is current), and asking it let a call from the wrong thread through.
         // Setting the theme verifies against the shared UI dispatcher, which parallel headless sessions can move on from the application's own, so both must agree.
@@ -1098,6 +1099,10 @@ public sealed class TimerModel : INotifyPropertyChanged
     public void SetPillLower(PillLower shown) { if (shown == PillLower) return; SetAppearanceFlag(PillLowerLine, shown == PillLower.Strip ? null : shown.ToString().ToLowerInvariant(), true); Notify(PresentationChange); }
     public void CyclePillLower() { var all = LowerDisplay.Cycle; SetPillLower(all[(all.ToList().IndexOf(PillLower) + 1) % all.Count]); }
     // A saved displaytimeline= line is ignored and left alone: the display look is the only one now.
+    private const string BlocksLine = "blocks=";
+    /// <summary>Phosphor's timeline blocks as a coloured outline with coloured words instead of a filled block (a trial, for contrast). Saved as blocks=outline.</summary>
+    public bool OutlinedBlocks => AppearanceValue(BlocksLine) == "outline";
+    public void SetOutlinedBlocks(bool on) { if (on == OutlinedBlocks) return; SetAppearanceFlag(BlocksLine, on ? "outline" : null, true); Notify(); }
     // ---- the display style: Phosphor (the vacuum-fluorescent look) or E-ink (normal type, grain, calm motion), for the whole application
     private const string DisplayStyleLine = "displaystyle=", InkStrengthLine = "inkstrength=", TexturesLine = "textures=";
     /// <summary>Which look every display wears. Saved as displaystyle=ink; Phosphor, the original, has no line.</summary>

@@ -193,11 +193,47 @@ public sealed class DisplayInkTests
             Assert.NotNull(Led().OpacityMask); Assert.Equal(34, Key("PillBreak").Width); Assert.Equal(16, Key("PillBreak").Height); // Phosphor: the honeycomb and the small keys.
             model.SetDisplayStyle(DisplayStyle.Ink); Dispatcher.UIThread.RunJobs();
             Assert.Null(Led().OpacityMask); // E-ink: a plain LED, no mesh.
-            Assert.Equal(40, Key("PillBreak").Width); Assert.Equal(20, Key("PillBreak").Height); Assert.Equal(40, Key("PillPause").Width); // Room for the word Break inside its box.
+            Assert.Equal(40, Key("PillBreak").Width); Assert.Equal(19, Key("PillBreak").Height); Assert.Equal(40, Key("PillPause").Width); // Room for the word Break inside its box.
             Assert.NotEmpty(pill.GetVisualDescendants().OfType<PaperLayer>()); // The well has its paper grain.
             model.SetDisplayStyle(DisplayStyle.Phosphor); Dispatcher.UIThread.RunJobs();
             Assert.NotNull(Led().OpacityMask); Assert.Equal(34, Key("PillBreak").Width);
         }
         finally { pill.Close(); DisplayInk.Style = DisplayStyle.Phosphor; }
     }
+
+    [AvaloniaFact]
+    public void OutlinedBlocksDrawAColouredOutlineAndWashInPlaceOfTheFilledBlock()
+    {
+        var model = Demo(); model.SetOutlinedBlocks(true); Assert.True(model.OutlinedBlocks);
+        var window = new DashboardWindow(model); window.Show(); for (var pass = 0; pass < 3; pass++) { Dispatcher.UIThread.RunJobs(); using var f = window.CaptureRenderedFrame(); }
+        try
+        {
+            var block = window.GetVisualDescendants().OfType<Border>().First(b => b.Name?.StartsWith("TimelineEntry") == true && !string.IsNullOrEmpty(b.Name));
+            Assert.True(block.BorderThickness.Left > 1); Assert.NotNull(block.BorderBrush);
+            Assert.Contains(block.GetVisualDescendants().OfType<Border>(), b => b.Name == "BlockOutlineWash"); Assert.DoesNotContain(block.GetVisualDescendants().OfType<Border>(), b => b.Name == "BlockPhosphor");
+            model.SetOutlinedBlocks(false); Assert.False(model.OutlinedBlocks);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void TheWheelScrollsTheWeeksAccountsFromAnywhereOverThem()
+    {
+        var model = TimerModel.CreateDemo(() => new DateTime(2026, 10, 9, 12, 0, 0)); model.CompleteSetup();
+        var window = new DashboardWindow(model); window.Show(); window.SelectTab(true); for (var pass = 0; pass < 3; pass++) { Dispatcher.UIThread.RunJobs(); using var f = window.CaptureRenderedFrame(); }
+        try
+        {
+            var instrument = window.GetVisualDescendants().OfType<WeekInstrument>().Single();
+            if (instrument.RowCount <= instrument.Capacity) return; // nothing to scroll with this much room
+            var row = window.GetVisualDescendants().OfType<Button>().First(b => b.Name?.StartsWith("WeekAccount_") == true);
+            var at = row.TranslatePoint(new Point(row.Bounds.Width / 2, row.Bounds.Height / 2), window)!.Value; // on a button, not on the bare drawing
+            var before = instrument.ShownAccounts.ToList();
+            Avalonia.Headless.HeadlessWindowExtensions.MouseWheel(window, at, new Vector(0, -1)); Dispatcher.UIThread.RunJobs();
+            Assert.NotEqual(before, instrument.ShownAccounts);
+        }
+        finally { window.Close(); }
+    }
+
+    [Fact]
+    public void TheSidebarsWreathStaysInsideTheColumnsMargin() => Assert.True(Sidebar.DisplayFrame.Room <= 12);
 }

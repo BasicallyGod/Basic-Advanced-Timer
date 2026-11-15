@@ -49,7 +49,7 @@ public static class DisplayInk
     // ---- grain
     // Grain is drawn from small noise bitmaps with DrawImage, laid side by side where a shape is bigger than one, and the text speckle is a bitmap mask the size of the text
     // (never repeated). Tiled brushes were used first and left vertical bands with no grain and, worse, letters missing from the speckle mask on Windows.
-    private const int NoiseSize = 512, DropoutHeight = 96;
+    private const int NoiseSize = 512;
     private static readonly Dictionary<string, WriteableBitmap> noise = new();
     private static WriteableBitmap Cached(string key, Func<WriteableBitmap> make) { lock (noise) { if (!noise.TryGetValue(key, out var bitmap)) noise[key] = bitmap = make(); return bitmap; } }
     private static WriteableBitmap Bitmap(int width, int height, Func<double, uint> pixel, int cell, int seed)
@@ -75,11 +75,6 @@ public static class DisplayInk
     private static WriteableBitmap Specks(bool onLightPaper) => Cached(onLightPaper ? "specks-dark" : "specks-light", () => Bitmap(NoiseSize, NoiseSize, r => Speck(r, onLightPaper), 2, onLightPaper ? 7 : 11));
     /// <summary>A very fine grain for the paper itself.</summary>
     private static WriteableBitmap PaperNoise(bool onLightPaper) => Cached(onLightPaper ? "paper-dark" : "paper-light", () => Bitmap(NoiseSize, NoiseSize, r => Speck(r, onLightPaper), 1, onLightPaper ? 5 : 9));
-    private static ImageBrush Dropout(int tenths)
-    {
-        var bitmap = Cached("dropout" + tenths, () => Bitmap(NoiseSize, DropoutHeight, r => { var strength = tenths / 10.0; return Premul((byte)(255 * (r < .10 * strength ? 1 - .4 * strength : 1.0)), 255); }, 1, 13));
-        return new ImageBrush(bitmap) { Stretch = Stretch.None, TileMode = TileMode.None, AlignmentX = AlignmentX.Left, AlignmentY = AlignmentY.Top };
-    }
     private static void Lay(DrawingContext context, WriteableBitmap bitmap, Rect rect, double opacity)
     {
         if (rect.Width <= 0 || rect.Height <= 0) return;
@@ -93,10 +88,21 @@ public static class DisplayInk
                 }
     }
 
-    /// <summary>Pushes a mask that lets a little ink drop out of whatever is drawn inside it (the speckle in the letters); nothing at all with the effect at 0, and none for text too big for its mask. Dispose to stop.</summary>
-    public static IDisposable Speckled(DrawingContext context, Rect bounds) =>
-        On && percent > 0 && bounds.Width <= NoiseSize && bounds.Height <= DropoutHeight ? context.PushOpacityMask(Dropout(percent / 10), bounds) : NoMask.Instance;
-    private sealed class NoMask : IDisposable { public static readonly NoMask Instance = new(); public void Dispose() { } }
+    /// <summary>
+    /// The speckle in the letters: a few single pixels in the paper's colour laid over text that has just been drawn, so a little ink seems to have dropped out. It is laid with
+    /// plain rectangles and no mask: an opacity mask (tiled or not) hid whole stretches of letters on Windows. Nothing at all with the effect at 0.
+    /// </summary>
+    public static void Erode(DrawingContext context, Rect bounds, string seed)
+    {
+        if (!On || percent == 0 || bounds.Width <= 0 || bounds.Height <= 0) return;
+        var hash = 2166136261u; foreach (var ch in seed) hash = (hash ^ ch) * 16777619u; hash ^= (uint)((int)bounds.X * 73856093) ^ (uint)((int)bounds.Y * 19349663);
+        var rnd = new Random((int)hash); var dots = (int)(bounds.Width * bounds.Height * .05 * Strength);
+        var brush = new SolidColorBrush(For(DarkPaper).Paper, .9);
+        for (var k = 0; k < dots; k++) context.DrawRectangle(brush, null, new Rect(Math.Floor(bounds.X + rnd.NextDouble() * bounds.Width), Math.Floor(bounds.Y + rnd.NextDouble() * bounds.Height), 1, 1));
+    }
+    [ThreadStatic] private static bool? darkPaper;
+    /// <summary>Whether the theme is Dark, so the speckle is laid in the right paper colour. Set by <see cref="TimerModel"/> whenever the theme is applied.</summary>
+    public static bool DarkPaper { get => darkPaper ?? true; set => darkPaper = value; }
 
     /// <summary>Fills a rounded shape with <paramref name="fill"/> and lays the ink grain over it, at its strength; an outline as firm as the ink round it.</summary>
     public static void Cell(DrawingContext context, Colours colours, IBrush fill, Rect rect, double radius, bool outline = false)
@@ -177,7 +183,6 @@ public static class InkType
     {
         text = Sentence(text); var total = Width(text, role); var left = align == TextAlignment.Right ? x - total : align == TextAlignment.Center ? x - total / 2 : x;
         var bounds = new Rect(left - 2, baseline - role.Size * 1.1, total + 4, role.Size * 1.5);
-        using (DisplayInk.Speckled(context, bounds))
         {
             double zero = Zero(role), colon = Colon(role), px = left;
             foreach (var (part, number) in Runs(text))
@@ -191,6 +196,7 @@ public static class InkType
                 else { var run = Format(part, role, brush); context.DrawText(run, new Point(px, baseline - run.Baseline)); px += RunWidth(part, role); }
             }
         }
+        DisplayInk.Erode(context, bounds, text);
         return total;
     }
 }
