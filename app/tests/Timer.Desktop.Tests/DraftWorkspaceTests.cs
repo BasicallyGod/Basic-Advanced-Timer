@@ -403,4 +403,25 @@ public sealed class DraftWorkspaceTests
         Assert.NotNull(model.LastError); using var lease = model.Drafts.AcquireBlock(row);
         Assert.False(lease.Draft.PendingPersistence);
     }
+
+    [Fact]
+    public void RecoveryCannotMistakeAnotherCommandsUndoChangeForAnAcceptedDraft()
+    {
+        Stored((store, model) =>
+        {
+            var row = Block(model); using var lease = model.Drafts.AcquireBlock(row); var d = lease.Draft;
+            d.Update(d.Values with { Words = "Retain this draft" });
+            model.Engine.Sessions.Add(new SessionRow(Day.ToString("yyyy-MM-dd"), "Account one", "12:00:00", "added", "10"));
+            StorageFaults.Block(store); Assert.False(model.Save()); StorageFaults.Unblock(store);
+            var entered = false;
+            model.PropertyChanged += (_, _) =>
+            {
+                if (entered || model.LastError is not null) return; entered = true;
+                model.SelectBlock(new[] { row }, false); Assert.True(model.DeleteSelection());
+            };
+            Assert.Equal(DraftSaveOutcome.Refused, model.Drafts.Save(d).Outcome);
+            Assert.True(d.IsDirty); Assert.Equal("Retain this draft", d.Values.Words); Assert.Null(d.SubmittedRevision);
+            Assert.DoesNotContain(model.Engine.Sessions, r => ReferenceEquals(r, row));
+        });
+    }
 }

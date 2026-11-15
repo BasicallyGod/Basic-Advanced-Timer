@@ -230,13 +230,12 @@ public sealed class DraftWorkspace
         DraftSaveResult result;
         try
         {
-            var previousUndo = model.Editor.UndoState;
             string? problem = null; bool saved = true;
             RecordValues? commandValues = null;
             if (draft.Kind == DraftKind.Block)
             {
                 saved = model.EditEntryDraft(entry.Row!, submitted.Account!, start, end, submitted.Words, (row, note) => commandValues = Read(row, note));
-                if (!saved && ReferenceEquals(previousUndo, model.Editor.UndoState)) problem = model.EditError ?? model.LastError ?? "That change was refused.";
+                if (commandValues is null) problem = model.EditError ?? model.LastError ?? "That change was refused.";
                 if (problem is null) entry.PendingLedger = !saved;
             }
             else
