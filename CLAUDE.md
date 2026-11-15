@@ -282,3 +282,9 @@ Native ComboBoxes retain ownership of popup arrows, type-ahead, Enter and Escape
 Temporary note IDs and known ledger replacements remap identity. Account changes defer intermediate reconciliation and relink accepted/unsubmitted assignments; deleted targets remain for correction. No draft owns a view or a timer, and idle applications do not create a workspace. Package C is model infrastructure: current editors keep their behaviour until Package D adopts explicit record saves together. See [shared record drafts](docs/design/shared-record-drafts.md) for the command contract and migration handoff.
 
 `LedgerUnsaved` is independent of `LastError`: a startup-setting error is not a ledger failure, and clearing that error cannot clear a failed ledger checkpoint. `SaveError` retains a generic pending-ledger warning if another action has cleared its specific error; only a successful Save acknowledges the ledger.
+
+### Native UI acceptance follow-up (15 November 2026)
+
+The Package F native baseline is Experimental 0.1.824 (`866404d`). The recorded scope and remaining release gates are in [UI cohesion acceptance](docs/testing/ui-cohesion-acceptance.md). Sampled scaling was restored to 125%; do not infer a complete matrix, Narrator speech, Store upgrade or independent comprehension pass from UI Automation and screenshots.
+
+`Ui.DialogButton` keeps its generated automation name current when a string caption changes, retaining names for icon panels and preserving caller-supplied descriptions. `RescheduleStrip` exposes an editable HH:mm automation value and explicit Invoke/Enter commit; the selected working day resolves midnight offsets and commit rechecks the current clock. Exact-minute accessibility edits retain the existing final-minute reminder support. Row DraftBadge checks note persistence even without a leased editor draft, observes note changes while attached and does not create drafts merely to show Retrying.

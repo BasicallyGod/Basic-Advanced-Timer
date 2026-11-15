@@ -1,6 +1,10 @@
 using System.Globalization;
 using Avalonia;
+using Avalonia.Automation;
+using Avalonia.Automation.Peers;
+using Avalonia.Automation.Provider;
 using Avalonia.Controls;
+using Avalonia.Controls.Automation.Peers;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
@@ -116,6 +120,7 @@ public sealed class RescheduleStrip : Control
     public DateTime? ZoomFrom { get; private set; }
     private DateTime ViewFrom => ZoomFrom ?? from;
     private DateTime ViewTo => ZoomFrom?.AddMinutes(ZoomMinutes) ?? until;
+    private ReminderTimePeer? timePeer;
 
     public RescheduleStrip(TimerModel model, Action<DateTime> set)
     {
@@ -146,7 +151,40 @@ public sealed class RescheduleStrip : Control
     }
     /// <summary>Whether the pin can be anywhere on this day (false for a day already over).</summary>
     public bool Open => Floor <= Latest;
-    private void Describe() => Avalonia.Automation.AutomationProperties.SetName(this, $"Reminder at {Pin.ToString("ddd d MMM, HH:mm", CultureInfo.GetCultureInfo("en-GB"))}. Drag or press to move it");
+    private void Describe()
+    {
+        AutomationProperties.SetName(this, $"Reminder time, {Pin.ToString("ddd d MMM, HH:mm", CultureInfo.GetCultureInfo("en-GB"))}");
+        AutomationProperties.SetHelpText(this, "Enter sets the reminder.");
+        timePeer?.UpdateValue();
+    }
+    protected override AutomationPeer OnCreateAutomationPeer() => timePeer = new ReminderTimePeer(this);
+    private sealed class ReminderTimePeer(RescheduleStrip owner) : ControlAutomationPeer(owner), IValueProvider, IInvokeProvider
+    {
+        private string previous = owner.Pin.ToString("HH:mm", CultureInfo.InvariantCulture);
+        protected override AutomationControlType GetAutomationControlTypeCore() => AutomationControlType.Edit;
+        public bool IsReadOnly => !owner.Open;
+        public string Value => owner.Pin.ToString("HH:mm", CultureInfo.InvariantCulture);
+        public void SetValue(string? value)
+        {
+            EnsureEnabled();
+            if (IsReadOnly) throw new InvalidOperationException("No reminder time is available on this day.");
+            if (!TimeSpan.TryParseExact(value, @"hh\:mm", CultureInfo.InvariantCulture, out var at))
+                throw new ArgumentException("Use HH:mm.", nameof(value));
+            var candidate = owner.from.Date + at;
+            if (candidate < owner.from) candidate = candidate.AddDays(1);
+            if (candidate >= owner.until || candidate < owner.model.Engine.Now)
+                throw new ArgumentOutOfRangeException(nameof(value), "Choose a future time on the selected day.");
+            // As with the keyboard, changing the pin previews it; Enter/Invoke commits after revalidation.
+            // Exact minutes remain valid, including an existing final-minute reminder.
+            owner.Pin = candidate; owner.Describe(); owner.InvalidateVisual();
+        }
+        public void Invoke() { EnsureEnabled(); owner.Commit(); }
+        public void UpdateValue()
+        {
+            var current = Value; if (current == previous) return;
+            RaisePropertyChangedEvent(ValuePatternIdentifiers.ValueProperty, previous, current); previous = current;
+        }
+    }
 
     private double X(DateTime t) => Math.Clamp((t - ViewFrom).TotalMinutes / Math.Max(1, (ViewTo - ViewFrom).TotalMinutes), 0, 1) * Bounds.Width;
     private double Fraction(double x) => Math.Clamp(x / Math.Max(1, Bounds.Width), 0, 1);
