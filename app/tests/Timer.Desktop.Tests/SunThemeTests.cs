@@ -106,9 +106,9 @@ public sealed class SunThemeTests
             Assert.Equal(AppThemes.Sun, model.Theme); Assert.True(Find<StackPanel>(window, "SunOptions").IsVisible);
             var place = Find<ComboBox>(window, "SunPlace"); place.SelectedItem = "London"; Settle(window);
             Assert.Equal("London", model.SunPlace); Assert.Contains("light from 04:", Find<TextBlock>(window, "SunSummary").Text);
-            Assert.False(Find<StackPanel>(window, "SunHandTimes").IsVisible);
+            Assert.False(Find<Panel>(window, "SunHandTimes").IsVisible);
             place.SelectedItem = "Set times by hand"; Settle(window);
-            Assert.Equal(SunTimes.ByHand, model.SunPlace); Assert.True(Find<StackPanel>(window, "SunHandTimes").IsVisible);
+            Assert.Equal(SunTimes.ByHand, model.SunPlace); Assert.True(Find<Panel>(window, "SunHandTimes").IsVisible);
             var dark = Find<TextBox>(window, "SunDarkFrom"); dark.Text = "20:30"; dark.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(InputElement.LostFocusEvent)); Settle(window);
             Assert.Equal(new TimeSpan(20, 30, 0), model.SunHandTimes.DarkFrom);
             Click(window, "ThemeLight"); Assert.False(Find<StackPanel>(window, "SunOptions").IsVisible);
