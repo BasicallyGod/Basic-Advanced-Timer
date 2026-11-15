@@ -184,6 +184,7 @@ public sealed class StatusFace : Grid
 
     public StatusFace(TimerModel model, string prefix, string breakName, string clockTip, Action clockClick, Action circleClick, Action accountsClick, bool sidebar = false, Action? alertsClick = null)
     {
+        TextSizing.SetFixed(this, true);
         this.model = model; this.clockTip = clockTip; Sidebar = sidebar;
         // The state LED is a capsule set into the display, like a segment: an empty groove when idle, inlaid in the state's colour when not.
         stateLight = new Border { Name = prefix + "StateLight", Width = 6, Height = 14, CornerRadius = new CornerRadius(3.5), OpacityMask = Honeycomb.Brush };

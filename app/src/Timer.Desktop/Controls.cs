@@ -179,6 +179,18 @@ public static class Ui
     {
         var button = Button(text, click, name);
         Avalonia.Automation.AutomationProperties.SetName(button, text);
+        var caption = text;
+        button.PropertyChanged += (_, e) =>
+        {
+            // Keep spoken actions current when a caption changes, while retaining names for icon panels
+            // and respecting an explicit, more descriptive name supplied by the caller.
+            if (e.Property == ContentControl.ContentProperty && button.Content is string current
+                && Avalonia.Automation.AutomationProperties.GetName(button) == caption)
+            {
+                caption = current;
+                Avalonia.Automation.AutomationProperties.SetName(button, current);
+            }
+        };
         button.Classes.Add("toolButton"); button.Classes.Add("quiet"); button.Classes.Add("dialogButton");
         if (main ?? MainActions.Contains(text)) button.Classes.Add("mainAction");
         return button;

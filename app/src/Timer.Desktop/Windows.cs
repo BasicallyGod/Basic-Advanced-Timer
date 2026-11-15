@@ -212,6 +212,7 @@ public sealed class WindowCoordinator
     }
     private static void AttachFront(Window window)
     {
+        TextSizing.Watch(window);
         window.Deactivated += (_, _) => Avalonia.Threading.DispatcherTimer.RunOnce(() => Reassert(window), TimeSpan.FromMilliseconds(250));
     }
     private void OnClosing(object? sender, WindowClosingEventArgs e)
@@ -433,7 +434,7 @@ public sealed class DashboardWindow : Window
         timelineRail = ViewTab(IconKind.Timeline, "TimelineTab", "Timeline", () => SelectTab(false));
         notesTab = ViewTab(IconKind.NotesList, "NotesTab", "Notes", ShowNotes);
         overviewTab = ViewTab(IconKind.Week, "WeekOverviewTab", "Week overview", () => SelectTab(true));
-        var tabRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 }; foreach (var tab in new[] { timelineRail, notesTab, overviewTab }) tabRow.Children.Add(tab);
+        var tabRow = new WrapPanel { Orientation = Orientation.Horizontal, ItemSpacing = 2, LineSpacing = 2 }; foreach (var tab in new[] { timelineRail, notesTab, overviewTab }) tabRow.Children.Add(tab);
         var tabTrack = new Border { Name = "ViewTabs", Child = tabRow, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left }; tabTrack.Classes.Add("viewTabs"); viewTabs = tabTrack;
         var leftOfHeader = new Grid { Children = { tabTrack, workspaceTitle }, Margin = new Thickness(4, 0, 0, 0) }; workspaceTitle.HorizontalAlignment = HorizontalAlignment.Left;
         Ui.Put(nav, leftOfHeader); headerRow = nav;
@@ -461,11 +462,19 @@ public sealed class DashboardWindow : Window
         var dateHost = new Grid { Children = { datePick, dateCalendar, alertsPopup } }; // The popup only needs a place in the tree: it is placed against the sidebar's display when it opens.
         todayButton.Margin = new Thickness(8, 0, 0, 0);
         searchHost.Margin = new Thickness(0, 0, 8, 0); dateHost.Margin = new Thickness(8, 0, 0, 0); next.Margin = new Thickness(8, 0, 0, 0);
-        var steps = Ui.Horizontal(searchHost, previous, dateHost, next, todayButton); steps.Spacing = 0;
+        var steps = new WrapPanel { LineSpacing = 6, Children = { searchHost, previous, dateHost, next, todayButton } };
         Ui.Put(nav, steps, 1);
         // Settings is a gear at the top right, which also closes it again.
         settingsRail = Ui.Ctl("Settings", null, IconKind.Gear, "Settings", ShowSettings); settingsRail.Margin = new Thickness(8, 0, 0, 0);
         Ui.Put(nav, settingsRail, 2);
+        TextSizing.Follow(nav, () =>
+        {
+            var large = TextSizing.Factor > 1; nav.Height = large ? double.NaN : 42; nav.MinHeight = 42;
+            nav.ColumnDefinitions = new ColumnDefinitions(large ? "*,Auto" : "*,Auto,Auto"); nav.RowDefinitions = new RowDefinitions(large ? "Auto,Auto" : "*");
+            if (large) nav.RowDefinitions[0].Height = new GridLength(42 * TextSizing.Factor);
+            Grid.SetColumn(settingsRail, large ? 1 : 2); Grid.SetColumn(steps, large ? 0 : 1); Grid.SetRow(steps, large ? 1 : 0);
+            date.Width = 124 * TextSizing.Factor; searchGrid.Width = 240 * TextSizing.Factor;
+        });
         Ui.Put(review, nav);
         // The bar under the timeline, as in the mock: Add time and Undo on the left, the day's figures in the middle and the zoom buttons on the right.
         addTime = Ui.Ctl("AddTime", "Add time", IconKind.Plus, "Add time to this day", () => model.OpenGap()); addTime.Classes.Add("primary");
@@ -480,6 +489,12 @@ public sealed class DashboardWindow : Window
         totalsStrip = BuildTotals();
         var tools = Ui.Grid("Auto,*,Auto"); tools.Margin = new Thickness(14, 13, 14, 0);
         var editKeys = Ui.Horizontal(addTime, Ui.KeyPair(undo, redo, "EditKeys")); editKeys.Spacing = 8; editKeys.VerticalAlignment = VerticalAlignment.Center; zoom.VerticalAlignment = VerticalAlignment.Center; Ui.Put(tools, editKeys); Ui.Put(tools, totalsStrip, 1); Ui.Put(tools, zoom, 2);
+        TextSizing.Follow(tools, () =>
+        {
+            var large = TextSizing.Factor > 1;
+            tools.RowDefinitions = new RowDefinitions(large ? "Auto,Auto" : "Auto"); Grid.SetRow(totalsStrip, large ? 1 : 0);
+            Grid.SetColumn(totalsStrip, large ? 0 : 1); Grid.SetColumnSpan(totalsStrip, large ? 3 : 1);
+        });
         workspace.Margin = new Thickness(0, 14, 0, 0); // Room under the title and date, so content never touches them.
         workspace.ClipToBounds = false; // A content control clips by default, which cut the raised cards' shadows square at the page's edge; the lists inside scroll and clip themselves.
         Ui.Put(review, workspace, row: 1);

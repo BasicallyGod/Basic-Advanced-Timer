@@ -24,6 +24,7 @@ public sealed class StackTimeline : Panel
 
     public StackTimeline(TimerModel model, IReadOnlyList<Bar> bars, int stepMinutes)
     {
+        TextSizing.SetFixed(this, true);
         this.model = model; this.bars = bars; this.stepMinutes = stepMinutes; Name = "StackTimeline";
         var first = bars.Min(b => b.Start); var last = bars.Max(b => b.End);
         windowStart = first.Date.AddMinutes(Math.Floor((first - first.Date).TotalMinutes / 30) * 30); windowEnd = first.Date.AddMinutes(Math.Ceiling((last - first.Date).TotalMinutes / 30) * 30);

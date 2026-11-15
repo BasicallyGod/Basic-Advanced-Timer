@@ -53,6 +53,14 @@ public sealed class NotesPage : Grid
         accountButton.Classes.Add("ctl"); accountButton.Classes.Add("small"); accountButton.Height = 34; accountButton.Padding = new Thickness(11, 0); accountButton.Click += (_, _) => OpenAccountFilter();
         Avalonia.Automation.AutomationProperties.SetName(accountButton, "Filter by account");
         var filterRow = Ui.Grid("*,Auto"); filterRow.Margin = new Thickness(14, 0, 14, 8); Ui.Put(filterRow, viewsTrack); Ui.Put(filterRow, accountButton, 1);
+        TextSizing.Follow(filterRow, () =>
+        {
+            var large = TextSizing.Factor > 1;
+            filterRow.ColumnDefinitions = new ColumnDefinitions(large ? "*" : "*,Auto");
+            filterRow.RowDefinitions = new RowDefinitions(large ? "Auto,Auto" : "Auto");
+            Grid.SetColumn(accountButton, large ? 0 : 1); Grid.SetRow(accountButton, large ? 1 : 0);
+            accountButton.HorizontalAlignment = large ? HorizontalAlignment.Left : HorizontalAlignment.Stretch;
+        });
         Ui.Put(inner, formBox); Ui.Put(inner, filterRow, 0, 1);
         list.ItemsPanel = new FuncTemplate<Panel?>(() => new VirtualizingStackPanel());
         list.ItemTemplate = new FuncDataTemplate<ListRow>((item, _) => BuildListRow(item));
@@ -111,7 +119,7 @@ public sealed class NotesPage : Grid
         if (signature == shown) return; shown = signature;
         var matches = Notes.MatchingAny(query, accountFilters);
         // One row of views with their counts, the chosen one raised on a sunk track.
-        var tabs = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
+        var tabs = new WrapPanel { Orientation = Orientation.Horizontal, ItemSpacing = 2, LineSpacing = 2 };
         foreach (var kind in Enum.GetValues<NoteView>())
         {
             var count = matches.Count(n => Notes.InView(n, kind)); var name = kind == NoteView.All ? "All" : kind.ToString();
@@ -213,6 +221,7 @@ public sealed class NotesPage : Grid
     {
         var text = accountFilters.Count == 0 ? "All accounts" : accountFilters.Count == 1 ? accountFilters[0] : accountFilters.Count + " accounts";
         var caption = Ui.Text(text, 13); caption.MaxWidth = 150; caption.TextTrimming = TextTrimming.CharacterEllipsis;
+        TextSizing.Follow(caption, () => caption.MaxWidth = 150 * TextSizing.Factor);
         accountButton.Content = Ui.Horizontal(new IconGlyph(IconKind.Accounts), caption, new Chevron());
         Avalonia.Automation.AutomationProperties.SetName(accountButton, "Filter by account: " + text);
         accountButton.Classes.Set("on", accountFilters.Count > 0);
@@ -252,6 +261,7 @@ public sealed class NotesPage : Grid
         Ui.Put(foot, Ui.Text(accountFilters.Count == 0 ? "Every account" : accountFilters.Count + (accountFilters.Count == 1 ? " account chosen" : " accounts chosen"), 12, "muted"));
         if (accountFilters.Count > 0) { var clear = Ui.Button("Clear", () => { accountFilters.Clear(); shown = null; Sync(); BuildAccountFilterCard(); Dispatcher.UIThread.Post(() => { if (filterHost.IsOpen) filterCard?.GetVisualDescendants().OfType<CompletionButton>().FirstOrDefault()?.Focus(NavigationMethod.Tab); }, DispatcherPriority.Loaded); }, "NotesAccountClear"); clear.Classes.Add("flat"); clear.FontSize = 12.5; clear.FontWeight = FontWeight.SemiBold; Ui.Put(foot, clear, 1); }
         var column = new StackPanel { Width = 250 };
+        TextSizing.Follow(column, () => column.Width = 250 * TextSizing.Factor);
         var offset = filterCard?.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault()?.Offset ?? default;
         column.Children.Add(new ScrollViewer { Content = rows, MaxHeight = 280, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Offset = offset });
         column.Children.Add(Ui.Rule()); column.Children.Add(foot);

@@ -65,10 +65,11 @@ public sealed class NotesModel
     public IReadOnlyList<DayNote> All => notes;
     public DayNote? Find(long id) => notes.FirstOrDefault(n => n.Id == savedNoteIds.GetValueOrDefault(id, id));
     /// <summary>Whether this item and its recurrence template have reached storage, rather than only the retry queue.</summary>
-    public bool IsSaved(long id) => Find(id) is { Id: >= 0 } note && !pendingUpdates.Contains(note.Id)
+    public bool IsSaved(long id) => Find(id) is { } note && IsSaved(note);
+    internal bool IsSaved(DayNote note) => note.Id >= 0 && !pendingUpdates.Contains(note.Id)
         && (note.SeriesId is not { } seriesId || seriesId >= 0 && !pendingSeriesUpdates.Contains(seriesId));
     // Command receipts include removals and recurrence templates, not only the visible occurrence.
-    internal bool IsNoteWritePending(long id) => pendingDeletes.Contains(savedNoteIds.GetValueOrDefault(id, id)) || Find(id) is { } note && !IsSaved(note.Id);
+    internal bool IsNoteWritePending(long id) => pendingDeletes.Contains(savedNoteIds.GetValueOrDefault(id, id)) || Find(id) is { } note && !IsSaved(note);
     internal bool IsSeriesWritePending(long id) => pendingSeriesDeletes.Contains(id) || pendingSeriesUpdates.Contains(id) || id < 0 && series.Any(s => s.Id == id);
     public static bool IsMeeting(DayNote note) => DayNotes.IsMeeting(note);
     private IReadOnlyList<string> Names => accountNames();

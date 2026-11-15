@@ -10,13 +10,15 @@ internal sealed class DraftBadge : TextBlock
         FontSize = 11; Classes.Add("muted"); Name = "DraftStatus_" + id;
         void Refresh()
         {
-            var resolved = model.Notes.Find(id)?.Id ?? id;
+            var note = model.Notes.Find(id);
+            var resolved = note?.Id ?? id;
             var draft = model.Drafts.NoteDraft(resolved);
-            var label = draft?.IsDirty == true ? "Draft" : draft?.PendingPersistence == true ? "Retrying" : "";
+            var pending = draft?.PendingPersistence == true || note is not null && !model.Notes.IsSaved(note);
+            var label = draft?.IsDirty == true ? "Draft" : pending ? "Retrying" : "";
             if (Text != label) Text = label; IsVisible = label.Length > 0;
         }
-        AttachedToVisualTree += (_, _) => { model.Drafts.Changed += Refresh; Refresh(); };
-        DetachedFromVisualTree += (_, _) => model.Drafts.Changed -= Refresh;
+        AttachedToVisualTree += (_, _) => { model.Drafts.Changed += Refresh; model.Notes.Changed += Refresh; Refresh(); };
+        DetachedFromVisualTree += (_, _) => { model.Drafts.Changed -= Refresh; model.Notes.Changed -= Refresh; };
         Refresh();
     }
 }

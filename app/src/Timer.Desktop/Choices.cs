@@ -115,7 +115,7 @@ public sealed class ChoiceStrip : Border
             var button = NotesPage.Seg((string.IsNullOrEmpty(Name) ? "Choice" : Name) + "_" + Safe(item), item, false, () => Choose(captured));
             AutomationProperties.SetName(button, item); buttons.Add(button); row.Children.Add(button);
         }
-        var track = new Border { Child = row, Height = 36, HorizontalAlignment = HorizontalAlignment.Left }; track.Classes.Add("segTrack");
+        var track = new Border { Child = row, MinHeight = 36, HorizontalAlignment = HorizontalAlignment.Left }; track.Classes.Add("segTrack");
         foreach (var choice in buttons.OfType<ChoiceButton>()) choice.Sync();
         Dispatcher_Refresh(); return track;
     }

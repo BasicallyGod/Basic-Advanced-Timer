@@ -20,6 +20,7 @@ public sealed class AccountsDialog : Dialog
         var list = new StackPanel { Spacing = 10 };
         var entries = new List<AccountRow>();
         var headings = Ui.Grid("26,*,50,80,85,110,44");
+        ScaleColumns(headings);
         Ui.Put(headings, Ui.Text("Account", 12, "muted"), 1); Ui.Put(headings, Ui.Text("Colour", 12, "muted"), 2); Ui.Put(headings, Ui.Text("In tracker", 12, "muted"), 3);
         Ui.Put(headings, Ui.Text("Budget", 12, "muted"), 4); Ui.Put(headings, Ui.Text("Period", 12, "muted"), 5);
         list.Children.Add(headings);
@@ -52,6 +53,7 @@ public sealed class AccountsDialog : Dialog
         void Add(AccountSettings account, bool existing = true)
         {
             var row = Ui.Grid("26,*,50,80,85,110,44");
+            ScaleColumns(row);
             var name = new TextBox { Text = account.Name, MaxLength = Math.Max(TimerModel.MaxAccountNameLength, account.Name.Length), Margin = new Thickness(0, 0, 8, 0) };
             Avalonia.Automation.AutomationProperties.SetName(name, "Account name");
             Ui.Put(row, name, 1);
@@ -135,6 +137,11 @@ public sealed class AccountsDialog : Dialog
         Ui.Put(root, Ui.Horizontal(Ui.DialogButton("Save", () => Commit(false), "SaveAccounts"), Ui.DialogButton("Cancel", Close)), row: 5);
         Content = root;
     }
+    private static void ScaleColumns(Grid grid) => TextSizing.Follow(grid, () =>
+    {
+        foreach (var (column, width) in new[] { (2, 50), (3, 80), (4, 85), (5, 110) })
+            grid.ColumnDefinitions[column].Width = new GridLength(width * TextSizing.Factor);
+    });
     private sealed class AccountRow
     {
         public string? Original; public TextBox Name = null!; public CheckBox Visible = null!; public DurationBox Budget = null!; public ComboBox Period = null!;

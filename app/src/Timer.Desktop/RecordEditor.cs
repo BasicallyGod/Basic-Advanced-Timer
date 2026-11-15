@@ -81,6 +81,8 @@ public sealed class RecordEditor : Grid
         AddField(options, DraftField.Account, "Account", account);
         account.SelectionChanged += (_, _) => { if (!settling) Change(Draft.Values with { Account = account.SelectedItem is string a && a != "No account" ? BreakAccount.Stored(a) : null }); };
         if (Draft.Kind == DraftKind.Block) account.Width = 140;
+        var accountWidth = account.Width;
+        TextSizing.Follow(account, () => account.Width = accountWidth * TextSizing.Factor);
         if (Draft.Kind == DraftKind.Note)
         {
             reminder = Ui.Ctl(inline ? "PageWhen" : "DetailsNoteReminder", "No reminder", IconKind.Bell, "Choose reminder", OpenReminder); reminder.Width = 190;
@@ -97,7 +99,7 @@ public sealed class RecordEditor : Grid
             end = Clock(inline ? "PageEnd" : Draft.Kind == DraftKind.Meeting ? "DetailsMeetingEnd" : "SelectedEnd", v.End);
             if (Draft.Kind == DraftKind.Block) start.Width = end.Width = 90;
             ToolTip.SetTip(start, "Start, HH:mm"); ToolTip.SetTip(end, "End, HH:mm");
-            Panel clocks = Draft.Kind == DraftKind.Meeting ? new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 } : options;
+            Panel clocks = Draft.Kind == DraftKind.Meeting ? new WrapPanel { Orientation = Orientation.Horizontal, ItemSpacing = 10, LineSpacing = 10 } : options;
             AddField(clocks, DraftField.Start, "Start", start); AddField(clocks, DraftField.End, "End", end);
             if (clocks != options) options.Children.Add(clocks);
             start.PropertyChanged += (_, e) => { if (e.Property == TextBox.TextProperty && !settling) Change(Draft.Values with { Start = start.Text ?? "" }); };
@@ -137,8 +139,8 @@ public sealed class RecordEditor : Grid
         save = Ui.Ctl(inline ? "PageSubmit" : "DetailsSave", "Save", null, "Save changes", Save, small: true); save.Classes.Add("primary");
         cancel = Ui.Ctl(inline ? "PageCancel" : "DetailsDiscard", "Cancel", null, "Cancel changes", Cancel, small: true);
         state = Ui.Text("", 12.5, "muted"); state.Name = inline ? "PageSaveState" : "DetailsSaveState"; state.TextWrapping = TextWrapping.Wrap;
-        var footer = Ui.Grid("Auto,Auto,*"); footer.ColumnSpacing = 10; footer.Margin = new Thickness(2, 8, 2, 2);
-        Ui.Put(footer, save); Ui.Put(footer, cancel, 1); Ui.Put(footer, state, 2); Ui.Put(this, footer, 0, 1);
+        var footer = new WrapPanel { ItemSpacing = 10, LineSpacing = 8, Margin = new Thickness(2, 8, 2, 2) };
+        footer.Children.Add(save); footer.Children.Add(cancel); footer.Children.Add(state); Ui.Put(this, footer, 0, 1);
         AddHandler(KeyDownEvent, (_, e) =>
         {
             // Multiline TextBox handles Enter before a bubbling parent sees it.
