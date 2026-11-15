@@ -188,7 +188,7 @@ public sealed class SelectedBlockCardTests
     [AvaloniaFact]
     public void TheSelectionRingIsNotClippedAndTheBlocksTimeIsInTheOrdinaryTypeface()
     {
-        var model = Model(out var engine); model.SetTimelineScale(320, 0, 0); model.TimelineOffset = null; var window = new DashboardWindow(model); window.Show(); Settle(window);
+        var model = Model(out var engine); model.SetOutlinedBlocks(false); model.SetTimelineScale(320, 0, 0); model.TimelineOffset = null; var window = new DashboardWindow(model); window.Show(); Settle(window);
         try
         {
             model.SelectBlock(new[] { engine.Sessions[0] }, false); Settle(window);

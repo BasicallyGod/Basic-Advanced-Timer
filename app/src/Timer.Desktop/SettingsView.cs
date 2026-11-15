@@ -106,7 +106,7 @@ public sealed class SettingsView : Grid
         stack.Children.Add(BuildSunOptions());
 
         stack.Children.Add(BuildDisplayStyle());
-        stack.Children.Add(Section("Timeline blocks", Toggle("Outlined blocks", "Phosphor: a coloured outline and coloured words in place of the filled block, to read more clearly.", "OutlinedBlocks", () => model.OutlinedBlocks, v => model.SetOutlinedBlocks(v))));
+        stack.Children.Add(Section("Timeline blocks", Toggle("Outlined blocks", "Phosphor: a coloured outline and coloured words, which read more clearly than a filled block. Turn off for filled blocks.", "OutlinedBlocks", () => model.OutlinedBlocks, v => model.SetOutlinedBlocks(v))));
         stack.Children.Add(Section("Hints", Toggle("Show tooltips", "Short hints on hover. With them off, budget percentages are still in Week overview.", "ShowTooltips", () => model.Tooltips, v => model.SetTooltips(v))));
         stack.Children.Add(Section("Seasonal", Toggle("Seasonal decorations", "A wreath and lights round the pill at Christmas, 1 December to 6 January. Off by default.", "SeasonalDecorations", () => model.SeasonalDecorations, v => model.SetSeasonalDecorations(v))));
         stack.Margin = new Thickness(0, 0, 0, 6); // room for the last tick's shadow when the page scrolls

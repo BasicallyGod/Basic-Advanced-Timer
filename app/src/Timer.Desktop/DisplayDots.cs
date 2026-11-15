@@ -369,15 +369,29 @@ public sealed class SegmentName : SteppedControl
             if (value == text) return;
             text = value;
             // Append just enough of the next repeat to read a full window across the join.
-            ribbon = Overflows ? text + ScrollGap + text[..(VisibleCells - 1)] : text.PadRight(VisibleCells);
-            offset = 0;
+            ribbon = text.Length > VisibleCells ? text + ScrollGap + text[..(VisibleCells - 1)] : text.PadRight(VisibleCells);
+            offset = 0; pixelOffset = 0; holdClock = 0;
             stepClock = 0;
             InvalidateVisual();
             Wake();
         }
     }
     public int VisibleCells { get; }
-    public bool Overflows => text.Length > VisibleCells;
+    // E-ink: the name fills a window of pixels (not whole cells) and slides along it smoothly, a dot's worth at a time, instead of jumping a cell.
+    private double? inkWindow; private double pixelOffset, holdClock;
+    private const double InkSpeed = 34, InkHoldMilliseconds = 1400, InkGapCells = 3;
+    private double InkRibbon => (text.Length + InkGapCells) * CellWidth;
+    /// <summary>Gives E-ink's name the room it has to fill; Phosphor keeps its whole cells.</summary>
+    public void SetInkWindow(double width)
+    {
+        if (inkWindow == width) { RefreshWidth(); return; }
+        inkWindow = width; pixelOffset = 0; holdClock = 0; RefreshWidth(); Wake();
+    }
+    private void RefreshWidth() { var want = DisplayInk.On && inkWindow is { } w ? w : VisibleCells * CellWidth + CellHeight * Slant; if (Math.Abs(Width - want) > .01) Width = want; InvalidateVisual(); }
+    /// <summary>How far E-ink's name has slid, in pixels (it moves a few at a time, not a cell).</summary>
+    public double InkOffset => pixelOffset;
+    private bool InkOverflows => inkWindow is { } w && text.Length * CellWidth > w;
+    public bool Overflows => DisplayInk.On && inkWindow is not null ? InkOverflows : text.Length > VisibleCells;
     /// <summary>The cells currently visible, including the gap between repeats.</summary>
     public string VisibleText => ribbon.Substring(Scrolling ? offset : 0, VisibleCells);
     /// <summary>Long names loop continuously unless reduced motion is enabled.</summary>
@@ -397,7 +411,15 @@ public sealed class SegmentName : SteppedControl
     protected override bool Animating => Overflows && !Motion.Reduced;
     protected override void Advance(double milliseconds)
     {
-        if (!Animating) { offset = 0; return; }
+        if (!Animating) { offset = 0; pixelOffset = 0; return; }
+        if (DisplayInk.On && inkWindow is not null)
+        {
+            // A rest at the start so the beginning can be read, then a steady slide; the end of the ribbon joins its start after a gap.
+            if (pixelOffset == 0 && holdClock < InkHoldMilliseconds) { holdClock += milliseconds; return; }
+            pixelOffset += milliseconds * InkSpeed / 1000;
+            if (pixelOffset >= InkRibbon) { pixelOffset = 0; holdClock = 0; }
+            return;
+        }
         stepClock += milliseconds;
         if (stepClock < StepMilliseconds) return;
         var steps = Math.Floor(stepClock / StepMilliseconds);
@@ -408,21 +430,34 @@ public sealed class SegmentName : SteppedControl
     public const double DotPitch = CellWidth / 8, InkHeight = 16 * CellWidth / 8 + 1;
     private void RenderDots(DrawingContext context)
     {
+        // Unifont's capitals and figures stand on rows 4 to 13 of its sixteen, so the letters are centred by those rows, not by the whole cell: that is the middle of the
+        // keys beside the name.
+        var top = Height / 2 - 9 * DotPitch;
+        var window = Bounds.Width; if (window <= 0) window = inkWindow ?? Width;
+        using var clip = context.PushClip(new Rect(0, 0, window, Height));
         var brush = new SolidColorBrush(Colour); var size = DotPitch * .86;
-        var shown = VisibleText;
-        for (var i = 0; i < VisibleCells; i++)
+        var scrolling = InkOverflows; var shift = scrolling ? pixelOffset : 0;
+        // The ribbon is the name, a gap and the name again, so a window across the join reads whole.
+        var span = text.Length + (scrolling ? (int)InkGapCells : 0);
+        var first = Math.Max(0, (int)Math.Floor(shift / CellWidth));
+        var cells = (int)Math.Ceiling(window / CellWidth) + 2;
+        for (var k = first; k < first + cells; k++)
         {
-            if (DotFont.Rows(shown[i]) is not { } rows) continue;
+            var at = span == 0 ? ' ' : (scrolling ? RibbonChar(k % span) : (k < text.Length ? text[k] : ' '));
+            if (DotFont.Rows(at) is not { } rows) continue;
+            var left = k * CellWidth - shift;
+            if (left + CellWidth < 0 || left > window) continue;
             for (var row = 0; row < DotFont.Height; row++)
             {
                 var bits = rows[row] | rows[row] >> 1; // bold: the stroke doubled
                 if (bits == 0) continue;
                 for (var col = 0; col < DotFont.Width; col++)
                     if ((bits >> (DotFont.Width - 1 - col) & 1) != 0)
-                        context.DrawRectangle(brush, null, new Rect(i * CellWidth + col * DotPitch, .5 + row * DotPitch, size, size), size * .3, size * .3);
+                        context.DrawRectangle(brush, null, new Rect(left + col * DotPitch, top + row * DotPitch, size, size), size * .3, size * .3);
             }
         }
     }
+    private char RibbonChar(int i) => i < text.Length ? text[i] : ' ';
     public override void Render(DrawingContext context)
     {
         if (DisplayInk.On) { RenderDots(context); return; }

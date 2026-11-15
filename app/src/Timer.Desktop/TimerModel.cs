@@ -1100,9 +1100,9 @@ public sealed class TimerModel : INotifyPropertyChanged
     public void CyclePillLower() { var all = LowerDisplay.Cycle; SetPillLower(all[(all.ToList().IndexOf(PillLower) + 1) % all.Count]); }
     // A saved displaytimeline= line is ignored and left alone: the display look is the only one now.
     private const string BlocksLine = "blocks=";
-    /// <summary>Phosphor's timeline blocks as a coloured outline with coloured words instead of a filled block (a trial, for contrast). Saved as blocks=outline.</summary>
-    public bool OutlinedBlocks => AppearanceValue(BlocksLine) == "outline";
-    public void SetOutlinedBlocks(bool on) { if (on == OutlinedBlocks) return; SetAppearanceFlag(BlocksLine, on ? "outline" : null, true); Notify(); }
+    /// <summary>Phosphor's timeline blocks as a coloured outline with coloured words instead of a filled block (for contrast). The default after the trial read better; saved as blocks=filled when turned off.</summary>
+    public bool OutlinedBlocks => AppearanceValue(BlocksLine) != "filled";
+    public void SetOutlinedBlocks(bool on) { if (on == OutlinedBlocks) return; SetAppearanceFlag(BlocksLine, on ? null : "filled", true); Notify(); }
     // ---- the display style: Phosphor (the vacuum-fluorescent look) or E-ink (normal type, grain, calm motion), for the whole application
     private const string DisplayStyleLine = "displaystyle=", InkStrengthLine = "inkstrength=", TexturesLine = "textures=";
     /// <summary>Which look every display wears. Saved as displaystyle=ink; Phosphor, the original, has no line.</summary>

@@ -95,7 +95,7 @@ public sealed class DialogTests
     [AvaloniaFact]
     public void ASelectedBlockShowsAsARingInTheAccentColourAndItsTextIsUntouched()
     {
-        var model = Model(out var engine); var dashboard = new DashboardWindow(model); dashboard.Show(); Settle(dashboard);
+        var model = Model(out var engine); model.SetOutlinedBlocks(false); var dashboard = new DashboardWindow(model); dashboard.Show(); Settle(dashboard);
         Border Card(int index) => Find<Border>(dashboard, "TimelineEntry" + index);
         Assert.Equal(1, Card(0).BoxShadow.Count); Assert.DoesNotContain("mergeSelected", Card(0).Classes); // Only the lit block's own glow.
         model.ToggleSelection(new[] { engine.Sessions[0] }); Settle(dashboard);
