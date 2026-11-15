@@ -233,6 +233,7 @@ public sealed class SharedControlContractTests
             var rows = card.GetVisualDescendants().OfType<ToggleButton>().ToArray();
             Assert.True(rows[0].IsChecked, "First filter remains checked after rebuilding");
             Assert.True(rows[0].IsFocused, "Focus follows the replacement filter row");
+            Assert.Contains(":focus-visible", rows[0].Classes);
             Assert.False(rows[1].IsChecked);
             rows[1].Focus(); Key(window, Avalonia.Input.Key.Space); Settle(window);
             Assert.All(card.GetVisualDescendants().OfType<ToggleButton>(), b => Assert.True(b.IsChecked));

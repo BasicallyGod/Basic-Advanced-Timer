@@ -228,7 +228,7 @@ public sealed class NotesPage : Grid
             row.Click += (_, _) =>
             {
                 ToggleAccount(a.Name); BuildAccountFilterCard();
-                Dispatcher.UIThread.Post(() => { if (filterHost.IsOpen) filterCard?.GetVisualDescendants().OfType<Button>().FirstOrDefault(b => b.Name == row.Name)?.Focus(); }, DispatcherPriority.Loaded);
+                Dispatcher.UIThread.Post(() => { if (filterHost.IsOpen) filterCard?.GetVisualDescendants().OfType<Button>().FirstOrDefault(b => b.Name == row.Name)?.Focus(NavigationMethod.Tab); }, DispatcherPriority.Loaded);
             };
             row.Classes.Add("pillBare"); row.Content = line; row.HorizontalAlignment = HorizontalAlignment.Stretch; row.HorizontalContentAlignment = HorizontalAlignment.Stretch; row.Padding = new Thickness(8, 6);
             Avalonia.Automation.AutomationProperties.SetName(row, "Filter by " + a.Display + ", " + count + (count == 1 ? " note" : " notes"));
@@ -236,7 +236,7 @@ public sealed class NotesPage : Grid
         }
         var foot = Ui.Grid("*,Auto"); foot.Margin = new Thickness(10, 8, 10, 6);
         Ui.Put(foot, Ui.Text(accountFilters.Count == 0 ? "Every account" : accountFilters.Count + (accountFilters.Count == 1 ? " account chosen" : " accounts chosen"), 12, "muted"));
-        if (accountFilters.Count > 0) { var clear = Ui.Button("Clear", () => { accountFilters.Clear(); shown = null; Sync(); BuildAccountFilterCard(); Dispatcher.UIThread.Post(() => { if (filterHost.IsOpen) filterCard?.GetVisualDescendants().OfType<CompletionButton>().FirstOrDefault()?.Focus(); }, DispatcherPriority.Loaded); }, "NotesAccountClear"); clear.Classes.Add("flat"); clear.FontSize = 12.5; clear.FontWeight = FontWeight.SemiBold; Ui.Put(foot, clear, 1); }
+        if (accountFilters.Count > 0) { var clear = Ui.Button("Clear", () => { accountFilters.Clear(); shown = null; Sync(); BuildAccountFilterCard(); Dispatcher.UIThread.Post(() => { if (filterHost.IsOpen) filterCard?.GetVisualDescendants().OfType<CompletionButton>().FirstOrDefault()?.Focus(NavigationMethod.Tab); }, DispatcherPriority.Loaded); }, "NotesAccountClear"); clear.Classes.Add("flat"); clear.FontSize = 12.5; clear.FontWeight = FontWeight.SemiBold; Ui.Put(foot, clear, 1); }
         var column = new StackPanel { Width = 250 };
         var offset = filterCard?.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault()?.Offset ?? default;
         column.Children.Add(new ScrollViewer { Content = rows, MaxHeight = 280, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Offset = offset });
