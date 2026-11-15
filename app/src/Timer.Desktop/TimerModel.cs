@@ -264,6 +264,10 @@ public sealed class TimerModel : INotifyPropertyChanged
     }
     private StoreSettings preferences;
     private readonly TimerStore? store;
+    private DraftWorkspace? drafts;
+    /// <summary>Shared editor foundation; views adopt it together in the editor migration.</summary>
+    public DraftWorkspace Drafts => drafts ??= new DraftWorkspace(this);
+    internal bool CanEditRecords => !closed && store is not { IsDisposed: true };
     private int ticks;
     public TimerModel(TrackingEngine? engine = null, StoreSettings? preferences = null, TimerStore? store = null)
     {
@@ -273,7 +277,7 @@ public sealed class TimerModel : INotifyPropertyChanged
         Editor = store?.Editor ?? new LedgerEditor(Engine);
         Notes = new NotesModel(store, () => Engine.Now, () => ReviewAccounts.Select(a => a.Name).ToList());
         Notes.Changed += Notify;
-        Notes.NoteIdChanged += (previous, current) => { if (SelectedMeetingId == previous) SelectedMeetingId = current; if (SelectedNoteId == previous) SelectedNoteId = current; };
+        Notes.NoteIdChanged += (previous, current) => { if (SelectedMeetingId == previous) SelectedMeetingId = current; if (SelectedNoteId == previous) SelectedNoteId = current; drafts?.NoteIdChanged(previous, current); };
         Engine.CanReopen = row => !InGroup(row); // A block in a group is never taken out of it to be carried on.
         this.preferences = this.preferences with { Accounts = WithColours(this.preferences.Accounts) };
         // Window shadows are gone as a choice: the pill and the dashboard are always drawn flat with a hairline. The shared package still defaults them on and an older
@@ -390,7 +394,8 @@ public sealed class TimerModel : INotifyPropertyChanged
     public DateTime SelectedDate { get; private set; }
     public string Theme => preferences.Theme;
     public string? LastError { get; private set; }
-    public string? SaveError => LastError ?? (Notes.Unsaved ? Notes.Fault ?? "Notes not saved · kept on screen, retrying" : null);
+    internal bool LedgerUnsaved { get; private set; }
+    public string? SaveError => LastError ?? (LedgerUnsaved ? "Not saved · kept on screen, retrying" : Notes.Unsaved ? Notes.Fault ?? "Notes not saved · kept on screen, retrying" : null);
     /// <summary>A one-off message for the footer, such as the note that old timesheet files are not used.</summary>
     private string? notice;
     public string? Notice { get => notice; set { notice = value; NoticeHasUndo = false; noticeUndo = null; } }
@@ -518,6 +523,7 @@ public sealed class TimerModel : INotifyPropertyChanged
                 || renamed.Any(r => r.Key != from && r.Value.Equals(to, StringComparison.OrdinalIgnoreCase))))
                 throw new ArgumentException($"\"{to}\" is already used by another account or in the history.");
         }
+        using var draftChange = drafts?.DeferModelChange();
         if (ActiveAccount is { } active && (values.Any(a => a.Name == active && a.Hidden) || renamed.Any(r => r.Key == active) || deleted.Contains(active))) Engine.StopAccount();
         if (deleted.Count > 0)
         {
@@ -535,8 +541,13 @@ public sealed class TimerModel : INotifyPropertyChanged
         {
             // Save first so the backup holds the latest entries, then rewrite everything in one go.
             if (store is not null) { store.Save(Engine, preferences); store.Backup("before-rename"); }
-            foreach (var (from, to) in renamed) Editor.RenameAccount(from, to);
+            foreach (var (from, to) in renamed)
+            {
+                if (drafts is null) Editor.RenameAccount(from, to);
+                else KeepingSelection(Engine.Sessions.Where(r => r.Account.Equals(from, StringComparison.OrdinalIgnoreCase)).ToArray(), () => Editor.RenameAccount(from, to));
+            }
         }
+        drafts?.RelinkAccounts(renames);
         preferences = preferences with { Accounts = WithColours(values) };
         if (renamed.Count > 0 && SelectedAccount is { } picked && renames.TryGetValue(picked, out var now)) SelectedAccount = now;
         if (!Accounts.Any(a => a.Name == SelectedAccount)) SelectedAccount = values.FirstOrDefault(a => !a.Hidden)?.Name;
@@ -832,12 +843,25 @@ public sealed class TimerModel : INotifyPropertyChanged
         => ChangeLog(() => { ValidateAccount(account); Editor.Add(account, start, end, note, allowOverlap: true); });
     /// <summary>Changes a block's account, times or note in place. Blocks may overlap (they stack on the timeline), so only the block being recorded can refuse it.</summary>
     public bool EditEntry(SessionRow row, string account, DateTime start, DateTime end, string note)
-        => ChangeLog(() => KeepingSelection(new[] { row }, () => { ValidateAccount(account); Editor.Edit(row, account, start, end, note, allowOverlap: true); }));
+        => ChangeEntry(row, account, start, end, note, null);
+    internal bool EditEntryDraft(SessionRow row, string account, DateTime start, DateTime end, string note, Action<SessionRow, string> accepted)
+        => ChangeEntry(row, account, start, end, note, accepted);
+    private bool ChangeEntry(SessionRow row, string account, DateTime start, DateTime end, string note, Action<SessionRow, string>? accepted)
+        => ChangeLog(() => KeepingSelection(new[] { row }, () =>
+        {
+            ValidateAccount(account); var index = Engine.Sessions.IndexOf(row);
+            Editor.Edit(row, account, start, end, note, allowOverlap: true);
+            if (accepted is not null && index >= 0 && index < Engine.Sessions.Count)
+            { var changed = Engine.Sessions[index]; accepted(changed, Editor.Note(changed)); }
+        }));
     // An edit replaces a block's row with a new one in the same place, so the selection is moved over to it: editing a selected block leaves it selected.
     private void KeepingSelection(IReadOnlyList<SessionRow> rows, Action change)
     {
         var places = rows.Where(selectedRows.Contains).Select(r => Engine.Sessions.IndexOf(r)).Where(i => i >= 0).ToList();
+        var replaced = drafts is null ? null : rows.Select(r => (Row: r, Index: Engine.Sessions.IndexOf(r))).Where(p => p.Index >= 0).ToArray();
         change();
+        if (replaced is not null) foreach (var item in replaced)
+            if (item.Index < Engine.Sessions.Count) drafts!.RemapBlock(item.Row, Engine.Sessions[item.Index]);
         foreach (var row in rows) selectedRows.Remove(row);
         foreach (var place in places) if (place < Engine.Sessions.Count) selectedRows.Add(Engine.Sessions[place]);
     }
@@ -917,7 +941,15 @@ public sealed class TimerModel : INotifyPropertyChanged
         {
             // Save any pending recording/edit before replacing the undo snapshot.
             if (!Save()) { EditError = LastError; Notify(); return false; }
+            var draftRows = drafts?.BlockRows.Select(r => (Row: r, Index: Engine.Sessions.IndexOf(r))).Where(p => p.Index >= 0).ToArray();
+            var previousRows = draftRows is { Length: > 0 } ? Engine.Sessions.ToArray() : null;
             change();
+            // Edit/drag/undo may replace ledger instances. Only same-size replacements at the original slot are mapped;
+            // existing neighbours and structural deletions are never treated as the old record.
+            if (previousRows is not null && previousRows.Length == Engine.Sessions.Count)
+                foreach (var item in draftRows!)
+                    if (!Engine.Sessions.Any(r => ReferenceEquals(r, item.Row)) && !previousRows.Any(r => ReferenceEquals(r, Engine.Sessions[item.Index])))
+                        drafts!.RemapBlock(item.Row, Engine.Sessions[item.Index]);
             selectedRows.RemoveWhere(s => !Engine.Sessions.Any(r => ReferenceEquals(r, s)));
             EditError = null;
             var saved = Save(); Notify(); return saved;
@@ -1235,10 +1267,10 @@ public sealed class TimerModel : INotifyPropertyChanged
         using var timing = PerformanceTimings.Measure("save");
         // Once the app is closing, or its database has been closed, there is nothing left to save and a late tick must not try.
         if (closed || store is { IsDisposed: true }) return true;
-        try { store?.Save(Engine, preferences); if (LastError is not null) { LastError = null; Notify(); } return true; } // A failure that has cleared is shown as gone at once, not at the next change.
+        try { store?.Save(Engine, preferences); var recovered = LedgerUnsaved || LastError is not null; LedgerUnsaved = false; if (recovered) { LastError = null; Notify(); } return true; } // A failure that has cleared is shown as gone at once, not at the next change.
         // A restart or shutdown can close the database under a save that is already queued. That must be reported, never allowed to crash the app.
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidOperationException or ObjectDisposedException || error.GetType().Namespace == "Microsoft.Data.Sqlite")
-        { LastError = "Not saved · kept on screen, retrying · " + error.Message; return false; }
+        { LedgerUnsaved = true; LastError = "Not saved · kept on screen, retrying · " + error.Message; return false; }
     }
     private bool closed;
     /// <summary>Called as the app exits, before the database is closed, so the clock's tick stops saving.</summary>
@@ -1302,7 +1334,8 @@ public sealed class TimerModel : INotifyPropertyChanged
         Notify(CheckpointChange);
     }
     private void Notify() => Notify(null);
-    private void Notify(string? property) { FrameMonitor.Bump("model changes"); ApplyTheme(); WatchMessages(); Publish(property); }
+    internal void DraftBatchFinished() => Notify();
+    private void Notify(string? property) { if (drafts?.Deferring == true) return; FrameMonitor.Bump("model changes"); drafts?.Refresh(); ApplyTheme(); WatchMessages(); Publish(property); }
     private void Publish(string? property)
     {
         notificationAlerts = null; notifying++;

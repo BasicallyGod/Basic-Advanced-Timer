@@ -67,6 +67,9 @@ public sealed class NotesModel
     /// <summary>Whether this item and its recurrence template have reached storage, rather than only the retry queue.</summary>
     public bool IsSaved(long id) => Find(id) is { Id: >= 0 } note && !pendingUpdates.Contains(note.Id)
         && (note.SeriesId is not { } seriesId || seriesId >= 0 && !pendingSeriesUpdates.Contains(seriesId));
+    // Command receipts include removals and recurrence templates, not only the visible occurrence.
+    internal bool IsNoteWritePending(long id) => pendingDeletes.Contains(savedNoteIds.GetValueOrDefault(id, id)) || Find(id) is { } note && !IsSaved(note.Id);
+    internal bool IsSeriesWritePending(long id) => pendingSeriesDeletes.Contains(id) || pendingSeriesUpdates.Contains(id) || id < 0 && series.Any(s => s.Id == id);
     public static bool IsMeeting(DayNote note) => DayNotes.IsMeeting(note);
     private IReadOnlyList<string> Names => accountNames();
 
@@ -328,13 +331,16 @@ public sealed class NotesModel
 
     /// <summary>Changes a note's words, account and reminder (a null reminder makes it undated again).</summary>
     public string? EditNote(long id, string words, string? account, DateTime? reminder, bool? important = null)
+        => EditNoteDraft(id, words, account, reminder, important, out _);
+    internal string? EditNoteDraft(long id, string words, string? account, DateTime? reminder, bool? important, out DayNote? accepted)
     {
+        accepted = null;
         if (Find(id) is not { } note) return "That note is no longer there.";
         if (string.IsNullOrWhiteSpace(words)) return "Write a note first";
         var text = Compose(StoredWords(words, important ?? IsImportant(note)), account);
         Change(id, n => reminder is { } when ? n with { Text = text, Day = when.Date, At = when.TimeOfDay.Truncate(), HasDate = true, Done = n.Done && ReminderOf(n) == when }
             : n with { Text = text, Day = now().Date, At = null, HasDate = false });
-        NotifyChanged(); return null;
+        accepted = Find(id); NotifyChanged(); return null;
     }
 
     /// <summary>Sets or removes a note's reminder, keeping its words.</summary>
@@ -349,7 +355,10 @@ public sealed class NotesModel
     /// ones from this day); otherwise only this one changes and the series carries on as before.
     /// </summary>
     public string? EditMeeting(long id, string words, string? account, DateTime day, TimeSpan start, TimeSpan end, RepeatChoice repeat, bool allLater)
+        => EditMeetingDraft(id, words, account, day, start, end, repeat, allLater, out _);
+    internal string? EditMeetingDraft(long id, string words, string? account, DateTime day, TimeSpan start, TimeSpan end, RepeatChoice repeat, bool allLater, out DayNote? accepted)
     {
+        accepted = null;
         if (Find(id) is not { } meeting) return "That meeting is no longer there.";
         id = meeting.Id;
         if (string.IsNullOrWhiteSpace(words)) return "Name the meeting";
@@ -378,7 +387,7 @@ public sealed class NotesModel
                 series[series.FindIndex(s => s.Id == current.Id)] = updated; PersistSeries(updated);
             }
         }
-        NotifyChanged(); return null;
+        accepted = Find(id); NotifyChanged(); return null;
     }
 
     public void Toggle(long id)
