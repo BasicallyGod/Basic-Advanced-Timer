@@ -45,6 +45,7 @@ public sealed class SoftDatePicker : Border
     public SoftDatePicker()
     {
         Width = 266; Padding = new Thickness(12, 10); BorderThickness = new Thickness(1);
+        TextSizing.Follow(this, () => Width = 266 * TextSizing.Factor);
         CornerRadius = new CornerRadius(14); Classes.Add("softCalendar");
         var column = new StackPanel { Spacing = 8 };
         var header = Ui.Grid("Auto,*,Auto"); header.Margin = new Thickness(2, 0, 2, 0);

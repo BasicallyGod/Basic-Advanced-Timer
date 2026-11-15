@@ -43,6 +43,7 @@ public sealed class ReminderPopup : Border
         column.Children.Add(title);
 
         var calendar = new StackPanel { Spacing = 4, Name = "ReminderMonthPanel", HorizontalAlignment = HorizontalAlignment.Center, Width = 196 };
+        TextSizing.Follow(this, () => { Width = DayOnlyWide * TextSizing.Factor; calendar.Width = 196 * TextSizing.Factor; });
         var nav = Ui.Grid("Auto,*,Auto");
         Ui.Put(nav, Small(Ui.IconButton(IconKind.Previous, "Previous month", "ReminderMonthBack", () => { month = month.AddMonths(-1); DrawDays(); })));
         Ui.Put(nav, monthTitle, 1);

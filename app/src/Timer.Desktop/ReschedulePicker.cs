@@ -375,6 +375,7 @@ public sealed class ReminderPickerCard : Border
     public ReminderPickerCard(TimerModel model, string forText, DateTime? current, Action<DateTime?> answer, Action close)
     {
         Name = "ReminderPicker"; CornerRadius = new CornerRadius(18); BorderThickness = new Thickness(1); Padding = new Thickness(12); Width = CardWidth;
+        TextSizing.Follow(this, () => Width = CardWidth * TextSizing.Factor);
         Classes.Add("surface"); Classes.Add("flyoutCard"); BoxShadow = BoxShadows.Parse("0 10 28 0 #29141E46");
         var column = new StackPanel { Spacing = 10 };
         var title = Ui.Grid("Auto,*,Auto"); title.ColumnSpacing = 8;

@@ -46,6 +46,7 @@ public sealed class DialogHost : Grid
         var close = Ui.IconButton(IconKind.Close, "Close", "CloseDialog", dialog.Close);
         close.VerticalAlignment = VerticalAlignment.Center; close.Margin = new Thickness(0, 0, 10, 0);
         var title = Ui.Heading(dialog.Title, 24); title.Name = "DialogTitle"; title.VerticalAlignment = VerticalAlignment.Center; title.Margin = new Thickness(24, 0, 12, 0);
+        title.TextWrapping = Avalonia.Media.TextWrapping.Wrap;
         var header = Ui.Grid("*,Auto"); header.Margin = new Thickness(0, 14, 0, 0); header.Children.Add(title); Ui.Put(header, close, 1);
         var inner = Ui.Grid("*", "Auto,*"); inner.Children.Add(header); Ui.Put(inner, dialog, row: 1);
         var card = new Border { Child = inner, CornerRadius = new CornerRadius(20), BorderThickness = new Thickness(1), ClipToBounds = true,
@@ -53,6 +54,12 @@ public sealed class DialogHost : Grid
         card.Classes.Add("dayCard");
         if (!double.IsNaN(dialog.Width)) card.Width = dialog.Width;
         if (!double.IsNaN(dialog.Height)) card.Height = dialog.Height;
+        var designWidth = card.Width; var designHeight = card.Height;
+        TextSizing.Follow(card, () =>
+        {
+            card.Width = designWidth * TextSizing.Factor;
+            card.Height = designHeight * TextSizing.Factor;
+        });
         dialog.Width = double.NaN; dialog.Height = double.NaN; // The card has the size now, and the dialog fills it.
         var scrim = new Border { Name = "DialogScrim", Opacity = .38 };
         scrim.Classes.Add("scrim");

@@ -41,7 +41,17 @@ public sealed class ShiftEditor : StackPanel
             var start = new TextBox { Text = shift.Start.ToString(@"hh\:mm"), Width = 80 };
             var end = new TextBox { Text = shift.End.ToString(@"hh\:mm"), Width = 80 };
             var row = Ui.Grid("*,80,24,80");
-            Ui.Put(row, on); Ui.Put(row, start, 1); Ui.Put(row, Ui.Dash(), 2); Ui.Put(row, end, 3);
+            var dash = Ui.Dash(); Ui.Put(row, on); Ui.Put(row, start, 1); Ui.Put(row, dash, 2); Ui.Put(row, end, 3);
+            TextSizing.Follow(row, () =>
+            {
+                var large = TextSizing.Factor > 1;
+                row.ColumnDefinitions = new ColumnDefinitions(large ? "80,24,80,*" : "*,80,24,80");
+                if (large) row.ColumnDefinitions[0].Width = row.ColumnDefinitions[2].Width = new GridLength(80 * TextSizing.Factor);
+                row.RowDefinitions = new RowDefinitions(large ? "Auto,Auto" : "Auto");
+                Grid.SetColumnSpan(on, large ? 4 : 1);
+                Grid.SetColumn(start, large ? 0 : 1); Grid.SetColumn(dash, large ? 1 : 2); Grid.SetColumn(end, large ? 2 : 3);
+                foreach (var field in new Control[] { start, dash, end }) Grid.SetRow(field, large ? 1 : 0);
+            });
             root.Children.Add(row); entries.Add((day, on, start, end));
         }
         var breakBox = new DurationBox(DurationUnit.Minutes, model, "Break each day", allowZero: true) { Width = 90, Name = "BreakAllowance" };
@@ -53,6 +63,8 @@ public sealed class ShiftEditor : StackPanel
             well.Bind(Border.BackgroundProperty, well.GetResourceObservable("Well")); well.Bind(Border.BoxShadowProperty, well.GetResourceObservable("ShadowSunk"));
             var inner = new StackPanel { Spacing = 8 };
             var breakRow = Ui.Grid("*,90"); var breakLabel = Ui.Text("Break each day", 14); breakLabel.Name = "BreakEachDay"; breakLabel.FontWeight = Avalonia.Media.FontWeight.SemiBold;
+            breakLabel.TextWrapping = Avalonia.Media.TextWrapping.Wrap;
+            TextSizing.Follow(breakRow, () => breakRow.ColumnDefinitions[1].Width = new GridLength(90 * TextSizing.Factor));
             Ui.Put(breakRow, breakLabel); Ui.Put(breakRow, breakBox, 1); inner.Children.Add(breakRow);
             var breakNote = Ui.Text("Taken off every working day, so the schedule is the time you are to work.", 12, "muted"); breakNote.TextWrapping = Avalonia.Media.TextWrapping.Wrap; inner.Children.Add(breakNote);
             var sum = Ui.Text("", 13); sum.Name = "BreakSummary"; sum.FontWeight = Avalonia.Media.FontWeight.SemiBold; sum.TextWrapping = Avalonia.Media.TextWrapping.Wrap; inner.Children.Add(sum);
@@ -70,6 +82,8 @@ public sealed class ShiftEditor : StackPanel
             Sum(); well.Child = inner; root.Children.Add(well);
         }
         var today = new CheckBox { Content = "Also reset today to its new scheduled start/end" };
+        today.Content = new TextBlock { Text = (string)today.Content, TextWrapping = Avalonia.Media.TextWrapping.Wrap };
+        Avalonia.Automation.AutomationProperties.SetName(today, "Also reset today to its new scheduled start/end");
         root.Children.Add(today);
         var error = new TextBlock { TextWrapping = Avalonia.Media.TextWrapping.Wrap, Classes = { "overtime" } };
         root.Children.Add(error);

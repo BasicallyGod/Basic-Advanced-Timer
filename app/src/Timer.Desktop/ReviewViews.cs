@@ -296,6 +296,7 @@ public static partial class ReviewViews
         double X(DateTime time) => TimelineGutter + (time - origin).TotalHours * pixelsPerHour;
         // A little room before the first hour and after the last lets the end labels sit fully in view.
         var canvas = new Canvas { Name = "TimelineCanvas", Width = 24 * pixelsPerHour + 2 * TimelineGutter, Height = TimelineHeight, Background = Brushes.Transparent };
+        TextSizing.SetFixed(canvas, true);
         // Where the last right-click landed, to the 5 minutes: Add time and Paste on any menu, a block's included, use it.
         DateTime clicked = origin.AddHours(9);
         DateTime At(double x) => origin.AddMinutes(Math.Clamp(Math.Floor((x - TimelineGutter) / pixelsPerHour * 60 / 5) * 5, 0, 1435));

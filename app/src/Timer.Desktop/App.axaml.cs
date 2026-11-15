@@ -13,6 +13,7 @@ public sealed partial class App : Application
     public override void Initialize()
     {
         using var timing = PerformanceTimings.Measure("startup XAML and themes");
+        TextSizing.Install();
         AvaloniaXamlLoader.Load(this);
         // Colours are registered before any window exists, so every control finds them the first time it looks.
         ThemeEngine.Register(this, AppThemes.BuiltIn);

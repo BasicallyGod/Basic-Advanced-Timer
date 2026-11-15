@@ -93,7 +93,7 @@ public static class NoteLinks
         foreach (var piece in Parse(words))
         {
             if (piece.Address is not { } address) { block.Inlines.Add(new Run(piece.Words)); continue; }
-            var label = new TextBlock { Text = piece.Words, FontSize = block.FontSize, FontWeight = block.FontWeight, TextDecorations = block.TextDecorations, TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis, MaxWidth = 300 }; // A very long address is cut short, not run past the card; its tooltip has all of it.
+            var label = new TextBlock { Text = piece.Words, FontSize = TextSizing.BaseFontSize(block), FontWeight = block.FontWeight, TextDecorations = block.TextDecorations, TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis, MaxWidth = 300 }; // A very long address is cut short, not run past the card; its tooltip has all of it.
             var link = Ui.Button("", () => { }, null); link.Classes.Add("pillBare"); link.Classes.Add("noteLink"); link.Content = label; link.Padding = new Avalonia.Thickness(0);
             link.Click += (_, _) => Open(address, link);
             ToolTip.SetTip(link, address); Avalonia.Automation.AutomationProperties.SetName(link, "Link: " + piece.Words);

@@ -8,6 +8,7 @@ public static class Program
     public static void Main(string[] args)
     {
         StartupTimings.Begin();
+        TextSizing.UseWindowsPreference();
         AppDomain.CurrentDomain.UnhandledException += (_, e) =>
         {
             try

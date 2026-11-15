@@ -59,13 +59,21 @@ Row badges now also read the note model's persistence state and observe note cha
 
 These changes do not alter storage schema, recording policy, shared package pins, display geometry or the approved material renderers.
 
-### F-04: Windows larger-text preference is not reflected in ordinary app text — open
+### F-04: Windows larger-text preference — corrected before merge
 
 With explicit permission, Windows Text size was changed from 100% to exactly 150% and applied. Windows Settings and other desktop text enlarged. Ordinary Timer Settings labels retained their original size. A cold launch of the fixed candidate into first-run setup also retained the original text sizes. Therefore this is **not** a passed larger-text accessibility check, even though the inspected layouts did not clip. Text size was restored to 100% afterwards.
 
-This is separate from DPI scaling, which the app does respond to. A follow-up should define shared, scalable typography for ordinary labels, editors, menus and dialogs, read the Windows preference at startup and when it changes, and exercise wrapping, minimum window areas and popup placement. The fixed-size instrument displays need their own deliberate policy so expanding ordinary text does not accidentally stretch the segment glyphs or change the approved pill geometry. Increasing isolated font constants, or merely scaling the whole app as a substitute for text adaptation, would not establish a coherent solution.
+This is separate from DPI scaling. `TextSizing` now reads the Windows per-user text preference at startup and observes `WM_SETTINGCHANGE`, with activation as a fallback. Registry access is read-only; there is no polling, new package, preference write or application zoom. The supported Windows range is 100–225%. Other platforms retain the existing typography.
 
-This follow-up remains open; it has not been silently folded into the three contained acceptance corrections. No whole-app accessibility or Main-release acceptance is claimed.
+The shared typography policy scales each control's own design font once. Inherited and template-bound fonts follow their owner. Default-sized explicit text is registered on load as well as on property changes. Text-bearing fixed fields/buttons gain width and line height; icon-only keys retain their geometry. Registrations are weak, dead entries are pruned, and layout callbacks subscribe only while attached. Copying a label's font for linked note text uses its unscaled design size. Live adaptation updates existing controls rather than recreating pages, draft leases or focused editors.
+
+The pill, sidebar instrument face, timeline instruments and Settings display illustration explicitly retain their existing geometry/material rendering. This policy does not claim that every custom-drawn chart label becomes larger. The ordinary workspace typography, dialogs, menus, inputs and calendar labels follow the preference.
+
+Layouts now reserve space for the larger text: Settings navigation widens; theme/option groups reflow; settings labels and account summaries wrap; Day and time stacks its groups and shift fields; account-editor columns and dialog cards expand within the window; onboarding scrolls within a bounded card; Notes filters wrap with the account filter below; header navigation/date/search and timeline totals use separate rows; editor options/footer wrap; calendar and reminder cards expand. At 100%, the existing header height/gear position remains stable.
+
+Automated checks cover inherited/template fonts, cold creation, later font changes, restoration, focused unfinished drafts and selection, detached layout subscriptions, fixed instrument geometry, all Settings sections, account-column separation, onboarding bounds, calendar cards and header-key position at 100/150/225%. Look renders cover Light/Dark × Phosphor/E-ink at 150/225%. These are layout/render checks, not a claim of a complete native accessibility matrix.
+
+The native follow-up applied exactly 150% through Windows Settings and independently confirmed the registry value. The already-open Settings page visibly enlarged and reflowed; a cold launch picked up the preference; Phosphor and E-ink instrument styling remained intact. The cold dashboard header, timeline totals and Details editor were inspected. An unsaved Details draft remained intact and visibly Draft through restoration to 100%; Cancel returned the original saved note. Windows Text size was restored and observed at 100%, and the disposable app/Settings windows were closed. Native 225%, smaller physical monitors, mixed-monitor transitions and actual Narrator speech remain outside this sample.
 
 ## Performance evidence and limits
 
@@ -78,14 +86,14 @@ Continuous timing was a separate diagnostic pass. Its retained Notes sample repo
 ## Remaining acceptance and release gates
 
 - Reduced motion: after explicit permission, Windows Animation effects was set Off. A read-only call to the same client-area animation API used by the app confirmed disabled animations. Live and cold pill observations showed stationary account text; dashboard/picker navigation remained usable. This is sampled behaviour, not a presented-frame measurement of every effect. Original On restoration is confirmed in the final verification record.
-- Windows text-size variation: applied 150%, checked live and cold, restored 100%; F-04 remains open.
+- Windows text-size variation: F-04's follow-up now adapts ordinary typography and reflows layouts. Native live/cold 150% and automated 150/225% checks are described above; this is sampled coverage.
 - The scale pass is sampled native coverage, not every theme × pill × page × scale permutation or a cold launch at every scale. Smaller physical displays and mixed-monitor movement remain separate checks.
 - Native minimise/tray return, Store-installed startup registration and update/upgrade handling are not established by this pass. Portable export was exercised above; that does not establish the installed Store workflow. Existing automated lifecycle/export contracts and CI native smoke results are supporting evidence only.
 - Actual Narrator speech needs listening verification. Windows UI Automation observations are not a passed speech test.
 - A first-time participant must still assess idle/recording/break comprehension and saved/unsaved understanding. The implementer's own successful navigation is not an independent comprehension sample.
 - Promotion to Main additionally requires the installed MSIX release gate in `BRANCHES.md`: installation/update, persistence, tray/startup and export. No Main promotion or Store acceptance is claimed here.
 
-## Fixed-candidate validation
+## Earlier fixed-candidate validation (0.1.826)
 
 The correction code is commit `670d3edaeb312c80d9d299d15086f73cc09ebedf`, PR 263. Feature workflow [43755367982](https://github.com/BasicallyGod/Basic-Advanced-Timer/actions/runs/43755367982) published **0.1.826**, artifact 14177374025. It passed all 967 tests, with zero failures or skips, and both native smoke modes. The separate PR workflow passed its shell checks and packaged launcher checks. Locally, all 967 tests passed before the final lookup-reuse adjustment; 97 affected tests passed after it.
 
@@ -99,4 +107,10 @@ The downloaded fixed executable was checked natively:
 
 All temporary Windows changes were restored and observed: display scale 125%, Text size 100%, Animation effects On. A read-only client-area animation API check also returned enabled after restoration. The disposable timer processes and the Settings window opened for this session were closed. The downloaded fixed main DLL SHA256 is `97066F12AA38083148F91C901BBA7565D9F4B0EF4D4F8964A37A5BF9A085C52C`.
 
-Subsequent documentation-only commits record these outcomes without changing the tested correction code. The complete local evidence, diagnostic reports, fixture SQL and native notes are in the project review directory `reviews/ui-cohesion-f/`; they are not application data or shipped fixtures.
+Documentation-only commits initially recorded these outcomes without changing that correction code. The later F-04 typography implementation extends the same PR before merge; the native larger-text sample above used a local Release build. Its additional render and regression evidence is retained beside the original pass.
+
+The complete local evidence, diagnostic reports, fixture SQL and native notes are in the project review directory `reviews/ui-cohesion-f/`; they are not application data or shipped fixtures.
+
+## Larger-text regression validation
+
+The expanded local suite passed **996 tests, zero failures or skips**. After the final account-filter caption/popup-width adjustment, all 30 affected typography/header tests passed again. This adds 29 typography/layout cases to the earlier 967-test candidate. Thirty-five local preview images cover the materials and expanded workspace/settings/calendar layouts. The native sample used explicit fixture data and left Windows Text size at its original 100%; display scale and animation preferences were not changed during this follow-up.

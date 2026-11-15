@@ -32,6 +32,7 @@ public sealed class SettingsView : Grid
     public SettingsView(TimerModel model)
     {
         this.model = model; Name = "SettingsPage"; ColumnDefinitions = new ColumnDefinitions("210,*"); Margin = new Thickness(0, 0, 0, 8);
+        TextSizing.Follow(this, () => ColumnDefinitions[0].Width = new GridLength(210 + 150 * (TextSizing.Factor - 1)));
         var list = new StackPanel { Spacing = 2, Margin = new Thickness(0, 0, 14, 0), Name = "SettingsSections" };
         var body = new StackPanel { Spacing = 0 };
         Add("look", "Look", IconKind.Sunrise, "Colours, shadows and hints.", BuildLook(), list, body);
@@ -88,6 +89,7 @@ public sealed class SettingsView : Grid
         // Dark first, as it is the default, then Light, then System (which follows the computer's light or dark setting) and Sunset. Each tile is a small picture of the dashboard in that theme.
         // Four equal tiles that share the card's width up to their own 172, so with the card narrower they narrow too, side by side, instead of running past the card's edge.
         var tiles = new Avalonia.Controls.Primitives.UniformGrid { Rows = 1, Columns = 4, Margin = new Thickness(0, 6, 0, 10), HorizontalAlignment = HorizontalAlignment.Left, MaxWidth = 4 * 172 + 36 };
+        TextSizing.Follow(tiles, () => { tiles.Columns = TextSizing.Factor > 1 ? 2 : 4; tiles.Rows = TextSizing.Factor > 1 ? 2 : 1; });
         var buttons = new Dictionary<string, Button>();
         foreach (var (choice, words) in new[] { (AppThemes.Dark.Name, "Dark"), (AppThemes.Light.Name, "Light"), (ThemeLibrary.System, "System"), (AppThemes.Sun, "Sunset") })
         {
@@ -133,8 +135,9 @@ public sealed class SettingsView : Grid
         var slider = new Slider { Name = "InkStrength", Minimum = 0, Maximum = 100, TickFrequency = 10, IsSnapToTickEnabled = true, MinWidth = 200, MaxWidth = 280, HorizontalAlignment = HorizontalAlignment.Left, Value = model.InkPercent };
         Avalonia.Automation.AutomationProperties.SetName(slider, "E-ink effect strength");
         var value = Ui.Text("", 13); value.Name = "InkStrengthNote"; value.FontWeight = FontWeight.SemiBold; value.Width = 80; value.TextAlignment = TextAlignment.Right; value.VerticalAlignment = VerticalAlignment.Center;
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
+        var row = new WrapPanel { Orientation = Orientation.Horizontal, ItemSpacing = 12, LineSpacing = 8 };
         var label = Ui.Text("Effect", 13); label.VerticalAlignment = VerticalAlignment.Center; label.Width = 52;
+        TextSizing.Follow(row, () => { label.Width = 52 * TextSizing.Factor; value.Width = 80 * TextSizing.Factor; });
         row.Children.Add(label); row.Children.Add(slider); row.Children.Add(value);
         slider.PropertyChanged += (_, e) => { if (e.Property == Avalonia.Controls.Primitives.RangeBase.ValueProperty && slider.IsEnabled) model.SetInkPercent((int)Math.Round(slider.Value)); };
         void Sync()
@@ -156,6 +159,7 @@ public sealed class SettingsView : Grid
     {
         var ink = style == DisplayStyle.Ink;
         var picture = new Border { Height = 44, CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1) };
+        TextSizing.SetFixed(picture, true);
         picture.Background = new SolidColorBrush(ink ? Color.Parse("#F3F3EF") : Color.Parse("#0D1411"));
         picture.BorderBrush = new SolidColorBrush(ink ? Color.Parse("#B9B9B2") : Color.Parse("#2A332E"));
         var clock = new TextBlock { Text = "07:42", FontSize = 22, FontWeight = FontWeight.Bold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
@@ -225,7 +229,9 @@ public sealed class SettingsView : Grid
         {
             var row = Ui.Grid("Auto,230,*"); row.Margin = new Thickness(0, 8); row.ColumnSpacing = 10;
             var dot = new Ellipse { Width = 8, Height = 8, VerticalAlignment = VerticalAlignment.Center }; dot.Bind(Shape.FillProperty, dot.GetResourceObservable("Overtime"));
-            Ui.Put(row, dot); var w = Ui.Text(what, 13.5); w.FontWeight = FontWeight.SemiBold; Ui.Put(row, w, 1); Ui.Put(row, Ui.Text(where, 12.5, "muted"), 2);
+            Ui.Put(row, dot); var w = Ui.Text(what, 13.5); w.FontWeight = FontWeight.SemiBold; w.TextWrapping = TextWrapping.Wrap; Ui.Put(row, w, 1);
+            var detail = Ui.Text(where, 12.5, "muted"); detail.TextWrapping = TextWrapping.Wrap; Ui.Put(row, detail, 2);
+            TextSizing.Follow(row, () => row.ColumnDefinitions[1].Width = TextSizing.Factor > 1 ? new GridLength(1, GridUnitType.Star) : new GridLength(230));
             counts.Children.Add(row);
         }
         var order = Ui.Text("Reminders from an earlier day come first, then a spent budget, then the rest. A card that opens by itself folds after 12 seconds, unless a budget is spent.", 12, "muted"); order.TextWrapping = TextWrapping.Wrap; counts.Children.Add(order);
@@ -268,6 +274,13 @@ public sealed class SettingsView : Grid
         var side = new StackPanel();
         side.Children.Add(Section("Week", Rows(Row("Week starts on", "The Week overview and the exports begin here.", new Border(), start), Row("Day starts at", "Where one day ends and the next begins. Leave it at midnight unless you work through it.", dayStart), Row("How time is written", "A 90 minute block reads 01:30, or 1.50h. Exports follow it.", format))));
         Ui.Put(grid, left); Ui.Put(grid, side, 1);
+        TextSizing.Follow(grid, () =>
+        {
+            var large = TextSizing.Factor > 1;
+            grid.ColumnDefinitions = new ColumnDefinitions(large ? "*" : "1.15*,*");
+            grid.RowDefinitions = new RowDefinitions(large ? "Auto,Auto" : "Auto");
+            Grid.SetColumn(side, large ? 0 : 1); Grid.SetRow(side, large ? 1 : 0);
+        });
         return grid;
     }
 
@@ -277,9 +290,16 @@ public sealed class SettingsView : Grid
     {
         var stack = new StackPanel { Spacing = 10 };
         accountSummary = Ui.Text("", 13, "muted"); accountSummary.Name = "AccountsSummary"; accountSummary.VerticalAlignment = VerticalAlignment.Center;
+        accountSummary.TextWrapping = TextWrapping.Wrap;
         var edit = Ui.DialogButton("Edit accounts and budgets…", () => { if (TopLevel.GetTopLevel(this) is DashboardWindow dashboard) dashboard.Dialogs.Show(new AccountsDialog(model)); }, "EditAccounts", true);
         edit.Content = Ui.Horizontal(new IconGlyph(IconKind.Edit), Ui.Text("Edit accounts and budgets…", 14));
         var top = Ui.Grid("*,Auto"); Ui.Put(top, accountSummary); Ui.Put(top, edit, 1); stack.Children.Add(top);
+        TextSizing.Follow(top, () =>
+        {
+            var large = TextSizing.Factor > 1;
+            top.ColumnDefinitions = new ColumnDefinitions(large ? "*" : "*,Auto"); top.RowDefinitions = new RowDefinitions(large ? "Auto,Auto" : "Auto");
+            Grid.SetColumn(edit, large ? 0 : 1); Grid.SetRow(edit, large ? 1 : 0); edit.HorizontalAlignment = HorizontalAlignment.Left;
+        });
         accountList = new StackPanel { Name = "AccountList" }; stack.Children.Add(accountList);
         var note = Ui.Text("Hiding an account only removes it from the tracker list. Its time stays in every report.", 12, "muted"); note.TextWrapping = TextWrapping.Wrap; stack.Children.Add(note);
         syncs.Add(RefreshAccounts); RefreshAccounts();
@@ -295,12 +315,18 @@ public sealed class SettingsView : Grid
         foreach (var account in all)
         {
             var row = Ui.Grid("Auto,*,150,130"); row.Height = 36; row.ColumnSpacing = 12; row.Name = "SettingsAccount_" + account.Name.Replace(" ", "");
+            TextSizing.Follow(row, () =>
+            {
+                var large = TextSizing.Factor > 1; row.Height = large ? double.NaN : 36; row.MinHeight = 36;
+                row.ColumnDefinitions[2].Width = large ? new GridLength(1, GridUnitType.Star) : new GridLength(150);
+                row.ColumnDefinitions[3].Width = large ? new GridLength(1, GridUnitType.Star) : new GridLength(130);
+            });
             var visible = shown.Contains(account.Name);
             Ui.Put(row, NoteParts.Dot(model, account.Name, 12));
             var name = Ui.Text(account.Display, 13.5); name.FontWeight = FontWeight.Medium; name.VerticalAlignment = VerticalAlignment.Center; Ui.Put(row, name, 1);
             Ui.Put(row, Ui.Text(account.Budget is { } budget ? $"{model.FormatShort(budget)} per {account.Period}" : "No budget", 13, "muted"), 2);
             Ui.Put(row, Ui.Text(visible ? "In the tracker" : "Hidden from tracker", 12, "muted"), 3);
-            foreach (var cell in row.Children.OfType<TextBlock>()) cell.VerticalAlignment = VerticalAlignment.Center;
+            foreach (var cell in row.Children.OfType<TextBlock>()) { cell.VerticalAlignment = VerticalAlignment.Center; cell.TextWrapping = TextWrapping.Wrap; }
             if (!visible) row.Opacity = .55;
             var line = new Border { BorderThickness = new Thickness(0, 1, 0, 0), Child = row }; line.Bind(Border.BorderBrushProperty, line.GetResourceObservable("Hover"));
             accountList.Children.Add(line);
@@ -547,6 +573,7 @@ public sealed class SettingsView : Grid
         var frame = new Border { Height = pictureHeight, CornerRadius = new CornerRadius(9), ClipToBounds = true, Child = picture }; frame.Bind(Border.BackgroundProperty, frame.GetResourceObservable("Hover"));
         var words = new StackPanel { Spacing = 2, Margin = new Thickness(2, 8, 2, 0) };
         var head = Ui.Text(label, 13.5); head.FontWeight = FontWeight.SemiBold; words.Children.Add(head);
+        head.TextWrapping = TextWrapping.Wrap;
         var detail = Ui.Text(description, 12, "muted"); detail.TextWrapping = TextWrapping.Wrap; words.Children.Add(detail);
         var inner = new StackPanel(); inner.Children.Add(frame); inner.Children.Add(words);
         var tile = new ChoiceButton("selected") { Name = name, Content = inner, HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Top, Padding = new Thickness(8), BorderThickness = new Thickness(2), Margin = new Thickness(0, 0, 10, 0) };
@@ -561,10 +588,11 @@ public sealed class SettingsView : Grid
     private static Control Choices(params Button[] tiles)
     {
         var grid = new Avalonia.Controls.Primitives.UniformGrid { Rows = 1, Columns = tiles.Length, HorizontalAlignment = HorizontalAlignment.Left, MaxWidth = 250 * tiles.Length };
+        TextSizing.Follow(grid, () => { grid.Columns = TextSizing.Factor > 1 ? Math.Min(2, tiles.Length) : tiles.Length; grid.Rows = (int)Math.Ceiling(tiles.Length / (double)grid.Columns); });
         foreach (var tile in tiles) grid.Children.Add(tile);
         return grid;
     }
-    private static TextBlock Label(string text) { var t = Ui.Text(text, 14); t.FontWeight = FontWeight.SemiBold; return t; }
+    private static TextBlock Label(string text) { var t = Ui.Text(text, 14); t.FontWeight = FontWeight.SemiBold; t.TextWrapping = TextWrapping.Wrap; return t; }
     /// <summary>Rows set one under another, with a hairline between them.</summary>
     private static StackPanel Rows(params Control[] rows)
     {
@@ -585,6 +613,12 @@ public sealed class SettingsView : Grid
         if (description is not null) { var d = Ui.Text(description, 12, "muted"); d.TextWrapping = TextWrapping.Wrap; text.Children.Add(d); }
         if (below is not null) text.Children.Add(below);
         Ui.Put(grid, text); control.VerticalAlignment = VerticalAlignment.Center; Ui.Put(grid, control, 1);
+        TextSizing.Follow(grid, () =>
+        {
+            var large = TextSizing.Factor > 1;
+            grid.ColumnDefinitions = new ColumnDefinitions(large ? "*" : "*,Auto"); grid.RowDefinitions = new RowDefinitions(large ? "Auto,Auto" : "Auto");
+            Grid.SetColumn(control, large ? 0 : 1); Grid.SetRow(control, large ? 1 : 0);
+        });
         return grid;
     }
     /// <summary>A tick box with its name and what it does beside it.</summary>

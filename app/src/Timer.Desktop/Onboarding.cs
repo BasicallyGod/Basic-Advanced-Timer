@@ -59,7 +59,15 @@ public sealed class OnboardingView : Grid
         var footer = Ui.Grid("Auto,*,Auto,Auto"); footer.Margin = new Thickness(0, 10, 0, 0);
         Ui.Put(footer, skip); Ui.Put(footer, back, 2); back.Margin = new Thickness(0, 0, 8, 0); Ui.Put(footer, next, 3);
         layout.Children.Add(footer);
-        card.Child = layout; Children.Add(card);
+        card.Child = new ScrollViewer { Content = layout, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto };
+        title.TextWrapping = subtitle.TextWrapping = TextWrapping.Wrap;
+        void FitCard()
+        {
+            card.Width = 720 * Math.Min(1.5, TextSizing.Factor);
+            card.MaxWidth = Math.Max(1, Bounds.Width - 32); card.MaxHeight = Math.Max(1, Bounds.Height - 32);
+            card.MinHeight = Math.Min(540, card.MaxHeight);
+        }
+        SizeChanged += (_, _) => FitCard(); TextSizing.Follow(card, FitCard); Children.Add(card);
         Focusable = true;
         // Skipping is an explicit choice. Escape must not mark an unfinished setup complete.
         KeyDown += (_, e) => { if (e.Key == Key.Escape) e.Handled = true; };
@@ -118,6 +126,7 @@ public sealed class OnboardingView : Grid
     {
         var panel = new StackPanel { Spacing = 8 };
         var headings = Ui.Grid("*,76,100,72");
+        ScaleAccountColumns(headings);
         Ui.Put(headings, Ui.Text("Account", 12, "muted")); Ui.Put(headings, Ui.Text("Budget", 12, "muted"), 1); Ui.Put(headings, Ui.Text("Period", 12, "muted"), 2); Ui.Put(headings, Ui.Text("In tracker", 12, "muted"), 3);
         panel.Children.Add(headings);
         accountList = new StackPanel { Spacing = 8 };
@@ -149,9 +158,16 @@ public sealed class OnboardingView : Grid
     private static Grid RowGrid((string? Original, string? Colour, TextBox Name, TextBox Budget, ComboBox Period, CheckBox Show) row)
     {
         var grid = Ui.Grid("*,76,100,72");
+        ScaleAccountColumns(grid);
         Ui.Put(grid, Detach(row.Name)); Ui.Put(grid, Detach(row.Budget), 1); Ui.Put(grid, Detach(row.Period), 2); Ui.Put(grid, Detach(row.Show), 3);
         return grid;
     }
+    private static void ScaleAccountColumns(Grid grid) => TextSizing.Follow(grid, () =>
+    {
+        grid.ColumnDefinitions[1].Width = new GridLength(76 * TextSizing.Factor);
+        grid.ColumnDefinitions[2].Width = new GridLength(100 * TextSizing.Factor);
+        grid.ColumnDefinitions[3].Width = new GridLength(72 * TextSizing.Factor);
+    });
     private bool ApplyAccounts()
     {
         var accounts = new List<AccountSettings>(); var renames = new Dictionary<string, string>();
