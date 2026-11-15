@@ -10,6 +10,7 @@ The dated Avalonia milestones below are newest first, not numbered releases. Use
 
 | Change | Commit | Details |
 |---|---|---|
+| First UI cohesion corrections: current onboarding instructions and Open timer finish action; Escape no longer skips setup. Settings has an explicit close action, previews use the actual display glyphs with stacked keys in every style, and essential empty ticks have a readable neutral outline. Reminder/day pickers take keyboard focus, keep Tab inside and dismiss with Escape while restoring focus. | [27fadde](https://github.com/BasicallyGod/Basic-Advanced-Timer/commit/27faddeb4df9e11526e474a79186774acafce608) | Production Phosphor/E-ink rendering and saving behaviour are retained. 874 local Windows tests passed; native reminder keyboard flow and previews checked. |
 | Third round from Windows: Outlined blocks are now the Phosphor default (a Settings, Look tick turns them off, `blocks=filled`); E-ink grain defaults to 50 per cent; E-ink block words use one size on every block; the account name in E-ink fills its whole box, is centred on the keys and slides a few pixels at a time with a rest at the start, instead of jumping a cell; the tall pill's lower row follows the padding when the look changes and is clipped to the well's rounded foot, so a hover wash no longer overhangs the pill. | pending | Not yet seen on real Windows. |
 
 ## 14 November 2026
